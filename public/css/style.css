@@ -716,9 +716,6 @@ select.input {
   .columns-container {
     grid-template-columns: 1fr 1fr;
   }
-  #col-accounts {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 768px) {
