@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FediBoard - Fediverse Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <h1 class="logo">FediBoard</h1>
+      <span class="tagline">Fediverse Multi-Account Dashboard</span>
+    </div>
+    <div class="header-right">
+      <button id="btn-add-account" class="btn btn-primary">+ 계정 추가</button>
+      <button id="btn-refresh-all" class="btn btn-secondary">새로고침</button>
+      <button id="btn-settings" class="btn btn-icon" title="설정">⚙</button>
+    </div>
+  </header>
+
+  <nav class="account-tabs" id="account-tabs">
+    <button class="tab active" data-tab="all">전체</button>
+  </nav>
+
+  <main class="dashboard" id="dashboard">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">🌐</div>
+      <h2>Fediverse 계정을 연결하세요</h2>
+      <p>Misskey, Iceshrimp, CherryPick, Mastodon 계정을 추가하여<br>모든 타임라인을 한 곳에서 확인하세요.</p>
+      <button class="btn btn-primary btn-large" id="btn-add-first">계정 추가하기</button>
+    </div>
+
+    <div class="columns-container" id="columns-container" style="display:none;">
+      <section class="column" id="col-timeline">
+        <div class="column-header">
+          <h2>타임라인</h2>
+          <button class="btn btn-icon btn-small" data-action="refresh-timeline" title="새로고침">↻</button>
+        </div>
+        <div class="column-content" id="timeline-feed"></div>
+      </section>
+
+      <section class="column" id="col-notifications">
+        <div class="column-header">
+          <h2>알림</h2>
+          <button class="btn btn-icon btn-small" data-action="refresh-notifications" title="새로고침">↻</button>
+        </div>
+        <div class="column-content" id="notifications-feed"></div>
+      </section>
+
+      <section class="column" id="col-accounts">
+        <div class="column-header">
+          <h2>계정 목록</h2>
+        </div>
+        <div class="column-content" id="accounts-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- 계정 추가 모달 -->
+  <div class="modal-overlay" id="modal-add-account" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>계정 추가</h2>
+        <button class="btn btn-icon modal-close" data-close-modal="modal-add-account">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="platform-select">플랫폼</label>
+          <select id="platform-select" class="input">
+            <option value="">선택하세요</option>
+            <option value="misskey">Misskey (오리지널)</option>
+            <option value="iceshrimp">Iceshrimp</option>
+            <option value="cherrypick">CherryPick</option>
+            <option value="mastodon">Mastodon</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="instance-url">인스턴스 URL</label>
+          <input type="url" id="instance-url" class="input" placeholder="https://misskey.io">
+          <small class="form-hint">예: https://misskey.io, https://mastodon.social</small>
+        </div>
+        <div class="form-group">
+          <label for="access-token">액세스 토큰</label>
+          <input type="password" id="access-token" class="input" placeholder="액세스 토큰을 입력하세요">
+          <small class="form-hint" id="token-hint">인스턴스 설정에서 API 토큰을 생성하세요.</small>
+        </div>
+        <div class="form-group">
+          <label for="account-label">표시 이름 (선택)</label>
+          <input type="text" id="account-label" class="input" placeholder="내 미스키 계정">
+        </div>
+        <div id="add-account-error" class="form-error" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-modal="modal-add-account">취소</button>
+        <button class="btn btn-primary" id="btn-confirm-add">연결 확인 및 추가</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 게시물 상세 모달 -->
+  <div class="modal-overlay" id="modal-post-detail" style="display:none;">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>게시물 상세</h2>
+        <button class="btn btn-icon modal-close" data-close-modal="modal-post-detail">✕</button>
+      </div>
+      <div class="modal-body" id="post-detail-content"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
