@@ -237,7 +237,11 @@ class StarShipApp {
       // Sort by date descending
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
-      if (allPosts.length === 0) {
+      const timelinePosts = this.activeFilter === 'all'
+        ? this.mergeCommonTimelinePosts(allPosts)
+        : allPosts;
+
+      if (timelinePosts.length === 0) {
         this.timelineFeed.innerHTML = '';
         this.timelineFeed.appendChild(renderLoadingText('타임라인에 표시할 게시물이 없습니다.'));
         this.cachedPosts = [];
@@ -245,7 +249,7 @@ class StarShipApp {
         return;
       }
 
-      const makeKey = (post) => `${post.platform}:${post.accountId || ''}:${post.id}`;
+      const makeKey = (post) => post.dedupeKey || `${post.platform}:${post.accountId || ''}:${post.id}`;
 
       const hasRenderedPosts = this.timelineFeed.querySelector('.post-card') !== null;
       const canIncremental = !shouldShowLoader
@@ -254,17 +258,17 @@ class StarShipApp {
 
       if (!canIncremental) {
         this.timelineFeed.innerHTML = '';
-        for (const post of allPosts) {
+        for (const post of timelinePosts) {
           this.timelineFeed.appendChild(renderPost(post));
         }
-        this.cachedPosts = allPosts;
+        this.cachedPosts = timelinePosts;
         this.cachedTimelineFilter = this.activeFilter;
         return;
       }
 
       const prevByKey = new Map((this.cachedPosts || []).map((post) => [makeKey(post), post]));
-      const nextByKey = new Map(allPosts.map((post) => [makeKey(post), post]));
-      const newPosts = allPosts.filter((post) => !prevByKey.has(makeKey(post)));
+      const nextByKey = new Map(timelinePosts.map((post) => [makeKey(post), post]));
+      const newPosts = timelinePosts.filter((post) => !prevByKey.has(makeKey(post)));
 
       const isPostChanged = (prev, next) => {
         if (!prev || !next) return true;
@@ -304,11 +308,60 @@ class StarShipApp {
         this.timelineFeed.scrollTop = isNearTop ? 0 : (prevScrollTop + delta);
       }
 
-      this.cachedPosts = allPosts;
+      this.cachedPosts = timelinePosts;
       this.cachedTimelineFilter = this.activeFilter;
     } catch (err) {
       this.timelineFeed.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
     }
+  }
+
+  mergeCommonTimelinePosts(posts) {
+    const mergedByKey = new Map();
+
+    for (const post of posts) {
+      const key = this.getPostDedupeKey(post);
+      const account = this.store.getById(post.accountId);
+      const marker = {
+        accountId: post.accountId,
+        label: account?.label || account?.profile?.displayName || post.accountId,
+        color: this.getAccountMarkerColor(post.accountId),
+      };
+
+      if (!mergedByKey.has(key)) {
+        mergedByKey.set(key, {
+          ...post,
+          dedupeKey: key,
+          sourceAccounts: [marker],
+        });
+        continue;
+      }
+
+      const existing = mergedByKey.get(key);
+      if (!existing.sourceAccounts.some((item) => item.accountId === marker.accountId)) {
+        existing.sourceAccounts.push(marker);
+      }
+    }
+
+    return [...mergedByKey.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  getPostDedupeKey(post) {
+    const targetId = post.targetPostId || post.reblog?.id || post.id;
+    const url = post.url || post.reblog?.url;
+    const authorAcct = post.author?.acct || '';
+    return url
+      ? `${post.platform}:url:${url}`
+      : `${post.platform}:id:${targetId}:author:${authorAcct}`;
+  }
+
+  getAccountMarkerColor(accountId = '') {
+    let hash = 0;
+    for (let i = 0; i < accountId.length; i += 1) {
+      hash = ((hash << 5) - hash) + accountId.charCodeAt(i);
+      hash |= 0;
+    }
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue} 80% 62%)`;
   }
 
 

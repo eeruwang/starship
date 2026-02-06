@@ -32,9 +32,17 @@ export function renderPost(post) {
     html += `<div class="cw-content" id="${cwId}">`;
   }
 
+  const sourceMarkers = Array.isArray(post.sourceAccounts) ? post.sourceAccounts : [];
+  const markerHtml = sourceMarkers.length > 0
+    ? `<div class="post-source-markers" aria-label="표시 계정">${sourceMarkers
+      .map((source) => `<span class="post-source-marker" style="--marker-color:${escapeHtml(source.color || '#8b93c9')}" title="${escapeHtml(source.label || source.accountId || '')}"></span>`)
+      .join('')}</div>`
+    : '';
+
   // Header
   html += `
     <div class="post-header">
+      ${markerHtml}
       <img class="post-avatar" src="${displayPost.author.avatarUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'}"
            alt="${escapeHtml(displayPost.author.displayName)}"
            loading="lazy"
