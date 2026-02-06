@@ -40,17 +40,32 @@ body {
 }
 
 /* ===== Scrollbar ===== */
-::-webkit-scrollbar {
+/* Hide only the outer page scrollbar */
+html, body {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Keep timeline/notification column scrollbars visible */
+.column-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+.column-content::-webkit-scrollbar {
   width: 6px;
 }
-::-webkit-scrollbar-track {
+.column-content::-webkit-scrollbar-track {
   background: transparent;
 }
-::-webkit-scrollbar-thumb {
+.column-content::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover {
+.column-content::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
