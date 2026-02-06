@@ -272,6 +272,7 @@ class StarShipApp {
 
       const prevScrollTop = this.timelineFeed.scrollTop;
       const prevScrollHeight = this.timelineFeed.scrollHeight;
+      const isNearTop = prevScrollTop < 24;
 
       for (let i = newPosts.length - 1; i >= 0; i -= 1) {
         const card = renderPost(newPosts[i]);
@@ -281,7 +282,7 @@ class StarShipApp {
       }
 
       const delta = this.timelineFeed.scrollHeight - prevScrollHeight;
-      this.timelineFeed.scrollTop = prevScrollTop + delta;
+      this.timelineFeed.scrollTop = isNearTop ? 0 : (prevScrollTop + delta);
 
       const merged = [...newPosts, ...(this.cachedPosts || [])];
       const deduped = [];
