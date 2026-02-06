@@ -25,6 +25,7 @@ export class MisskeyClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, i: this.accessToken }),
+      cache: 'no-store',
     });
 
     const responseText = await res.text().catch(() => '');

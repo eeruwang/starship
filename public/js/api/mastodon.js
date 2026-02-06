@@ -28,6 +28,7 @@ export class MastodonClient {
       method,
       headers,
       body: body ? JSON.stringify(body) : null,
+      cache: 'no-store',
     });
 
     if (!res.ok) {

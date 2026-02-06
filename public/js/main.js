@@ -247,9 +247,10 @@ class StarShipApp {
 
       const makeKey = (post) => `${post.platform}:${post.accountId || ''}:${post.id}`;
 
+      const hasRenderedPosts = this.timelineFeed.querySelector('.post-card') !== null;
       const canIncremental = !shouldShowLoader
         && this.cachedTimelineFilter === this.activeFilter
-        && this.timelineFeed.children.length > 0;
+        && hasRenderedPosts;
 
       if (!canIncremental) {
         this.timelineFeed.innerHTML = '';
@@ -261,39 +262,49 @@ class StarShipApp {
         return;
       }
 
-      const existingKeys = new Set((this.cachedPosts || []).map(makeKey));
-      const newPosts = allPosts.filter((post) => !existingKeys.has(makeKey(post)));
+      const prevByKey = new Map((this.cachedPosts || []).map((post) => [makeKey(post), post]));
+      const nextByKey = new Map(allPosts.map((post) => [makeKey(post), post]));
+      const newPosts = allPosts.filter((post) => !prevByKey.has(makeKey(post)));
 
-      if (newPosts.length === 0) {
-        this.cachedPosts = allPosts;
-        this.cachedTimelineFilter = this.activeFilter;
-        return;
+      const isPostChanged = (prev, next) => {
+        if (!prev || !next) return true;
+        const prevTime = prev.createdAt instanceof Date ? prev.createdAt.getTime() : new Date(prev.createdAt).getTime();
+        const nextTime = next.createdAt instanceof Date ? next.createdAt.getTime() : new Date(next.createdAt).getTime();
+        return prevTime !== nextTime
+          || prev.content !== next.content
+          || prev.contentWarning !== next.contentWarning
+          || JSON.stringify(prev.stats || {}) !== JSON.stringify(next.stats || {})
+          || JSON.stringify(prev.reactions || {}) !== JSON.stringify(next.reactions || {});
+      };
+
+      // Update existing cards in-place when content/stats changed.
+      for (const card of this.timelineFeed.querySelectorAll('.post-card')) {
+        const key = `${card.dataset.platform}:${card.dataset.accountId || ''}:${card.dataset.postId}`;
+        const prev = prevByKey.get(key);
+        const next = nextByKey.get(key);
+        if (!next || !isPostChanged(prev, next)) continue;
+
+        const replacement = renderPost(next);
+        card.replaceWith(replacement);
       }
 
-      const prevScrollTop = this.timelineFeed.scrollTop;
-      const prevScrollHeight = this.timelineFeed.scrollHeight;
-      const isNearTop = prevScrollTop < 24;
+      if (newPosts.length > 0) {
+        const prevScrollTop = this.timelineFeed.scrollTop;
+        const prevScrollHeight = this.timelineFeed.scrollHeight;
+        const isNearTop = prevScrollTop < 24;
 
-      for (let i = newPosts.length - 1; i >= 0; i -= 1) {
-        const card = renderPost(newPosts[i]);
-        card.classList.add('is-new');
-        setTimeout(() => card.classList.remove('is-new'), 700);
-        this.timelineFeed.prepend(card);
+        for (let i = newPosts.length - 1; i >= 0; i -= 1) {
+          const card = renderPost(newPosts[i]);
+          card.classList.add('is-new');
+          setTimeout(() => card.classList.remove('is-new'), 700);
+          this.timelineFeed.prepend(card);
+        }
+
+        const delta = this.timelineFeed.scrollHeight - prevScrollHeight;
+        this.timelineFeed.scrollTop = isNearTop ? 0 : (prevScrollTop + delta);
       }
 
-      const delta = this.timelineFeed.scrollHeight - prevScrollHeight;
-      this.timelineFeed.scrollTop = isNearTop ? 0 : (prevScrollTop + delta);
-
-      const merged = [...newPosts, ...(this.cachedPosts || [])];
-      const deduped = [];
-      const seen = new Set();
-      for (const post of merged) {
-        const key = makeKey(post);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        deduped.push(post);
-      }
-      this.cachedPosts = deduped.slice(0, 300);
+      this.cachedPosts = allPosts;
       this.cachedTimelineFilter = this.activeFilter;
     } catch (err) {
       this.timelineFeed.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
