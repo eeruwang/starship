@@ -1,5 +1,6 @@
 # FediBoard - Cloudflare Worker 설정
-name = "fediboard"
+# 배포 주소: https://starship.eeruwang.workers.dev/
+name = "starship"
 main = "src/worker.js"
 compatibility_date = "2024-09-23"
 
