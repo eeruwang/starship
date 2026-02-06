@@ -11,6 +11,7 @@ export class MisskeyClient {
     this.platformType = platformType; // 'misskey' | 'iceshrimp' | 'cherrypick'
     // localhost가 아니면 Worker 프록시 사용 (Cloudflare 배포 환경)
     this.useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    this.emojiLookupCache = new Map();
   }
 
   async request(endpoint, body = {}) {
@@ -47,7 +48,86 @@ export class MisskeyClient {
   async getNotifications(limit = 30, untilId = null) {
     const body = { limit };
     if (untilId) body.untilId = untilId;
-    return this.request('i/notifications', body);
+    const notifications = await this.request('i/notifications', body);
+    await this.prefetchNotificationEmojis(notifications);
+    return notifications;
+  }
+
+  extractEmojiTokens(text) {
+    if (typeof text !== 'string' || !text) return [];
+    const tokens = [];
+    const re = /:([a-zA-Z0-9_.+-]+(?:@[a-zA-Z0-9.-]+)?):/g;
+    let matched = re.exec(text);
+    while (matched) {
+      if (matched[1]) tokens.push(matched[1]);
+      matched = re.exec(text);
+    }
+    return tokens;
+  }
+
+  async lookupEmojiUrl(name) {
+    const clean = this.extractEmojiName(name);
+    if (!clean) return null;
+    if (this.emojiLookupCache.has(clean)) return this.emojiLookupCache.get(clean);
+
+    const [base, host] = clean.split('@');
+    const attempts = [
+      () => this.request('emoji', host ? { name: base, host } : { name: base }),
+      () => this.request('emoji', { name: clean }),
+      () => this.request('emoji', { name: base }),
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const result = await attempt();
+        const url = this.extractEmojiUrl(result);
+        if (url) {
+          this.emojiLookupCache.set(clean, url);
+          return url;
+        }
+      } catch (_) {
+        // Ignore lookup failure and try fallback variants.
+      }
+    }
+
+    this.emojiLookupCache.set(clean, null);
+    return null;
+  }
+
+  async prefetchNotificationEmojis(notifications = []) {
+    if (!Array.isArray(notifications) || notifications.length === 0) return;
+
+    for (const notif of notifications) {
+      const known = this.buildEmojiMap(notif?.note || {}, notif?.note || {});
+      const texts = [
+        notif?.reaction,
+        notif?.user?.name,
+        notif?.user?.username,
+        notif?.note?.text,
+        notif?.note?.cw,
+      ].filter(Boolean);
+      const names = new Set();
+      for (const text of texts) {
+        for (const token of this.extractEmojiTokens(text)) names.add(token);
+        const plain = this.extractEmojiName(text);
+        if (plain && text.startsWith(':') && text.endsWith(':')) names.add(plain);
+      }
+
+      if (names.size === 0) continue;
+      const resolved = {};
+      for (const name of names) {
+        const token = `:${name}:`;
+        if (this.resolveEmojiUrl(token, known)) continue;
+        const url = await this.lookupEmojiUrl(name);
+        if (!url) continue;
+        this.addEmojiKeyVariants(known, name, url);
+        this.addEmojiKeyVariants(resolved, name, url);
+      }
+
+      if (Object.keys(resolved).length > 0) {
+        notif._resolvedEmojiMap = { ...(notif._resolvedEmojiMap || {}), ...resolved };
+      }
+    }
   }
 
   async getNote(noteId) {
@@ -113,31 +193,43 @@ export class MisskeyClient {
   }
 
 
+  extractEmojiName(value) {
+    if (typeof value !== 'string' || !value) return '';
+    return value.trim().replace(/^:+|:+$/g, '');
+  }
+
+  extractEmojiUrl(emoji) {
+    if (!emoji || typeof emoji !== 'object') return '';
+    return emoji.url || emoji.staticUrl || emoji.publicUrl || emoji.uri || '';
+  }
+
+  addEmojiKeyVariants(map, rawKey, rawUrl) {
+    if (typeof rawKey !== 'string' || !rawKey) return;
+    if (typeof rawUrl !== 'string' || !rawUrl) return;
+
+    const key = this.extractEmojiName(rawKey);
+    const url = rawUrl.trim();
+    if (!key || !url) return;
+
+    const base = key.split('@')[0];
+    const variants = new Set([rawKey.trim(), key, `:${key}:`]);
+    if (base) {
+      variants.add(base);
+      variants.add(`:${base}:`);
+    }
+
+    for (const v of variants) {
+      if (!v) continue;
+      if (!map[v]) map[v] = url;
+    }
+  }
+
+
   buildEmojiMap(actualNote, originalNote) {
     const map = {};
 
     const addEmojiMapping = (rawKey, rawUrl) => {
-      if (typeof rawKey !== 'string' || !rawKey) return;
-      if (typeof rawUrl !== 'string' || !rawUrl) return;
-
-      const key = rawKey.trim();
-      const url = rawUrl.trim();
-      if (!key || !url) return;
-
-      const noColon = key.replace(/^:+|:+$/g, '');
-      const base = noColon.split('@')[0];
-
-      const variants = new Set([key, noColon]);
-      variants.add(`:${noColon}:`);
-      if (base) {
-        variants.add(base);
-        variants.add(`:${base}:`);
-      }
-
-      for (const v of variants) {
-        if (!v) continue;
-        if (!map[v]) map[v] = url;
-      }
+      this.addEmojiKeyVariants(map, rawKey, rawUrl);
     };
 
     const addFromRecord = (source) => {
@@ -149,7 +241,7 @@ export class MisskeyClient {
         }
         if (value && typeof value === 'object') {
           const objectName = value.name || value.shortcode || value.shortName || key;
-          const objectUrl = value.url || value.staticUrl || value.publicUrl;
+          const objectUrl = this.extractEmojiUrl(value);
           addEmojiMapping(objectName, objectUrl);
           addEmojiMapping(key, objectUrl);
         }
@@ -161,7 +253,7 @@ export class MisskeyClient {
       for (const emoji of source) {
         if (!emoji || typeof emoji !== 'object') continue;
         const name = emoji.name || emoji.shortcode || emoji.shortName;
-        const url = emoji.url || emoji.staticUrl || emoji.publicUrl;
+        const url = this.extractEmojiUrl(emoji);
         addEmojiMapping(name, url);
       }
     };
@@ -184,9 +276,8 @@ export class MisskeyClient {
 
   resolveEmojiUrl(token, emojiMap = {}) {
     if (!token || typeof token !== 'string') return null;
-    const matched = token.match(/^:([a-zA-Z0-9_.+-]+(?:@[a-zA-Z0-9.-]+)?):$/);
-    if (!matched) return null;
-    const name = matched[1];
+    const name = this.extractEmojiName(token);
+    if (!name) return null;
     const base = name.split('@')[0];
     return emojiMap[token] || emojiMap[name] || emojiMap[`:${name}:`] || emojiMap[base] || emojiMap[`:${base}:`] || null;
   }
@@ -216,8 +307,8 @@ export class MisskeyClient {
         if (typeof value === 'string') return { name: key, url: value };
         if (value && typeof value === 'object') {
           return {
-            name: value.name || value.shortcode || value.shortName || key,
-            url: value.url || value.staticUrl || value.publicUrl,
+            name: value.name || value.shortcode || value.shortName || value.shortCode || key,
+            url: this.extractEmojiUrl(value),
           };
         }
         return null;
@@ -225,18 +316,9 @@ export class MisskeyClient {
 
       for (const item of list) {
         if (!item || typeof item !== 'object') continue;
-        const name = item.name || item.shortcode || item.shortName;
-        const url = item.url || item.staticUrl || item.publicUrl;
-        if (!name || !url) continue;
-        const clean = name.replace(/^:+|:+$/g, '');
-        const base = clean.split('@')[0];
-
-        reactionEmojiMap[clean] = reactionEmojiMap[clean] || url;
-        reactionEmojiMap[`:${clean}:`] = reactionEmojiMap[`:${clean}:`] || url;
-        if (base) {
-          reactionEmojiMap[base] = reactionEmojiMap[base] || url;
-          reactionEmojiMap[`:${base}:`] = reactionEmojiMap[`:${base}:`] || url;
-        }
+        const name = item.name || item.shortcode || item.shortName || item.shortCode;
+        const url = this.extractEmojiUrl(item) || item.url;
+        this.addEmojiKeyVariants(reactionEmojiMap, name, url);
       }
     };
 
@@ -246,6 +328,7 @@ export class MisskeyClient {
     mergeEmojiMap(notif.note?.emojiDefinitions);
     mergeEmojiMap(notif.reactionEmojis);
     mergeEmojiMap(notif.emojis);
+    mergeEmojiMap(notif._resolvedEmojiMap);
 
     const reactionEmojiUrl = notif.type === 'reaction'
       ? this.resolveEmojiUrl(notif.reaction, reactionEmojiMap)
