@@ -200,9 +200,8 @@ function renderTextWithEmojis(text, emojiMap = {}) {
   const safe = escapeHtml(text || '');
   if (!safe) return '';
   return safe.replace(/:([a-zA-Z0-9_.+-]+(?:@[a-zA-Z0-9.-]+)?):/g, (match, name) => {
-    const full = emojiMap?.[name];
-    const base = emojiMap?.[name.split('@')[0]];
-    const url = full || base;
+    const baseName = name.split('@')[0];
+    const url = emojiMap?.[name] || emojiMap?.[`:${name}:`] || emojiMap?.[baseName] || emojiMap?.[`:${baseName}:`];
     if (!url) return match;
     return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${escapeHtml(name)}:" loading="lazy">`;
   });

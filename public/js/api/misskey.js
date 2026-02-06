@@ -116,13 +116,34 @@ export class MisskeyClient {
   buildEmojiMap(actualNote, originalNote) {
     const map = {};
 
+    const addEmojiMapping = (rawKey, rawUrl) => {
+      if (typeof rawKey !== 'string' || !rawKey) return;
+      if (typeof rawUrl !== 'string' || !rawUrl) return;
+
+      const key = rawKey.trim();
+      const url = rawUrl.trim();
+      if (!key || !url) return;
+
+      const noColon = key.replace(/^:+|:+$/g, '');
+      const base = noColon.split('@')[0];
+
+      const variants = new Set([key, noColon]);
+      variants.add(`:${noColon}:`);
+      if (base) {
+        variants.add(base);
+        variants.add(`:${base}:`);
+      }
+
+      for (const v of variants) {
+        if (!v) continue;
+        if (!map[v]) map[v] = url;
+      }
+    };
+
     const addFromRecord = (source) => {
       if (!source || typeof source !== 'object' || Array.isArray(source)) return;
       for (const [key, value] of Object.entries(source)) {
-        if (typeof value !== 'string' || !value) continue;
-        map[key] = value;
-        const base = key.split('@')[0];
-        if (base && !map[base]) map[base] = value;
+        addEmojiMapping(key, value);
       }
     };
 
@@ -130,12 +151,9 @@ export class MisskeyClient {
       if (!Array.isArray(source)) return;
       for (const emoji of source) {
         if (!emoji || typeof emoji !== 'object') continue;
-        const name = emoji.name;
+        const name = emoji.name || emoji.shortcode || emoji.shortName;
         const url = emoji.url || emoji.staticUrl || emoji.publicUrl;
-        if (!name || !url) continue;
-        map[name] = url;
-        const base = name.split('@')[0];
-        if (base && !map[base]) map[base] = url;
+        addEmojiMapping(name, url);
       }
     };
 
@@ -144,14 +162,14 @@ export class MisskeyClient {
     addFromArray(actualNote?.emojiDefinitions);
     addFromArray(originalNote?.emojiDefinitions);
 
-    const mentionedUsers = [actualNote?.user, originalNote?.user].filter(Boolean);
-    for (const user of mentionedUsers) {
+    const users = [actualNote?.user, originalNote?.user].filter(Boolean);
+    for (const user of users) {
       addFromArray(user?.emojis);
+      addFromRecord(user?.emojis);
     }
 
     return map;
   }
-
 
   resolveEmojiUrl(token, emojiMap = {}) {
     if (!token || typeof token !== 'string') return null;
@@ -159,7 +177,7 @@ export class MisskeyClient {
     if (!matched) return null;
     const name = matched[1];
     const base = name.split('@')[0];
-    return emojiMap[name] || emojiMap[base] || null;
+    return emojiMap[token] || emojiMap[name] || emojiMap[`:${name}:`] || emojiMap[base] || emojiMap[`:${base}:`] || null;
   }
 
   normalizeNotification(notif) {
@@ -183,19 +201,32 @@ export class MisskeyClient {
     if (Array.isArray(notif.user?.emojis)) {
       for (const emoji of notif.user.emojis) {
         if (!emoji || typeof emoji !== 'object') continue;
-        const name = emoji.name;
+        const name = emoji.name || emoji.shortcode || emoji.shortName;
         const url = emoji.url || emoji.staticUrl || emoji.publicUrl;
         if (!name || !url) continue;
         reactionEmojiMap[name] = url;
+        reactionEmojiMap[`:${name}:`] = reactionEmojiMap[`:${name}:`] || url;
         const base = name.split('@')[0];
         if (base && !reactionEmojiMap[base]) reactionEmojiMap[base] = url;
+      }
+    }
+    if (notif.user?.emojis && typeof notif.user.emojis === 'object' && !Array.isArray(notif.user.emojis)) {
+      for (const [key, value] of Object.entries(notif.user.emojis)) {
+        if (typeof value !== 'string' || !value) continue;
+        reactionEmojiMap[key] = reactionEmojiMap[key] || value;
+        const clean = key.replace(/^:+|:+$/g, '');
+        reactionEmojiMap[clean] = reactionEmojiMap[clean] || value;
+        reactionEmojiMap[`:${clean}:`] = reactionEmojiMap[`:${clean}:`] || value;
       }
     }
     if (notif.reactionEmojis && typeof notif.reactionEmojis === 'object') {
       for (const [key, value] of Object.entries(notif.reactionEmojis)) {
         if (typeof value !== 'string' || !value) continue;
         reactionEmojiMap[key] = value;
-        const base = key.split('@')[0];
+        const clean = key.replace(/^:+|:+$/g, '');
+        reactionEmojiMap[clean] = reactionEmojiMap[clean] || value;
+        reactionEmojiMap[`:${clean}:`] = reactionEmojiMap[`:${clean}:`] || value;
+        const base = clean.split('@')[0];
         if (base && !reactionEmojiMap[base]) reactionEmojiMap[base] = value;
       }
     }
