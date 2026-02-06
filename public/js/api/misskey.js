@@ -168,6 +168,8 @@ export class MisskeyClient {
 
     addFromRecord(actualNote?.emojis);
     addFromRecord(originalNote?.emojis);
+    addFromArray(actualNote?.emojis);
+    addFromArray(originalNote?.emojis);
     addFromArray(actualNote?.emojiDefinitions);
     addFromArray(originalNote?.emojiDefinitions);
 
@@ -208,7 +210,7 @@ export class MisskeyClient {
     const info = typeMap[notif.type] || { icon: '🔔', label: notif.type };
     const reactionEmojiMap = this.buildEmojiMap(notif.note || {}, notif.note || {});
     const mergeEmojiMap = (source) => {
-      if (!source) return;
+      if (!source || typeof source !== 'object') return;
 
       const list = Array.isArray(source) ? source : Object.entries(source).map(([key, value]) => {
         if (typeof value === 'string') return { name: key, url: value };
@@ -240,6 +242,8 @@ export class MisskeyClient {
 
     mergeEmojiMap(notif.user?.emojis);
     mergeEmojiMap(notif.note?.user?.emojis);
+    mergeEmojiMap(notif.note?.emojis);
+    mergeEmojiMap(notif.note?.emojiDefinitions);
     mergeEmojiMap(notif.reactionEmojis);
     mergeEmojiMap(notif.emojis);
 
