@@ -39,13 +39,11 @@ class StarShipApp {
 
     // Modal
     this.modalAddAccount = document.getElementById('modal-add-account');
-    this.platformSelect = document.getElementById('platform-select');
     this.instanceUrl = document.getElementById('instance-url');
     this.accessToken = document.getElementById('access-token');
     this.accountLabel = document.getElementById('account-label');
     this.btnConfirmAdd = document.getElementById('btn-confirm-add');
     this.addAccountError = document.getElementById('add-account-error');
-    this.tokenHint = document.getElementById('token-hint');
 
     this.btnAddFirst = document.getElementById('btn-add-first');
 
@@ -84,16 +82,6 @@ class StarShipApp {
       });
     });
 
-    // Platform select → update hints and enable OAuth button
-    this.platformSelect.addEventListener('change', () => {
-      this.updateTokenHint();
-      this.updateOAuthButton();
-    });
-
-    // Instance URL change → platform auto detect
-    this.instanceUrl.addEventListener('input', () => {
-      this.schedulePlatformDetection();
-    });
 
     // OAuth login button
     this.btnOAuthLogin.addEventListener('click', () => this.handleOAuthLogin());
@@ -342,79 +330,27 @@ class StarShipApp {
   // ===== Add Account Modal =====
 
   openAddAccountModal() {
-    this.platformSelect.value = '';
     this.instanceUrl.value = '';
     this.accessToken.value = '';
     this.accountLabel.value = '';
     this.addAccountError.style.display = 'none';
     this.btnConfirmAdd.disabled = false;
     this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
-    this.btnOAuthLogin.textContent = '플랫폼 자동 감지 후 로그인';
     document.getElementById('manual-token-section').removeAttribute('open');
     this.modalAddAccount.style.display = 'flex';
     this.instanceUrl.focus();
-  }
-
-  schedulePlatformDetection() {
-    if (this.detectPlatformTimer) {
-      clearTimeout(this.detectPlatformTimer);
-    }
-
-    this.detectPlatformTimer = setTimeout(async () => {
-      const raw = this.instanceUrl.value.trim();
-      if (!raw) {
-        this.platformSelect.value = '';
-        this.updateTokenHint();
-        this.updateOAuthButton();
-        return;
-      }
-
-      try {
-        const normalized = normalizeInstanceUrl(raw);
-        const platform = await detectPlatform(normalized);
-        this.platformSelect.value = platform;
-        this.updateTokenHint();
-        this.updateOAuthButton();
-      } catch {
-        // keep current selection when detection fails during typing
-      }
-    }, 300);
+    this.updateOAuthButton();
   }
 
   updateOAuthButton() {
-    const platform = this.platformSelect.value;
-    const labels = {
-      misskey: 'Misskey 로그인으로 연결',
-      iceshrimp: 'Iceshrimp 로그인으로 연결',
-      cherrypick: 'CherryPick 로그인으로 연결',
-      mastodon: 'Mastodon 로그인으로 연결',
-    };
-    this.btnOAuthLogin.textContent = labels[platform] || '로그인으로 연결';
+    this.btnOAuthLogin.textContent = '로그인으로 연결';
   }
 
-  updateTokenHint() {
-    const platform = this.platformSelect.value;
-    const hints = {
-      misskey: 'Misskey 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      iceshrimp: 'Iceshrimp 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      cherrypick: 'CherryPick 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      mastodon: 'Mastodon 인스턴스 → 설정 → 개발 → 새 애플리케이션 생성 후 액세스 토큰 복사',
-    };
-    this.tokenHint.textContent = hints[platform] || '인스턴스 설정에서 API 토큰을 생성하세요.';
-
-    const placeholders = {
-      misskey: 'misskey.io',
-      iceshrimp: 'iceshrimp.example.com',
-      cherrypick: 'cherrypick.example.com',
-      mastodon: 'mastodon.social',
-    };
-    this.instanceUrl.placeholder = placeholders[platform] || 'example.com';
-  }
 
   // ===== OAuth / MiAuth 로그인 =====
 
   async handleOAuthLogin() {
-    let platform = this.platformSelect.value;
+    let platform;
     const rawInstanceUrl = this.instanceUrl.value.trim();
 
     // 단계별 유효성 검사 → 어떤 필드가 빠졌는지 명확히 안내
@@ -436,10 +372,9 @@ class StarShipApp {
     if (!platform) {
       try {
         platform = await detectPlatform(instanceUrl);
-        this.platformSelect.value = platform;
       } catch (err) {
         this.showAddError(err.message);
-        this.platformSelect.focus();
+        this.instanceUrl.focus();
         return;
       }
     }
@@ -483,7 +418,7 @@ class StarShipApp {
   // ===== 수동 토큰 추가 =====
 
   async handleAddAccount() {
-    let platform = this.platformSelect.value;
+    let platform;
     const rawInstanceUrl = this.instanceUrl.value.trim();
     const accessToken = this.accessToken.value.trim();
     const label = this.accountLabel.value.trim();
@@ -508,7 +443,6 @@ class StarShipApp {
     if (!platform) {
       try {
         platform = await detectPlatform(instanceUrl);
-        this.platformSelect.value = platform;
       } catch (err) {
         this.showAddError(err.message);
         return;
