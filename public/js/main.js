@@ -1,12 +1,12 @@
 /**
- * FediBoard - Main Application
+ * StarShip - Main Application
  * Fediverse multi-account dashboard for Misskey, Iceshrimp, CherryPick, and Mastodon.
  */
 import { AccountStore } from './accounts.js';
 import { renderPost, renderNotification, renderAccountCard, renderLoading, renderLoadingText } from './ui/dashboard.js';
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from './auth.js';
 
-class FediBoardApp {
+class StarShipApp {
   constructor() {
     this.store = new AccountStore();
     this.activeFilter = 'all'; // 'all' or account id
@@ -343,7 +343,6 @@ class FediBoardApp {
     this.addAccountError.style.display = 'none';
     this.btnConfirmAdd.disabled = false;
     this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
-    this.btnOAuthLogin.disabled = true;
     this.btnOAuthLogin.textContent = '로그인으로 연결';
     document.getElementById('manual-token-section').removeAttribute('open');
     this.modalAddAccount.style.display = 'flex';
@@ -352,15 +351,6 @@ class FediBoardApp {
 
   updateOAuthButton() {
     const platform = this.platformSelect.value;
-    const url = this.instanceUrl.value.trim();
-    let valid = false;
-
-    if (platform && url) {
-      try { new URL(url); valid = true; } catch {}
-    }
-
-    this.btnOAuthLogin.disabled = !valid;
-
     const labels = {
       misskey: 'Misskey 로그인으로 연결',
       iceshrimp: 'Iceshrimp 로그인으로 연결',
@@ -395,15 +385,23 @@ class FediBoardApp {
     const platform = this.platformSelect.value;
     const instanceUrl = this.instanceUrl.value.trim();
 
-    if (!platform || !instanceUrl) {
-      this.showAddError('플랫폼과 인스턴스 URL을 입력하세요.');
+    // 단계별 유효성 검사 → 어떤 필드가 빠졌는지 명확히 안내
+    if (!platform) {
+      this.showAddError('먼저 플랫폼을 선택하세요.');
+      this.platformSelect.focus();
+      return;
+    }
+    if (!instanceUrl) {
+      this.showAddError('인스턴스 URL을 입력하세요. (예: https://misskey.io)');
+      this.instanceUrl.focus();
       return;
     }
 
     try {
       new URL(instanceUrl);
     } catch {
-      this.showAddError('올바른 URL 형식이 아닙니다.');
+      this.showAddError('올바른 URL 형식이 아닙니다. (예: https://misskey.io)');
+      this.instanceUrl.focus();
       return;
     }
 
@@ -413,13 +411,19 @@ class FediBoardApp {
 
     try {
       // 플랫폼에 따라 OAuth 또는 MiAuth 시작
+      let popup;
       if (platform === 'mastodon') {
-        await startMastodonOAuth(instanceUrl);
+        popup = await startMastodonOAuth(instanceUrl);
       } else {
-        await startMiAuth(instanceUrl, platform);
+        popup = await startMiAuth(instanceUrl, platform);
       }
 
-      this.btnOAuthLogin.textContent = '인증 대기 중... (팝업 확인)';
+      if (popup) {
+        this.btnOAuthLogin.textContent = '인증 대기 중... (팝업에서 로그인하세요)';
+      } else {
+        // 팝업이 차단되어 리다이렉트된 경우 → 여기 도달 안 함
+        return;
+      }
 
       // 팝업에서 인증 완료 메시지 대기
       const result = await waitForAuthCallback();
@@ -498,13 +502,13 @@ class FediBoardApp {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-  const app = new FediBoardApp();
+  const app = new StarShipApp();
   window.app = app;
 
   // 리다이렉트 방식 OAuth 콜백 처리 (팝업 차단된 경우)
-  const authResult = localStorage.getItem('fediboard_auth_result');
+  const authResult = localStorage.getItem('starship_auth_result');
   if (authResult) {
-    localStorage.removeItem('fediboard_auth_result');
+    localStorage.removeItem('starship_auth_result');
     try {
       const result = JSON.parse(authResult);
       await app.store.addAccount(result.platform, result.instanceUrl, result.accessToken);

@@ -6,9 +6,9 @@
  */
 
 const CALLBACK_URL = `${window.location.origin}/callback.html`;
-const APP_NAME = 'FediBoard';
+const APP_NAME = 'StarShip';
 const APP_WEBSITE = window.location.origin;
-const PENDING_AUTH_KEY = 'fediboard_pending_auth';
+const PENDING_AUTH_KEY = 'starship_pending_auth';
 
 // Worker 프록시 사용 여부
 const useProxy = window.location.hostname !== 'localhost';
@@ -158,7 +158,7 @@ function openAuthPopup(url) {
 
   const popup = window.open(
     url,
-    'fediboard_auth',
+    'starship_auth',
     `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
   );
 
@@ -195,10 +195,10 @@ export function waitForAuthCallback() {
   return new Promise((resolve, reject) => {
     const handleMessage = (event) => {
       if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'fediboard_auth_complete') {
+      if (event.data?.type === 'starship_auth_complete') {
         window.removeEventListener('message', handleMessage);
         resolve(event.data.result);
-      } else if (event.data?.type === 'fediboard_auth_error') {
+      } else if (event.data?.type === 'starship_auth_error') {
         window.removeEventListener('message', handleMessage);
         reject(new Error(event.data.error));
       }

@@ -114,6 +114,13 @@ body {
 .btn-primary:hover {
   background: #6b6cee;
 }
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn:disabled:hover {
+  filter: none;
+}
 
 .btn-secondary {
   background: var(--bg-card);

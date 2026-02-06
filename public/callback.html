@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FediBoard - 인증 중...</title>
+  <title>StarShip - 인증 중...</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -43,15 +43,7 @@
   </div>
 
   <script type="module">
-    /**
-     * OAuth / MiAuth 콜백 처리
-     *
-     * Mastodon: ?code=xxx → 토큰 교환
-     * Misskey:  ?session=xxx → 세션 확인 (MiAuth는 콜백에 session 파라미터 없이
-     *           돌아오므로 저장된 sessionId 사용)
-     */
-
-    const PENDING_AUTH_KEY = 'fediboard_pending_auth';
+    const PENDING_AUTH_KEY = 'starship_pending_auth';
     const useProxy = window.location.hostname !== 'localhost';
 
     function buildFetchUrl(targetUrl) {
@@ -86,7 +78,6 @@
         let result;
 
         if (pending.platform === 'mastodon') {
-          // Mastodon OAuth: code 파라미터로 토큰 교환
           const code = params.get('code');
           if (!code) {
             const error = params.get('error_description') || params.get('error') || '인증이 거부되었습니다.';
@@ -118,7 +109,6 @@
           };
 
         } else {
-          // Misskey / Iceshrimp / CherryPick: MiAuth 세션 확인
           const sessionId = pending.sessionId;
 
           const checkRes = await fetch(buildFetchUrl(`${pending.instanceUrl}/api/miauth/${sessionId}/check`), {
@@ -143,18 +133,14 @@
           };
         }
 
-        // 인증 정보 정리
         localStorage.removeItem(PENDING_AUTH_KEY);
 
-        // 부모 창에 결과 전달
         if (window.opener) {
-          window.opener.postMessage({ type: 'fediboard_auth_complete', result }, window.location.origin);
+          window.opener.postMessage({ type: 'starship_auth_complete', result }, window.location.origin);
           showSuccess();
           setTimeout(() => window.close(), 1500);
         } else {
-          // 팝업이 아닌 경우 (리다이렉트 방식)
-          // 결과를 localStorage에 저장하고 메인 페이지로 이동
-          localStorage.setItem('fediboard_auth_result', JSON.stringify(result));
+          localStorage.setItem('starship_auth_result', JSON.stringify(result));
           showSuccess();
           setTimeout(() => { window.location.href = '/'; }, 1500);
         }
@@ -162,7 +148,7 @@
       } catch (err) {
         localStorage.removeItem(PENDING_AUTH_KEY);
         if (window.opener) {
-          window.opener.postMessage({ type: 'fediboard_auth_error', error: err.message }, window.location.origin);
+          window.opener.postMessage({ type: 'starship_auth_error', error: err.message }, window.location.origin);
         }
         showError(err.message);
       }

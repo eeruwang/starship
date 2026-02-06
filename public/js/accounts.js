@@ -5,7 +5,7 @@
 import { MastodonClient } from './api/mastodon.js';
 import { MisskeyClient } from './api/misskey.js';
 
-const STORAGE_KEY = 'fediboard_accounts';
+const STORAGE_KEY = 'starship_accounts';
 
 export class AccountStore {
   constructor() {

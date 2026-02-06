@@ -1,5 +1,5 @@
 /**
- * FediBoard Cloudflare Worker
+ * StarShip Cloudflare Worker
  *
  * 역할:
  * 1. 정적 파일 서빙 (wrangler assets 바인딩이 자동 처리)
@@ -61,7 +61,7 @@ async function handleProxy(request, url) {
   try {
     // 원본 요청의 헤더 추출 (Authorization 등)
     const proxyHeaders = new Headers();
-    proxyHeaders.set('User-Agent', 'FediBoard/1.0');
+    proxyHeaders.set('User-Agent', 'StarShip/1.0');
     proxyHeaders.set('Accept', 'application/json');
 
     const authHeader = request.headers.get('Authorization');

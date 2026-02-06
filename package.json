@@ -1,5 +1,5 @@
 {
-  "name": "fediboard",
+  "name": "starship",
   "version": "1.0.0",
   "description": "Multi-account Fediverse dashboard for Misskey, Iceshrimp, CherryPick, and Mastodon",
   "scripts": {
