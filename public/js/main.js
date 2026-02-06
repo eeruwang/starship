@@ -348,15 +348,43 @@ class StarShipApp {
   getPostDedupeKey(post) {
     const canonical = post.reblog || post;
     const canonicalRaw = canonical.raw || {};
-    const canonicalId = canonicalRaw.id || canonical.id || post.targetPostId || post.id;
     const canonicalUri = canonicalRaw.uri || canonicalRaw.url || canonical.url || post.url || '';
-    const canonicalAuthor = canonical.author?.acct || canonical.author?.username || '';
+    const normalizedUri = this.normalizeCanonicalUri(canonicalUri);
 
-    if (canonicalUri) {
-      return `${post.platform}:uri:${canonicalUri}`;
+    if (normalizedUri) {
+      return `${post.platform}:uri:${normalizedUri}`;
     }
 
-    return `${post.platform}:id:${canonicalId}:author:${canonicalAuthor}`;
+    // Some federated APIs (especially remote Misskey notes) expose local ids/urls per instance.
+    // Build a stable fallback signature from author + original text + creation time.
+    const authorKey = (canonical.author?.acct || canonical.author?.username || '').toLowerCase();
+    const rawText = (canonicalRaw.text || canonicalRaw.content || canonical.content || '').trim();
+    const createdAtKey = canonicalRaw.createdAt
+      || canonicalRaw.created_at
+      || (canonical.createdAt instanceof Date ? canonical.createdAt.toISOString() : String(canonical.createdAt || ''));
+    const mediaKey = Array.isArray(canonicalRaw.files)
+      ? canonicalRaw.files.map((f) => f?.url || f?.name || '').join('|')
+      : '';
+    const fallbackId = canonicalRaw.id || canonical.id || post.targetPostId || post.id;
+    const baseFallback = `${post.platform}:fallback:${authorKey}:${createdAtKey}:${rawText}:${mediaKey}`;
+
+    // If text/media are missing, include id as a last-resort discriminator to avoid accidental merges.
+    if (!rawText && !mediaKey) {
+      return `${baseFallback}:${fallbackId}`;
+    }
+
+    return baseFallback;
+  }
+
+  normalizeCanonicalUri(rawUri) {
+    if (!rawUri || typeof rawUri !== 'string') return '';
+    try {
+      const parsed = new URL(rawUri);
+      const pathname = parsed.pathname.replace(/\/+$/, '');
+      return `${parsed.hostname.toLowerCase()}${pathname}`;
+    } catch {
+      return rawUri.trim().toLowerCase().replace(/\/+$/, '');
+    }
   }
 
   getAccountMarkerColor(accountId = '') {
