@@ -746,3 +746,9 @@ select.input {
   vertical-align: -0.2em;
   object-fit: contain;
 }
+
+.notif-inline-emoji {
+  width: 1.5em;
+  height: 1.5em;
+  vertical-align: middle;
+}

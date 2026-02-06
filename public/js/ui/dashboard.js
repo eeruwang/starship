@@ -98,7 +98,7 @@ export function renderNotification(notif) {
   card.className = `notif-card platform-${notif.platform}`;
 
   let html = `
-    <div class="notif-icon">${notif.icon}</div>
+    <div class="notif-icon">${renderNotifIcon(notif)}</div>
     <div class="notif-body">
       <div class="notif-text">
         ${notif.actor ? `<strong>${escapeHtml(notif.actor.displayName)}</strong>` : ''}
@@ -194,6 +194,14 @@ export function renderLoadingText(message = '불러오는 중...') {
 }
 
 // Helpers
+
+function renderNotifIcon(notif) {
+  if (notif.reactionEmojiUrl) {
+    return `<img class="inline-emoji notif-inline-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.icon || 'reaction')}" loading="lazy">`;
+  }
+  return escapeHtml(notif.icon || '🔔');
+}
+
 
 function escapeHtml(text) {
   if (!text) return '';

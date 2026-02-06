@@ -152,6 +152,16 @@ export class MisskeyClient {
     return map;
   }
 
+
+  resolveEmojiUrl(token, emojiMap = {}) {
+    if (!token || typeof token !== 'string') return null;
+    const matched = token.match(/^:([a-zA-Z0-9_.+-]+(?:@[a-zA-Z0-9.-]+)?):$/);
+    if (!matched) return null;
+    const name = matched[1];
+    const base = name.split('@')[0];
+    return emojiMap[name] || emojiMap[base] || null;
+  }
+
   normalizeNotification(notif) {
     const typeMap = {
       'reaction': { icon: '💖', label: '리액션' },
@@ -169,12 +179,26 @@ export class MisskeyClient {
     };
 
     const info = typeMap[notif.type] || { icon: '🔔', label: notif.type };
+    const reactionEmojiMap = this.buildEmojiMap(notif.note || {}, notif.note || {});
+    if (notif.reactionEmojis && typeof notif.reactionEmojis === 'object') {
+      for (const [key, value] of Object.entries(notif.reactionEmojis)) {
+        if (typeof value !== 'string' || !value) continue;
+        reactionEmojiMap[key] = value;
+        const base = key.split('@')[0];
+        if (base && !reactionEmojiMap[base]) reactionEmojiMap[base] = value;
+      }
+    }
+
+    const reactionEmojiUrl = notif.type === 'reaction'
+      ? this.resolveEmojiUrl(notif.reaction, reactionEmojiMap)
+      : null;
 
     return {
       id: notif.id,
       platform: this.platformType,
       type: notif.type,
       icon: notif.type === 'reaction' ? (notif.reaction || info.icon) : info.icon,
+      reactionEmojiUrl,
       label: info.label,
       createdAt: new Date(notif.createdAt),
       actor: notif.user ? this.normalizeUser(notif.user) : null,
