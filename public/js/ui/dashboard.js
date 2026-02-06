@@ -101,8 +101,8 @@ export function renderNotification(notif) {
     <div class="notif-icon">${renderNotifIcon(notif)}</div>
     <div class="notif-body">
       <div class="notif-text">
-        ${notif.actor ? `<strong>${escapeHtml(notif.actor.displayName)}</strong>` : ''}
-        ${escapeHtml(notif.label)}
+        ${notif.actor ? `<strong>${renderTextWithEmojis(notif.actor.displayName, notif.emojiMap)}</strong>` : ''}
+        ${renderTextWithEmojis(notif.label, notif.emojiMap)}
       </div>
       <div class="notif-time">${timeAgo(notif.createdAt)}</div>
   `;
@@ -194,6 +194,19 @@ export function renderLoadingText(message = '불러오는 중...') {
 }
 
 // Helpers
+
+
+function renderTextWithEmojis(text, emojiMap = {}) {
+  const safe = escapeHtml(text || '');
+  if (!safe) return '';
+  return safe.replace(/:([a-zA-Z0-9_.+-]+(?:@[a-zA-Z0-9.-]+)?):/g, (match, name) => {
+    const full = emojiMap?.[name];
+    const base = emojiMap?.[name.split('@')[0]];
+    const url = full || base;
+    if (!url) return match;
+    return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${escapeHtml(name)}:" loading="lazy">`;
+  });
+}
 
 function renderNotifIcon(notif) {
   if (notif.reactionEmojiUrl) {

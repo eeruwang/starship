@@ -180,6 +180,17 @@ export class MisskeyClient {
 
     const info = typeMap[notif.type] || { icon: '🔔', label: notif.type };
     const reactionEmojiMap = this.buildEmojiMap(notif.note || {}, notif.note || {});
+    if (Array.isArray(notif.user?.emojis)) {
+      for (const emoji of notif.user.emojis) {
+        if (!emoji || typeof emoji !== 'object') continue;
+        const name = emoji.name;
+        const url = emoji.url || emoji.staticUrl || emoji.publicUrl;
+        if (!name || !url) continue;
+        reactionEmojiMap[name] = url;
+        const base = name.split('@')[0];
+        if (base && !reactionEmojiMap[base]) reactionEmojiMap[base] = url;
+      }
+    }
     if (notif.reactionEmojis && typeof notif.reactionEmojis === 'object') {
       for (const [key, value] of Object.entries(notif.reactionEmojis)) {
         if (typeof value !== 'string' || !value) continue;
@@ -199,6 +210,7 @@ export class MisskeyClient {
       type: notif.type,
       icon: notif.type === 'reaction' ? (notif.reaction || info.icon) : info.icon,
       reactionEmojiUrl,
+      emojiMap: reactionEmojiMap,
       label: info.label,
       createdAt: new Date(notif.createdAt),
       actor: notif.user ? this.normalizeUser(notif.user) : null,
