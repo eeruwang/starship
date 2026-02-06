@@ -27,12 +27,19 @@ export class MisskeyClient {
       body: JSON.stringify({ ...body, i: this.accessToken }),
     });
 
+    const responseText = await res.text().catch(() => '');
+
     if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Misskey API error ${res.status}: ${errText}`);
+      throw new Error(`Misskey API error ${res.status}: ${responseText}`);
     }
 
-    return res.json();
+    if (!responseText || !responseText.trim()) return {};
+
+    try {
+      return JSON.parse(responseText);
+    } catch (err) {
+      throw new Error(`Misskey API parse error: ${err.message}`);
+    }
   }
 
   async verifyCredentials() {

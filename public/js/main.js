@@ -350,6 +350,8 @@ class StarShipApp {
         } else {
           await client.createNote(text.trim(), targetPostId);
         }
+        this.bumpPostCounter(postId, platform, accountId, 'replies', 1);
+        this.animateAction(btn, 'reply');
       }
 
       if (action === 'fav') {
@@ -358,6 +360,8 @@ class StarShipApp {
         } else {
           await client.createReaction(targetPostId, '❤');
         }
+        this.bumpPostCounter(postId, platform, accountId, account.platform === 'mastodon' ? 'favourites' : 'reactions', 1);
+        this.animateAction(btn, 'fav');
       }
 
       if (action === 'boost') {
@@ -366,9 +370,11 @@ class StarShipApp {
         } else {
           await client.renote(targetPostId);
         }
+        this.bumpPostCounter(postId, platform, accountId, account.platform === 'mastodon' ? 'reblogs' : 'renotes', 1);
+        this.animateAction(btn, 'boost');
       }
 
-      await this.loadTimelines();
+      await this.refreshSinglePostCard(postId, platform, accountId, targetPostId);
     } catch (err) {
       alert(`작업 실패: ${err.message}`);
     } finally {
@@ -376,6 +382,68 @@ class StarShipApp {
       btn.title = originalTitle;
     }
   }
+
+  bumpPostCounter(postId, platform, accountId, key, amount = 1) {
+    const post = this.findPost(postId, platform, accountId);
+    if (!post) return;
+    post.stats = post.stats || {};
+    post.stats[key] = (post.stats[key] || 0) + amount;
+
+    const card = this.timelineFeed?.querySelector(`.post-card[data-post-id="${postId}"][data-platform="${platform}"][data-account-id="${accountId}"]`)
+      || this.timelineFeed?.querySelector(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
+    if (!card) return;
+
+    const action = key === 'replies' ? 'reply' : (key === 'reblogs' || key === 'renotes') ? 'boost' : 'fav';
+    const actionBtn = card.querySelector(`.post-action[data-action="${action}"]`);
+    if (!actionBtn) return;
+
+    let count = actionBtn.querySelector('.post-action-count');
+    if (!count) {
+      count = document.createElement('span');
+      count.className = 'post-action-count';
+      actionBtn.appendChild(count);
+    }
+    const value = post.stats[key] || 0;
+    count.textContent = String(value);
+  }
+
+  animateAction(btn, action) {
+    btn.classList.remove('is-pop', 'is-active');
+    btn.classList.add('is-pop', 'is-active', `is-${action}`);
+    setTimeout(() => {
+      btn.classList.remove('is-pop');
+    }, 260);
+  }
+
+  async refreshSinglePostCard(postId, platform, accountId, targetPostId) {
+    const account = this.store.getById(accountId);
+    const client = this.store.getClient(accountId);
+    if (!account || !client) return;
+
+    let refreshed = null;
+    if (account.platform === 'mastodon') {
+      const status = await client.getStatus(targetPostId);
+      refreshed = { ...client.normalizePost(status), accountId };
+    } else {
+      const note = await client.getNote(targetPostId);
+      refreshed = { ...client.normalizePost(note), accountId };
+    }
+
+    if (!refreshed) return;
+
+    const index = this.cachedPosts?.findIndex(p => p.id === postId && p.platform === platform && p.accountId === accountId);
+    if (typeof index === 'number' && index >= 0) {
+      this.cachedPosts[index] = refreshed;
+    }
+
+    const current = this.timelineFeed?.querySelector(`.post-card[data-post-id="${postId}"][data-platform="${platform}"][data-account-id="${accountId}"]`)
+      || this.timelineFeed?.querySelector(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
+    if (!current) return;
+
+    const nextCard = renderPost(refreshed);
+    current.replaceWith(nextCard);
+  }
+
 
   // ===== Auto Refresh =====
 

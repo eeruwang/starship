@@ -439,6 +439,32 @@ body {
   cursor: wait;
 }
 
+
+.post-action.is-active.fav {
+  color: #ffba6a;
+  border-color: rgba(255, 186, 106, 0.6);
+}
+
+.post-action.is-active.boost {
+  color: #7cf59f;
+  border-color: rgba(124, 245, 159, 0.6);
+}
+
+.post-action.is-active.reply {
+  color: #7fd4ff;
+  border-color: rgba(127, 212, 255, 0.6);
+}
+
+.post-action.is-pop {
+  animation: post-action-pop 0.24s ease;
+}
+
+@keyframes post-action-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
 /* ===== Notification Card ===== */
 .notif-card {
   background: var(--bg-card);
