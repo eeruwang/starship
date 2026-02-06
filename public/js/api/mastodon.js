@@ -1,15 +1,18 @@
 /**
  * Mastodon API Client
  * Handles communication with Mastodon instances.
+ * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
 export class MastodonClient {
   constructor(instanceUrl, accessToken) {
     this.instanceUrl = instanceUrl.replace(/\/+$/, '');
     this.accessToken = accessToken;
+    // localhost가 아니면 Worker 프록시 사용 (Cloudflare 배포 환경)
+    this.useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
   }
 
   async request(method, path, body = null) {
-    const url = `${this.instanceUrl}${path}`;
+    const targetUrl = `${this.instanceUrl}${path}`;
     const headers = {
       'Authorization': `Bearer ${this.accessToken}`,
     };
@@ -17,7 +20,11 @@ export class MastodonClient {
       headers['Content-Type'] = 'application/json';
     }
 
-    const res = await fetch(url, {
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
       method,
       headers,
       body: body ? JSON.stringify(body) : null,

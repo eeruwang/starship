@@ -1,0 +1,21 @@
+# FediBoard - Cloudflare Worker 설정
+name = "fediboard"
+main = "src/worker.js"
+compatibility_date = "2024-09-23"
+
+# 정적 파일 서빙 설정
+# public/ 디렉토리의 파일을 자동으로 서빙합니다.
+[assets]
+directory = "./public"
+
+# 커스텀 도메인 사용 시 아래 주석 해제
+# [routes]
+# pattern = "fediboard.example.com/*"
+# zone_name = "example.com"
+
+# 환경별 설정 (선택사항)
+# [env.production]
+# name = "fediboard-prod"
+
+# [env.staging]
+# name = "fediboard-staging"

@@ -2,17 +2,25 @@
  * Misskey API Client
  * Works with Misskey (Original), Iceshrimp, and CherryPick.
  * All use the same base API (Misskey API) with minor variations.
+ * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
 export class MisskeyClient {
   constructor(instanceUrl, accessToken, platformType = 'misskey') {
     this.instanceUrl = instanceUrl.replace(/\/+$/, '');
     this.accessToken = accessToken;
     this.platformType = platformType; // 'misskey' | 'iceshrimp' | 'cherrypick'
+    // localhost가 아니면 Worker 프록시 사용 (Cloudflare 배포 환경)
+    this.useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
   }
 
   async request(endpoint, body = {}) {
-    const url = `${this.instanceUrl}/api/${endpoint}`;
-    const res = await fetch(url, {
+    const targetUrl = `${this.instanceUrl}/api/${endpoint}`;
+
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, i: this.accessToken }),
