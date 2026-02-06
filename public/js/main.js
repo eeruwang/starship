@@ -283,7 +283,7 @@ class StarShipApp {
 
       // Update existing cards in-place when content/stats changed.
       for (const card of this.timelineFeed.querySelectorAll('.post-card')) {
-        const key = `${card.dataset.platform}:${card.dataset.accountId || ''}:${card.dataset.postId}`;
+        const key = card.dataset.dedupeKey || `${card.dataset.platform}:${card.dataset.accountId || ''}:${card.dataset.postId}`;
         const prev = prevByKey.get(key);
         const next = nextByKey.get(key);
         if (!next || !isPostChanged(prev, next)) continue;
@@ -346,12 +346,17 @@ class StarShipApp {
   }
 
   getPostDedupeKey(post) {
-    const targetId = post.targetPostId || post.reblog?.id || post.id;
-    const url = post.url || post.reblog?.url;
-    const authorAcct = post.author?.acct || '';
-    return url
-      ? `${post.platform}:url:${url}`
-      : `${post.platform}:id:${targetId}:author:${authorAcct}`;
+    const canonical = post.reblog || post;
+    const canonicalRaw = canonical.raw || {};
+    const canonicalId = canonicalRaw.id || canonical.id || post.targetPostId || post.id;
+    const canonicalUri = canonicalRaw.uri || canonicalRaw.url || canonical.url || post.url || '';
+    const canonicalAuthor = canonical.author?.acct || canonical.author?.username || '';
+
+    if (canonicalUri) {
+      return `${post.platform}:uri:${canonicalUri}`;
+    }
+
+    return `${post.platform}:id:${canonicalId}:author:${canonicalAuthor}`;
   }
 
   getAccountMarkerColor(accountId = '') {

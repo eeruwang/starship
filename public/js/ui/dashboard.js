@@ -9,6 +9,7 @@ export function renderPost(post) {
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
   if (post.accountId) card.dataset.accountId = post.accountId;
+  if (post.dedupeKey) card.dataset.dedupeKey = post.dedupeKey;
 
   let html = '';
 
