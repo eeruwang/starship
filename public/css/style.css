@@ -368,48 +368,75 @@ body {
 
 .post-actions {
   display: flex;
-  gap: 1rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-color);
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
 }
 
 .post-action {
-  background: none;
-  border: none;
-  color: #6f8392;
+  background: linear-gradient(180deg, rgba(55, 58, 102, 0.36), rgba(35, 37, 73, 0.34));
+  border: 1px solid rgba(130, 142, 224, 0.24);
+  color: #9ca9d9;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.35rem;
-  border-radius: 6px;
+  min-height: 34px;
+  padding: 0.34rem 0.6rem;
+  border-radius: 999px;
   font-family: inherit;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .post-action svg {
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .post-action svg path,
 .post-action svg circle {
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: 1.9;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .post-action-count {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  min-width: 0.75rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #bcc4eb;
+  min-width: 0.7rem;
 }
 
-.post-action:hover {
-  color: #4f6676;
-  background: rgba(124, 125, 255, 0.08);
+.post-action.reply:hover {
+  color: #7fd4ff;
+  border-color: rgba(127, 212, 255, 0.5);
+  background: rgba(61, 119, 171, 0.26);
+}
+
+.post-action.boost:hover {
+  color: #7cf59f;
+  border-color: rgba(124, 245, 159, 0.5);
+  background: rgba(57, 128, 85, 0.26);
+}
+
+.post-action.fav:hover {
+  color: #ffba6a;
+  border-color: rgba(255, 186, 106, 0.5);
+  background: rgba(147, 96, 40, 0.27);
+}
+
+.post-action.open:hover {
+  color: #b7c2ff;
+  border-color: rgba(147, 159, 245, 0.5);
+  background: rgba(88, 92, 165, 0.27);
+}
+
+.post-action:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 /* ===== Notification Card ===== */

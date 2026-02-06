@@ -105,14 +105,16 @@ class StarShipApp {
       }
     });
 
-    // Post action: open link (delegated)
-    document.addEventListener('click', (e) => {
-      const btn = e.target.closest('.post-action[data-action="open"]');
+    // Post actions (delegated)
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.post-action');
       if (!btn) return;
       const card = btn.closest('.post-card');
       if (!card) return;
-      const postUrl = this.findPostUrl(card.dataset.postId, card.dataset.platform);
-      if (postUrl) window.open(postUrl, '_blank', 'noopener');
+
+      const action = btn.dataset.action;
+      if (!action) return;
+      await this.handlePostAction(action, card, btn);
     });
 
     // Keyboard shortcut: Escape to close modals
@@ -209,10 +211,10 @@ class StarShipApp {
 
           if (account.platform === 'mastodon') {
             const statuses = await client.getHomeTimeline(30);
-            return statuses.map(s => client.normalizePost(s));
+            return statuses.map(s => ({ ...client.normalizePost(s), accountId: account.id }));
           } else {
             const notes = await client.getHomeTimeline(30);
-            return notes.map(n => client.normalizePost(n));
+            return notes.map(n => ({ ...client.normalizePost(n), accountId: account.id }));
           }
         })
       );
@@ -307,6 +309,72 @@ class StarShipApp {
     if (!this.cachedPosts) return null;
     const post = this.cachedPosts.find(p => p.id === postId && p.platform === platform);
     return post?.url || null;
+  }
+
+  findPost(postId, platform, accountId = '') {
+    if (!this.cachedPosts) return null;
+    return this.cachedPosts.find(p => p.id === postId
+      && p.platform === platform
+      && (!accountId || p.accountId === accountId)) || null;
+  }
+
+  async handlePostAction(action, card, btn) {
+    const postId = card.dataset.postId;
+    const platform = card.dataset.platform;
+    const accountId = card.dataset.accountId || '';
+    const targetPostId = card.dataset.targetPostId || postId;
+    const postUrl = card.dataset.postUrl || this.findPostUrl(postId, platform);
+
+    if (action === 'open') {
+      if (postUrl) window.open(postUrl, '_blank', 'noopener');
+      return;
+    }
+
+    const account = this.store.getById(accountId);
+    const client = this.store.getClient(accountId);
+    if (!account || !client) {
+      alert('해당 계정 클라이언트를 찾을 수 없습니다.');
+      return;
+    }
+
+    btn.disabled = true;
+    const originalTitle = btn.title;
+    btn.title = '처리 중...';
+
+    try {
+      if (action === 'reply') {
+        const text = prompt('댓글 내용을 입력하세요');
+        if (!text || !text.trim()) return;
+        if (account.platform === 'mastodon') {
+          await client.createStatus(text.trim(), targetPostId);
+        } else {
+          await client.createNote(text.trim(), targetPostId);
+        }
+      }
+
+      if (action === 'fav') {
+        if (account.platform === 'mastodon') {
+          await client.favourite(targetPostId);
+        } else {
+          await client.createReaction(targetPostId, '❤');
+        }
+      }
+
+      if (action === 'boost') {
+        if (account.platform === 'mastodon') {
+          await client.reblog(targetPostId);
+        } else {
+          await client.renote(targetPostId);
+        }
+      }
+
+      await this.loadTimelines();
+    } catch (err) {
+      alert(`작업 실패: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.title = originalTitle;
+    }
   }
 
   // ===== Auto Refresh =====

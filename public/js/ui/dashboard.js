@@ -8,6 +8,7 @@ export function renderPost(post) {
   card.className = `post-card platform-${post.platform}`;
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
+  if (post.accountId) card.dataset.accountId = post.accountId;
 
   let html = '';
 
@@ -82,15 +83,16 @@ export function renderPost(post) {
 
   html += `
     <div class="post-actions">
-      <button class="post-action" data-action="reply" title="답글">${actionIcon('reply')}</button>
-      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">${actionIcon('boost')}${boostCount > 0 ? `<span class="post-action-count">${boostCount}</span>` : ''}</button>
-      <button class="post-action" data-action="fav" title="즐겨찾기">${actionIcon('star')}${favCount > 0 ? `<span class="post-action-count">${favCount}</span>` : ''}</button>
-      <button class="post-action" data-action="react" title="리액션">${actionIcon('smile')}</button>
-      <button class="post-action" data-action="open" title="더보기">${actionIcon('more')}</button>
+      <button class="post-action reply" data-action="reply" title="댓글" aria-label="댓글">${actionIcon('reply')}${replyCount > 0 ? `<span class="post-action-count">${replyCount}</span>` : ''}</button>
+      <button class="post-action boost" data-action="boost" title="${post.platform === 'mastodon' ? '리포스트' : '리노트'}" aria-label="${post.platform === 'mastodon' ? '리포스트' : '리노트'}">${actionIcon('boost')}${boostCount > 0 ? `<span class="post-action-count">${boostCount}</span>` : ''}</button>
+      <button class="post-action fav" data-action="fav" title="좋아요" aria-label="좋아요">${actionIcon('star')}${favCount > 0 ? `<span class="post-action-count">${favCount}</span>` : ''}</button>
+      <button class="post-action open" data-action="open" title="원문 열기" aria-label="원문 열기">${actionIcon('more')}</button>
     </div>
   `;
 
   card.innerHTML = html;
+  card.dataset.targetPostId = displayPost.id || post.id;
+  card.dataset.postUrl = displayPost.url || post.url || '';
   return card;
 }
 
@@ -199,11 +201,10 @@ export function renderLoadingText(message = '불러오는 중...') {
 
 function actionIcon(type) {
   const icons = {
-    reply: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 8L4 12L10 16"/><path d="M5 12H14C17.3 12 20 14.7 20 18"/></svg>',
-    boost: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7H17V17H7Z"/><path d="M12 3V7"/></svg>',
-    star: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5L14.7 9L20.8 9.9L16.4 14.2L17.5 20.4L12 17.5L6.5 20.4L7.6 14.2L3.2 9.9L9.3 9Z"/></svg>',
-    smile: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="0.8" fill="currentColor"/><circle cx="15" cy="10" r="0.8" fill="currentColor"/><path d="M8.5 14C9.3 15.2 10.5 16 12 16C13.5 16 14.7 15.2 15.5 14"/></svg>',
-    more: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="6" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18" cy="12" r="1.2" fill="currentColor"/></svg>',
+    reply: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 9L4 12.5L9 16"/><path d="M5.2 12.5H13.6C16.7 12.5 19.2 14.9 19.2 18"/></svg>',
+    boost: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7H18"/><path d="M15 4L18 7L15 10"/><path d="M17 17H6"/><path d="M9 14L6 17L9 20"/></svg>',
+    star: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.8L14.6 9.1L20.5 9.9L16.2 14L17.2 20L12 17.2L6.8 20L7.8 14L3.5 9.9L9.4 9.1Z"/></svg>',
+    more: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="6" cy="12" r="1.35" fill="currentColor"/><circle cx="12" cy="12" r="1.35" fill="currentColor"/><circle cx="18" cy="12" r="1.35" fill="currentColor"/></svg>',
   };
   return icons[type] || '';
 }

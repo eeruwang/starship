@@ -74,6 +74,12 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
   }
 
+  async createStatus(status, inReplyToId = null) {
+    const body = { status };
+    if (inReplyToId) body.in_reply_to_id = inReplyToId;
+    return this.request('POST', '/api/v1/statuses', body);
+  }
+
   normalizePost(status) {
     const acct = status.account;
     return {

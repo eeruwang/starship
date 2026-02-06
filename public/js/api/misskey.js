@@ -146,6 +146,12 @@ export class MisskeyClient {
     return this.request('notes/create', { renoteId: noteId });
   }
 
+  async createNote(text, replyId = null) {
+    const body = { text };
+    if (replyId) body.replyId = replyId;
+    return this.request('notes/create', body);
+  }
+
   normalizeUser(user) {
     return {
       id: user.id,
