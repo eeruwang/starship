@@ -87,7 +87,7 @@ export class MisskeyClient {
       id: note.id,
       platform: this.platformType,
       createdAt: new Date(note.createdAt),
-      content: this.mfmToHtml(actualNote.text || ''),
+      content: this.mfmToHtml(actualNote.text || '', actualNote.emojis || note.emojis || {}),
       contentWarning: actualNote.cw || null,
       author: actualAuthor,
       media: (actualNote.files || []).map(f => ({
@@ -142,7 +142,7 @@ export class MisskeyClient {
     };
   }
 
-  mfmToHtml(text) {
+  mfmToHtml(text, emojis = {}) {
     if (!text) return '';
     let html = this.escapeHtml(text);
     // Bold
@@ -158,6 +158,13 @@ export class MisskeyClient {
     // Hashtags
     html = html.replace(/#([\w\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\u4e00-\u9faf\uac00-\ud7af]+)/g,
       '<span class="hashtag">#$1</span>');
+    // Custom emoji (:blobcat:)
+    html = html.replace(/:([a-zA-Z0-9_+-]+):/g, (match, name) => {
+      const url = emojis?.[name];
+      if (!url) return match;
+      return `<img class="inline-emoji" src="${url}" alt=":${name}:" loading="lazy">`;
+    });
+
     // URLs
     html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
     // Newlines

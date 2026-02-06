@@ -5,6 +5,7 @@
 import { AccountStore } from './accounts.js';
 import { renderPost, renderNotification, renderAccountCard, renderLoading, renderLoadingText } from './ui/dashboard.js';
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from './auth.js';
+import { normalizeInstanceUrl, detectPlatform } from './utils/instance.js';
 
 class StarShipApp {
   constructor() {
@@ -24,6 +25,7 @@ class StarShipApp {
     this.btnAddAccount = document.getElementById('btn-add-account');
     this.btnRefreshAll = document.getElementById('btn-refresh-all');
     this.btnSettings = document.getElementById('btn-settings');
+    this.btnAccountsMenu = document.getElementById('btn-accounts-menu');
 
     // Tab bar
     this.accountTabs = document.getElementById('account-tabs');
@@ -55,6 +57,10 @@ class StarShipApp {
     // Open add account modal
     this.btnAddAccount.addEventListener('click', () => this.openAddAccountModal());
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
+    this.btnAccountsMenu?.addEventListener('click', () => {
+      document.getElementById('modal-accounts').style.display = 'flex';
+      this.renderAccountsList();
+    });
 
     // Refresh
     this.btnRefreshAll.addEventListener('click', () => this.refreshAll());
@@ -84,9 +90,9 @@ class StarShipApp {
       this.updateOAuthButton();
     });
 
-    // Instance URL change → enable OAuth button
+    // Instance URL change → platform auto detect
     this.instanceUrl.addEventListener('input', () => {
-      this.updateOAuthButton();
+      this.schedulePlatformDetection();
     });
 
     // OAuth login button
@@ -343,10 +349,36 @@ class StarShipApp {
     this.addAccountError.style.display = 'none';
     this.btnConfirmAdd.disabled = false;
     this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
-    this.btnOAuthLogin.textContent = '로그인으로 연결';
+    this.btnOAuthLogin.textContent = '플랫폼 자동 감지 후 로그인';
     document.getElementById('manual-token-section').removeAttribute('open');
     this.modalAddAccount.style.display = 'flex';
-    this.platformSelect.focus();
+    this.instanceUrl.focus();
+  }
+
+  schedulePlatformDetection() {
+    if (this.detectPlatformTimer) {
+      clearTimeout(this.detectPlatformTimer);
+    }
+
+    this.detectPlatformTimer = setTimeout(async () => {
+      const raw = this.instanceUrl.value.trim();
+      if (!raw) {
+        this.platformSelect.value = '';
+        this.updateTokenHint();
+        this.updateOAuthButton();
+        return;
+      }
+
+      try {
+        const normalized = normalizeInstanceUrl(raw);
+        const platform = await detectPlatform(normalized);
+        this.platformSelect.value = platform;
+        this.updateTokenHint();
+        this.updateOAuthButton();
+      } catch {
+        // keep current selection when detection fails during typing
+      }
+    }, 300);
   }
 
   updateOAuthButton() {
@@ -371,38 +403,45 @@ class StarShipApp {
     this.tokenHint.textContent = hints[platform] || '인스턴스 설정에서 API 토큰을 생성하세요.';
 
     const placeholders = {
-      misskey: 'https://misskey.io',
-      iceshrimp: 'https://iceshrimp.example.com',
-      cherrypick: 'https://cherrypick.example.com',
-      mastodon: 'https://mastodon.social',
+      misskey: 'misskey.io',
+      iceshrimp: 'iceshrimp.example.com',
+      cherrypick: 'cherrypick.example.com',
+      mastodon: 'mastodon.social',
     };
-    this.instanceUrl.placeholder = placeholders[platform] || 'https://example.com';
+    this.instanceUrl.placeholder = placeholders[platform] || 'example.com';
   }
 
   // ===== OAuth / MiAuth 로그인 =====
 
   async handleOAuthLogin() {
-    const platform = this.platformSelect.value;
-    const instanceUrl = this.instanceUrl.value.trim();
+    let platform = this.platformSelect.value;
+    const rawInstanceUrl = this.instanceUrl.value.trim();
 
     // 단계별 유효성 검사 → 어떤 필드가 빠졌는지 명확히 안내
-    if (!platform) {
-      this.showAddError('먼저 플랫폼을 선택하세요.');
-      this.platformSelect.focus();
-      return;
-    }
-    if (!instanceUrl) {
-      this.showAddError('인스턴스 URL을 입력하세요. (예: https://misskey.io)');
+    if (!rawInstanceUrl) {
+      this.showAddError('인스턴스 URL을 입력하세요. (예: misskey.io)');
       this.instanceUrl.focus();
       return;
     }
 
+    let instanceUrl;
     try {
-      new URL(instanceUrl);
-    } catch {
-      this.showAddError('올바른 URL 형식이 아닙니다. (예: https://misskey.io)');
+      instanceUrl = normalizeInstanceUrl(rawInstanceUrl);
+    } catch (err) {
+      this.showAddError(err.message);
       this.instanceUrl.focus();
       return;
+    }
+
+    if (!platform) {
+      try {
+        platform = await detectPlatform(instanceUrl);
+        this.platformSelect.value = platform;
+      } catch (err) {
+        this.showAddError(err.message);
+        this.platformSelect.focus();
+        return;
+      }
     }
 
     this.btnOAuthLogin.disabled = true;
@@ -444,16 +483,12 @@ class StarShipApp {
   // ===== 수동 토큰 추가 =====
 
   async handleAddAccount() {
-    const platform = this.platformSelect.value;
-    const instanceUrl = this.instanceUrl.value.trim();
+    let platform = this.platformSelect.value;
+    const rawInstanceUrl = this.instanceUrl.value.trim();
     const accessToken = this.accessToken.value.trim();
     const label = this.accountLabel.value.trim();
 
-    if (!platform) {
-      this.showAddError('플랫폼을 선택하세요.');
-      return;
-    }
-    if (!instanceUrl) {
+    if (!rawInstanceUrl) {
       this.showAddError('인스턴스 URL을 입력하세요.');
       return;
     }
@@ -462,11 +497,22 @@ class StarShipApp {
       return;
     }
 
+    let instanceUrl;
     try {
-      new URL(instanceUrl);
-    } catch {
-      this.showAddError('올바른 URL 형식이 아닙니다. (예: https://misskey.io)');
+      instanceUrl = normalizeInstanceUrl(rawInstanceUrl);
+    } catch (err) {
+      this.showAddError(err.message);
       return;
+    }
+
+    if (!platform) {
+      try {
+        platform = await detectPlatform(instanceUrl);
+        this.platformSelect.value = platform;
+      } catch (err) {
+        this.showAddError(err.message);
+        return;
+      }
     }
 
     this.btnConfirmAdd.disabled = true;
