@@ -4,6 +4,7 @@
  */
 import { AccountStore } from './accounts.js';
 import { renderPost, renderNotification, renderAccountCard, renderLoading, renderLoadingText } from './ui/dashboard.js';
+import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from './auth.js';
 
 class FediBoardApp {
   constructor() {
@@ -45,6 +46,9 @@ class FediBoardApp {
     this.tokenHint = document.getElementById('token-hint');
 
     this.btnAddFirst = document.getElementById('btn-add-first');
+
+    // OAuth
+    this.btnOAuthLogin = document.getElementById('btn-oauth-login');
   }
 
   bindEvents() {
@@ -74,12 +78,21 @@ class FediBoardApp {
       });
     });
 
-    // Platform select hint
+    // Platform select → update hints and enable OAuth button
     this.platformSelect.addEventListener('change', () => {
       this.updateTokenHint();
+      this.updateOAuthButton();
     });
 
-    // Confirm add account
+    // Instance URL change → enable OAuth button
+    this.instanceUrl.addEventListener('input', () => {
+      this.updateOAuthButton();
+    });
+
+    // OAuth login button
+    this.btnOAuthLogin.addEventListener('click', () => this.handleOAuthLogin());
+
+    // Confirm add account (manual token)
     this.btnConfirmAdd.addEventListener('click', () => this.handleAddAccount());
 
     // Tab clicks (delegated)
@@ -329,9 +342,32 @@ class FediBoardApp {
     this.accountLabel.value = '';
     this.addAccountError.style.display = 'none';
     this.btnConfirmAdd.disabled = false;
-    this.btnConfirmAdd.textContent = '연결 확인 및 추가';
+    this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
+    this.btnOAuthLogin.disabled = true;
+    this.btnOAuthLogin.textContent = '로그인으로 연결';
+    document.getElementById('manual-token-section').removeAttribute('open');
     this.modalAddAccount.style.display = 'flex';
     this.platformSelect.focus();
+  }
+
+  updateOAuthButton() {
+    const platform = this.platformSelect.value;
+    const url = this.instanceUrl.value.trim();
+    let valid = false;
+
+    if (platform && url) {
+      try { new URL(url); valid = true; } catch {}
+    }
+
+    this.btnOAuthLogin.disabled = !valid;
+
+    const labels = {
+      misskey: 'Misskey 로그인으로 연결',
+      iceshrimp: 'Iceshrimp 로그인으로 연결',
+      cherrypick: 'CherryPick 로그인으로 연결',
+      mastodon: 'Mastodon 로그인으로 연결',
+    };
+    this.btnOAuthLogin.textContent = labels[platform] || '로그인으로 연결';
   }
 
   updateTokenHint() {
@@ -353,13 +389,62 @@ class FediBoardApp {
     this.instanceUrl.placeholder = placeholders[platform] || 'https://example.com';
   }
 
+  // ===== OAuth / MiAuth 로그인 =====
+
+  async handleOAuthLogin() {
+    const platform = this.platformSelect.value;
+    const instanceUrl = this.instanceUrl.value.trim();
+
+    if (!platform || !instanceUrl) {
+      this.showAddError('플랫폼과 인스턴스 URL을 입력하세요.');
+      return;
+    }
+
+    try {
+      new URL(instanceUrl);
+    } catch {
+      this.showAddError('올바른 URL 형식이 아닙니다.');
+      return;
+    }
+
+    this.btnOAuthLogin.disabled = true;
+    this.btnOAuthLogin.textContent = '인증 페이지 여는 중...';
+    this.addAccountError.style.display = 'none';
+
+    try {
+      // 플랫폼에 따라 OAuth 또는 MiAuth 시작
+      if (platform === 'mastodon') {
+        await startMastodonOAuth(instanceUrl);
+      } else {
+        await startMiAuth(instanceUrl, platform);
+      }
+
+      this.btnOAuthLogin.textContent = '인증 대기 중... (팝업 확인)';
+
+      // 팝업에서 인증 완료 메시지 대기
+      const result = await waitForAuthCallback();
+
+      // 토큰으로 계정 추가
+      await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken);
+      this.modalAddAccount.style.display = 'none';
+      this.render();
+    } catch (err) {
+      clearPendingAuth();
+      this.showAddError(`인증 실패: ${err.message}`);
+    } finally {
+      this.btnOAuthLogin.disabled = false;
+      this.updateOAuthButton();
+    }
+  }
+
+  // ===== 수동 토큰 추가 =====
+
   async handleAddAccount() {
     const platform = this.platformSelect.value;
     const instanceUrl = this.instanceUrl.value.trim();
     const accessToken = this.accessToken.value.trim();
     const label = this.accountLabel.value.trim();
 
-    // Validation
     if (!platform) {
       this.showAddError('플랫폼을 선택하세요.');
       return;
@@ -392,7 +477,7 @@ class FediBoardApp {
       this.showAddError(`연결 실패: ${err.message}`);
     } finally {
       this.btnConfirmAdd.disabled = false;
-      this.btnConfirmAdd.textContent = '연결 확인 및 추가';
+      this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
     }
   }
 
@@ -412,6 +497,20 @@ class FediBoardApp {
 }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  window.app = new FediBoardApp();
+document.addEventListener('DOMContentLoaded', async () => {
+  const app = new FediBoardApp();
+  window.app = app;
+
+  // 리다이렉트 방식 OAuth 콜백 처리 (팝업 차단된 경우)
+  const authResult = localStorage.getItem('fediboard_auth_result');
+  if (authResult) {
+    localStorage.removeItem('fediboard_auth_result');
+    try {
+      const result = JSON.parse(authResult);
+      await app.store.addAccount(result.platform, result.instanceUrl, result.accessToken);
+      app.render();
+    } catch (err) {
+      console.error('OAuth 콜백 처리 실패:', err);
+    }
+  }
 });

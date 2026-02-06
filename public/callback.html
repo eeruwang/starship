@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FediBoard - 인증 중...</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      background: #1a1b2e;
+      color: #e8e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+      max-width: 400px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #3a3b5a;
+      border-top-color: #7c7dff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    h2 { margin-bottom: 0.5rem; font-size: 1.2rem; }
+    p { color: #9a9ab8; font-size: 0.9rem; line-height: 1.6; }
+    .error { color: #ff5555; margin-top: 1rem; }
+    .success { color: #96d04a; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner" id="spinner"></div>
+    <h2 id="status-title">인증 처리 중...</h2>
+    <p id="status-message">잠시만 기다려주세요.</p>
+  </div>
+
+  <script type="module">
+    /**
+     * OAuth / MiAuth 콜백 처리
+     *
+     * Mastodon: ?code=xxx → 토큰 교환
+     * Misskey:  ?session=xxx → 세션 확인 (MiAuth는 콜백에 session 파라미터 없이
+     *           돌아오므로 저장된 sessionId 사용)
+     */
+
+    const PENDING_AUTH_KEY = 'fediboard_pending_auth';
+    const useProxy = window.location.hostname !== 'localhost';
+
+    function buildFetchUrl(targetUrl) {
+      return useProxy ? `/proxy?url=${encodeURIComponent(targetUrl)}` : targetUrl;
+    }
+
+    function showError(msg) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('status-title').textContent = '인증 실패';
+      document.getElementById('status-title').classList.add('error');
+      document.getElementById('status-message').textContent = msg;
+      document.getElementById('status-message').classList.add('error');
+    }
+
+    function showSuccess() {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('status-title').textContent = '인증 완료!';
+      document.getElementById('status-title').classList.add('success');
+      document.getElementById('status-message').textContent = '이 창은 자동으로 닫힙니다.';
+    }
+
+    async function handleCallback() {
+      const params = new URLSearchParams(window.location.search);
+      const pending = JSON.parse(localStorage.getItem(PENDING_AUTH_KEY) || 'null');
+
+      if (!pending) {
+        showError('인증 정보를 찾을 수 없습니다. 다시 시도해주세요.');
+        return;
+      }
+
+      try {
+        let result;
+
+        if (pending.platform === 'mastodon') {
+          // Mastodon OAuth: code 파라미터로 토큰 교환
+          const code = params.get('code');
+          if (!code) {
+            const error = params.get('error_description') || params.get('error') || '인증이 거부되었습니다.';
+            throw new Error(error);
+          }
+
+          const tokenRes = await fetch(buildFetchUrl(`${pending.instanceUrl}/oauth/token`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              grant_type: 'authorization_code',
+              client_id: pending.clientId,
+              client_secret: pending.clientSecret,
+              redirect_uri: `${window.location.origin}/callback.html`,
+              code,
+              scope: 'read write follow push',
+            }),
+          });
+
+          if (!tokenRes.ok) {
+            throw new Error(`토큰 교환 실패 (${tokenRes.status})`);
+          }
+
+          const tokenData = await tokenRes.json();
+          result = {
+            platform: 'mastodon',
+            instanceUrl: pending.instanceUrl,
+            accessToken: tokenData.access_token,
+          };
+
+        } else {
+          // Misskey / Iceshrimp / CherryPick: MiAuth 세션 확인
+          const sessionId = pending.sessionId;
+
+          const checkRes = await fetch(buildFetchUrl(`${pending.instanceUrl}/api/miauth/${sessionId}/check`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          });
+
+          if (!checkRes.ok) {
+            throw new Error(`MiAuth 확인 실패 (${checkRes.status})`);
+          }
+
+          const checkData = await checkRes.json();
+          if (!checkData.token) {
+            throw new Error('인증이 완료되지 않았습니다.');
+          }
+
+          result = {
+            platform: pending.platform,
+            instanceUrl: pending.instanceUrl,
+            accessToken: checkData.token,
+          };
+        }
+
+        // 인증 정보 정리
+        localStorage.removeItem(PENDING_AUTH_KEY);
+
+        // 부모 창에 결과 전달
+        if (window.opener) {
+          window.opener.postMessage({ type: 'fediboard_auth_complete', result }, window.location.origin);
+          showSuccess();
+          setTimeout(() => window.close(), 1500);
+        } else {
+          // 팝업이 아닌 경우 (리다이렉트 방식)
+          // 결과를 localStorage에 저장하고 메인 페이지로 이동
+          localStorage.setItem('fediboard_auth_result', JSON.stringify(result));
+          showSuccess();
+          setTimeout(() => { window.location.href = '/'; }, 1500);
+        }
+
+      } catch (err) {
+        localStorage.removeItem(PENDING_AUTH_KEY);
+        if (window.opener) {
+          window.opener.postMessage({ type: 'fediboard_auth_error', error: err.message }, window.location.origin);
+        }
+        showError(err.message);
+      }
+    }
+
+    handleCallback();
+  </script>
+</body>
+</html>

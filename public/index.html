@@ -80,20 +80,40 @@
           <input type="url" id="instance-url" class="input" placeholder="https://misskey.io">
           <small class="form-hint">예: https://misskey.io, https://mastodon.social</small>
         </div>
-        <div class="form-group">
-          <label for="access-token">액세스 토큰</label>
-          <input type="password" id="access-token" class="input" placeholder="액세스 토큰을 입력하세요">
-          <small class="form-hint" id="token-hint">인스턴스 설정에서 API 토큰을 생성하세요.</small>
+
+        <!-- OAuth 로그인 (기본) -->
+        <div id="oauth-section">
+          <button class="btn btn-primary btn-large" id="btn-oauth-login" style="width:100%; margin-top:0.5rem;" disabled>
+            로그인으로 연결
+          </button>
+          <small class="form-hint" style="text-align:center; display:block; margin-top:0.5rem;">
+            인스턴스 로그인 페이지에서 권한을 승인합니다.
+          </small>
         </div>
-        <div class="form-group">
-          <label for="account-label">표시 이름 (선택)</label>
-          <input type="text" id="account-label" class="input" placeholder="내 미스키 계정">
-        </div>
+
+        <!-- 수동 토큰 입력 (접이식) -->
+        <details id="manual-token-section" style="margin-top:1rem;">
+          <summary style="cursor:pointer; color:var(--text-muted); font-size:0.85rem;">
+            수동으로 액세스 토큰 입력
+          </summary>
+          <div style="margin-top:0.75rem;">
+            <div class="form-group">
+              <label for="access-token">액세스 토큰</label>
+              <input type="password" id="access-token" class="input" placeholder="액세스 토큰을 입력하세요">
+              <small class="form-hint" id="token-hint">인스턴스 설정에서 API 토큰을 생성하세요.</small>
+            </div>
+            <div class="form-group">
+              <label for="account-label">표시 이름 (선택)</label>
+              <input type="text" id="account-label" class="input" placeholder="내 미스키 계정">
+            </div>
+          </div>
+        </details>
+
         <div id="add-account-error" class="form-error" style="display:none;"></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close-modal="modal-add-account">취소</button>
-        <button class="btn btn-primary" id="btn-confirm-add">연결 확인 및 추가</button>
+        <button class="btn btn-primary" id="btn-confirm-add">수동 토큰으로 추가</button>
       </div>
     </div>
   </div>
