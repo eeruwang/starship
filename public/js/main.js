@@ -352,13 +352,15 @@ class StarShipApp {
     const normalizedUri = this.normalizeCanonicalUri(canonicalUri);
 
     if (normalizedUri) {
-      return `${post.platform}:uri:${normalizedUri}`;
+      // Do not include platform prefix: same remote note can appear through different
+      // Misskey-family clients (misskey/cherrypick/iceshrimp) across connected accounts.
+      return `uri:${normalizedUri}`;
     }
 
     // Some federated APIs (especially remote Misskey notes) expose local ids/urls per instance.
     // Build a stable fallback signature from author + original text + creation time.
     const authorKey = (canonical.author?.acct || canonical.author?.username || '').toLowerCase();
-    const rawText = (canonicalRaw.text || canonicalRaw.content || canonical.content || '').trim();
+    const rawText = this.normalizeTextForDedupe(canonicalRaw.text || canonicalRaw.content || canonical.content || '');
     const createdAtKey = canonicalRaw.createdAt
       || canonicalRaw.created_at
       || (canonical.createdAt instanceof Date ? canonical.createdAt.toISOString() : String(canonical.createdAt || ''));
@@ -366,7 +368,7 @@ class StarShipApp {
       ? canonicalRaw.files.map((f) => f?.url || f?.name || '').join('|')
       : '';
     const fallbackId = canonicalRaw.id || canonical.id || post.targetPostId || post.id;
-    const baseFallback = `${post.platform}:fallback:${authorKey}:${createdAtKey}:${rawText}:${mediaKey}`;
+    const baseFallback = `fallback:${authorKey}:${createdAtKey}:${rawText}:${mediaKey}`;
 
     // If text/media are missing, include id as a last-resort discriminator to avoid accidental merges.
     if (!rawText && !mediaKey) {
@@ -374,6 +376,16 @@ class StarShipApp {
     }
 
     return baseFallback;
+  }
+
+  normalizeTextForDedupe(raw = '') {
+    const text = String(raw || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/https?:\/\/[^\s]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    return text;
   }
 
   normalizeCanonicalUri(rawUri) {
