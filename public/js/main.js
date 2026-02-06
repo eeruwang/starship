@@ -454,9 +454,8 @@ class StarShipApp {
       return;
     }
 
-    const account = this.store.getById(accountId);
-    const client = this.store.getClient(accountId);
-    if (!account || !client) {
+    const candidateAccountIds = this.getActionAccountCandidates(card, accountId);
+    if (candidateAccountIds.length === 0) {
       alert('해당 계정 클라이언트를 찾을 수 없습니다.');
       return;
     }
@@ -466,45 +465,89 @@ class StarShipApp {
     btn.title = '처리 중...';
 
     try {
+      let executedAccountId = null;
+
       if (action === 'reply') {
         const text = prompt('댓글 내용을 입력하세요');
         if (!text || !text.trim()) return;
-        if (account.platform === 'mastodon') {
-          await client.createStatus(text.trim(), targetPostId);
-        } else {
-          await client.createNote(text.trim(), targetPostId);
-        }
+        executedAccountId = await this.tryActionWithCandidates(candidateAccountIds, async (account, client) => {
+          if (account.platform === 'mastodon') {
+            await client.createStatus(text.trim(), targetPostId);
+          } else {
+            await client.createNote(text.trim(), targetPostId);
+          }
+        });
         this.bumpPostCounter(postId, platform, accountId, 'replies', 1);
         this.animateAction(btn, 'reply');
       }
 
       if (action === 'fav') {
-        if (account.platform === 'mastodon') {
-          await client.favourite(targetPostId);
-        } else {
-          await client.createReaction(targetPostId, '❤');
-        }
-        this.bumpPostCounter(postId, platform, accountId, account.platform === 'mastodon' ? 'favourites' : 'reactions', 1);
+        executedAccountId = await this.tryActionWithCandidates(candidateAccountIds, async (account, client) => {
+          if (account.platform === 'mastodon') {
+            await client.favourite(targetPostId);
+          } else {
+            await client.createReaction(targetPostId, '❤');
+          }
+        });
+        const executedAccount = this.store.getById(executedAccountId);
+        this.bumpPostCounter(postId, platform, accountId, executedAccount?.platform === 'mastodon' ? 'favourites' : 'reactions', 1);
         this.animateAction(btn, 'fav');
       }
 
       if (action === 'boost') {
-        if (account.platform === 'mastodon') {
-          await client.reblog(targetPostId);
-        } else {
-          await client.renote(targetPostId);
-        }
-        this.bumpPostCounter(postId, platform, accountId, account.platform === 'mastodon' ? 'reblogs' : 'renotes', 1);
+        executedAccountId = await this.tryActionWithCandidates(candidateAccountIds, async (account, client) => {
+          if (account.platform === 'mastodon') {
+            await client.reblog(targetPostId);
+          } else {
+            await client.renote(targetPostId);
+          }
+        });
+        const executedAccount = this.store.getById(executedAccountId);
+        this.bumpPostCounter(postId, platform, accountId, executedAccount?.platform === 'mastodon' ? 'reblogs' : 'renotes', 1);
         this.animateAction(btn, 'boost');
       }
 
-      await this.refreshSinglePostCard(postId, platform, accountId, targetPostId);
+      await this.refreshSinglePostCard(postId, platform, executedAccountId || accountId, targetPostId);
     } catch (err) {
       alert(`작업 실패: ${err.message}`);
     } finally {
       btn.disabled = false;
       btn.title = originalTitle;
     }
+  }
+
+  getActionAccountCandidates(card, fallbackAccountId = '') {
+    const ids = [];
+    if (fallbackAccountId) ids.push(fallbackAccountId);
+
+    const dedupeKey = card.dataset.dedupeKey;
+    if (dedupeKey) {
+      const mergedPost = (this.cachedPosts || []).find((post) => post.dedupeKey === dedupeKey);
+      const sourceIds = (mergedPost?.sourceAccounts || [])
+        .map((source) => source.accountId)
+        .filter(Boolean);
+      ids.push(...sourceIds);
+    }
+
+    return [...new Set(ids)];
+  }
+
+  async tryActionWithCandidates(accountIds, actionFn) {
+    let lastError = null;
+    for (const id of accountIds) {
+      const account = this.store.getById(id);
+      const client = this.store.getClient(id);
+      if (!account || !client) continue;
+
+      try {
+        await actionFn(account, client);
+        return id;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    throw lastError || new Error('작업 가능한 계정을 찾지 못했습니다.');
   }
 
   bumpPostCounter(postId, platform, accountId, key, amount = 1) {
