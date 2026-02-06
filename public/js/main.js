@@ -5,6 +5,7 @@
 import { AccountStore } from './accounts.js';
 import { renderPost, renderNotification, renderAccountCard, renderLoading, renderLoadingText } from './ui/dashboard.js';
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from './auth.js';
+import { normalizeInstanceUrl, detectPlatform } from './utils/instance.js';
 
 class StarShipApp {
   constructor() {
@@ -12,6 +13,7 @@ class StarShipApp {
     this.activeFilter = 'all'; // 'all' or account id
     this.autoRefreshTimer = null;
     this.AUTO_REFRESH_INTERVAL = 60000; // 1 minute
+    this.cachedTimelineFilter = null;
 
     this.initElements();
     this.bindEvents();
@@ -24,6 +26,7 @@ class StarShipApp {
     this.btnAddAccount = document.getElementById('btn-add-account');
     this.btnRefreshAll = document.getElementById('btn-refresh-all');
     this.btnSettings = document.getElementById('btn-settings');
+    this.btnAccountsMenu = document.getElementById('btn-accounts-menu');
 
     // Tab bar
     this.accountTabs = document.getElementById('account-tabs');
@@ -37,13 +40,11 @@ class StarShipApp {
 
     // Modal
     this.modalAddAccount = document.getElementById('modal-add-account');
-    this.platformSelect = document.getElementById('platform-select');
     this.instanceUrl = document.getElementById('instance-url');
     this.accessToken = document.getElementById('access-token');
     this.accountLabel = document.getElementById('account-label');
     this.btnConfirmAdd = document.getElementById('btn-confirm-add');
     this.addAccountError = document.getElementById('add-account-error');
-    this.tokenHint = document.getElementById('token-hint');
 
     this.btnAddFirst = document.getElementById('btn-add-first');
 
@@ -55,6 +56,10 @@ class StarShipApp {
     // Open add account modal
     this.btnAddAccount.addEventListener('click', () => this.openAddAccountModal());
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
+    this.btnAccountsMenu?.addEventListener('click', () => {
+      document.getElementById('modal-accounts').style.display = 'flex';
+      this.renderAccountsList();
+    });
 
     // Refresh
     this.btnRefreshAll.addEventListener('click', () => this.refreshAll());
@@ -78,16 +83,6 @@ class StarShipApp {
       });
     });
 
-    // Platform select → update hints and enable OAuth button
-    this.platformSelect.addEventListener('change', () => {
-      this.updateTokenHint();
-      this.updateOAuthButton();
-    });
-
-    // Instance URL change → enable OAuth button
-    this.instanceUrl.addEventListener('input', () => {
-      this.updateOAuthButton();
-    });
 
     // OAuth login button
     this.btnOAuthLogin.addEventListener('click', () => this.handleOAuthLogin());
@@ -111,14 +106,16 @@ class StarShipApp {
       }
     });
 
-    // Post action: open link (delegated)
-    document.addEventListener('click', (e) => {
-      const btn = e.target.closest('.post-action[data-action="open"]');
+    // Post actions (delegated)
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.post-action');
       if (!btn) return;
       const card = btn.closest('.post-card');
       if (!card) return;
-      const postUrl = this.findPostUrl(card.dataset.postId, card.dataset.platform);
-      if (postUrl) window.open(postUrl, '_blank', 'noopener');
+
+      const action = btn.dataset.action;
+      if (!action) return;
+      await this.handlePostAction(action, card, btn);
     });
 
     // Keyboard shortcut: Escape to close modals
@@ -199,11 +196,19 @@ class StarShipApp {
     const accounts = this.getFilteredAccounts();
     if (accounts.length === 0) {
       this.timelineFeed.innerHTML = '<div class="loading-text">표시할 타임라인이 없습니다.</div>';
+      this.cachedPosts = [];
+      this.cachedTimelineFilter = this.activeFilter;
       return;
     }
 
-    this.timelineFeed.innerHTML = '';
-    this.timelineFeed.appendChild(renderLoading());
+    const shouldShowLoader = !Array.isArray(this.cachedPosts)
+      || this.cachedPosts.length === 0
+      || this.cachedTimelineFilter !== this.activeFilter;
+
+    if (shouldShowLoader) {
+      this.timelineFeed.innerHTML = '';
+      this.timelineFeed.appendChild(renderLoading());
+    }
 
     try {
       const allPosts = [];
@@ -215,10 +220,10 @@ class StarShipApp {
 
           if (account.platform === 'mastodon') {
             const statuses = await client.getHomeTimeline(30);
-            return statuses.map(s => client.normalizePost(s));
+            return statuses.map(s => ({ ...client.normalizePost(s), accountId: account.id }));
           } else {
             const notes = await client.getHomeTimeline(30);
-            return notes.map(n => client.normalizePost(n));
+            return notes.map(n => ({ ...client.normalizePost(n), accountId: account.id }));
           }
         })
       );
@@ -232,23 +237,138 @@ class StarShipApp {
       // Sort by date descending
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
-      this.timelineFeed.innerHTML = '';
+      const timelinePosts = this.activeFilter === 'all'
+        ? this.mergeCommonTimelinePosts(allPosts)
+        : allPosts;
 
-      if (allPosts.length === 0) {
+      if (timelinePosts.length === 0) {
+        this.timelineFeed.innerHTML = '';
         this.timelineFeed.appendChild(renderLoadingText('타임라인에 표시할 게시물이 없습니다.'));
+        this.cachedPosts = [];
+        this.cachedTimelineFilter = this.activeFilter;
         return;
       }
 
-      // Store posts for URL lookup
-      this.cachedPosts = allPosts;
+      const makeKey = (post) => post.dedupeKey || `${post.platform}:${post.accountId || ''}:${post.id}`;
 
-      for (const post of allPosts) {
-        this.timelineFeed.appendChild(renderPost(post));
+      const hasRenderedPosts = this.timelineFeed.querySelector('.post-card') !== null;
+      const canIncremental = !shouldShowLoader
+        && this.cachedTimelineFilter === this.activeFilter
+        && hasRenderedPosts;
+
+      if (!canIncremental) {
+        this.timelineFeed.innerHTML = '';
+        for (const post of timelinePosts) {
+          this.timelineFeed.appendChild(renderPost(post));
+        }
+        this.cachedPosts = timelinePosts;
+        this.cachedTimelineFilter = this.activeFilter;
+        return;
       }
+
+      const prevByKey = new Map((this.cachedPosts || []).map((post) => [makeKey(post), post]));
+      const nextByKey = new Map(timelinePosts.map((post) => [makeKey(post), post]));
+      const newPosts = timelinePosts.filter((post) => !prevByKey.has(makeKey(post)));
+
+      const isPostChanged = (prev, next) => {
+        if (!prev || !next) return true;
+        const prevTime = prev.createdAt instanceof Date ? prev.createdAt.getTime() : new Date(prev.createdAt).getTime();
+        const nextTime = next.createdAt instanceof Date ? next.createdAt.getTime() : new Date(next.createdAt).getTime();
+        return prevTime !== nextTime
+          || prev.content !== next.content
+          || prev.contentWarning !== next.contentWarning
+          || JSON.stringify(prev.stats || {}) !== JSON.stringify(next.stats || {})
+          || JSON.stringify(prev.reactions || {}) !== JSON.stringify(next.reactions || {});
+      };
+
+      // Update existing cards in-place when content/stats changed.
+      for (const card of this.timelineFeed.querySelectorAll('.post-card')) {
+        const key = card.dataset.dedupeKey || `${card.dataset.platform}:${card.dataset.accountId || ''}:${card.dataset.postId}`;
+        const prev = prevByKey.get(key);
+        const next = nextByKey.get(key);
+        if (!next || !isPostChanged(prev, next)) continue;
+
+        const replacement = renderPost(next);
+        card.replaceWith(replacement);
+      }
+
+      if (newPosts.length > 0) {
+        const prevScrollTop = this.timelineFeed.scrollTop;
+        const prevScrollHeight = this.timelineFeed.scrollHeight;
+        const isNearTop = prevScrollTop < 24;
+
+        for (let i = newPosts.length - 1; i >= 0; i -= 1) {
+          const card = renderPost(newPosts[i]);
+          card.classList.add('is-new');
+          setTimeout(() => card.classList.remove('is-new'), 700);
+          this.timelineFeed.prepend(card);
+        }
+
+        const delta = this.timelineFeed.scrollHeight - prevScrollHeight;
+        this.timelineFeed.scrollTop = isNearTop ? 0 : (prevScrollTop + delta);
+      }
+
+      this.cachedPosts = timelinePosts;
+      this.cachedTimelineFilter = this.activeFilter;
     } catch (err) {
       this.timelineFeed.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
     }
   }
+
+  mergeCommonTimelinePosts(posts) {
+    const mergedByKey = new Map();
+
+    for (const post of posts) {
+      const key = this.getPostDedupeKey(post);
+      const account = this.store.getById(post.accountId);
+      const marker = {
+        accountId: post.accountId,
+        label: account?.label || account?.profile?.displayName || post.accountId,
+        color: this.getAccountMarkerColor(post.accountId),
+      };
+
+      if (!mergedByKey.has(key)) {
+        mergedByKey.set(key, {
+          ...post,
+          dedupeKey: key,
+          sourceAccounts: [marker],
+        });
+        continue;
+      }
+
+      const existing = mergedByKey.get(key);
+      if (!existing.sourceAccounts.some((item) => item.accountId === marker.accountId)) {
+        existing.sourceAccounts.push(marker);
+      }
+    }
+
+    return [...mergedByKey.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  getPostDedupeKey(post) {
+    const canonical = post.reblog || post;
+    const canonicalRaw = canonical.raw || {};
+    const canonicalId = canonicalRaw.id || canonical.id || post.targetPostId || post.id;
+    const canonicalUri = canonicalRaw.uri || canonicalRaw.url || canonical.url || post.url || '';
+    const canonicalAuthor = canonical.author?.acct || canonical.author?.username || '';
+
+    if (canonicalUri) {
+      return `${post.platform}:uri:${canonicalUri}`;
+    }
+
+    return `${post.platform}:id:${canonicalId}:author:${canonicalAuthor}`;
+  }
+
+  getAccountMarkerColor(accountId = '') {
+    let hash = 0;
+    for (let i = 0; i < accountId.length; i += 1) {
+      hash = ((hash << 5) - hash) + accountId.charCodeAt(i);
+      hash |= 0;
+    }
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue} 80% 62%)`;
+  }
+
 
   async loadNotifications() {
     const accounts = this.getFilteredAccounts();
@@ -315,6 +435,140 @@ class StarShipApp {
     return post?.url || null;
   }
 
+  findPost(postId, platform, accountId = '') {
+    if (!this.cachedPosts) return null;
+    return this.cachedPosts.find(p => p.id === postId
+      && p.platform === platform
+      && (!accountId || p.accountId === accountId)) || null;
+  }
+
+  async handlePostAction(action, card, btn) {
+    const postId = card.dataset.postId;
+    const platform = card.dataset.platform;
+    const accountId = card.dataset.accountId || '';
+    const targetPostId = card.dataset.targetPostId || postId;
+    const postUrl = card.dataset.postUrl || this.findPostUrl(postId, platform);
+
+    if (action === 'open') {
+      if (postUrl) window.open(postUrl, '_blank', 'noopener');
+      return;
+    }
+
+    const account = this.store.getById(accountId);
+    const client = this.store.getClient(accountId);
+    if (!account || !client) {
+      alert('해당 계정 클라이언트를 찾을 수 없습니다.');
+      return;
+    }
+
+    btn.disabled = true;
+    const originalTitle = btn.title;
+    btn.title = '처리 중...';
+
+    try {
+      if (action === 'reply') {
+        const text = prompt('댓글 내용을 입력하세요');
+        if (!text || !text.trim()) return;
+        if (account.platform === 'mastodon') {
+          await client.createStatus(text.trim(), targetPostId);
+        } else {
+          await client.createNote(text.trim(), targetPostId);
+        }
+        this.bumpPostCounter(postId, platform, accountId, 'replies', 1);
+        this.animateAction(btn, 'reply');
+      }
+
+      if (action === 'fav') {
+        if (account.platform === 'mastodon') {
+          await client.favourite(targetPostId);
+        } else {
+          await client.createReaction(targetPostId, '❤');
+        }
+        this.bumpPostCounter(postId, platform, accountId, account.platform === 'mastodon' ? 'favourites' : 'reactions', 1);
+        this.animateAction(btn, 'fav');
+      }
+
+      if (action === 'boost') {
+        if (account.platform === 'mastodon') {
+          await client.reblog(targetPostId);
+        } else {
+          await client.renote(targetPostId);
+        }
+        this.bumpPostCounter(postId, platform, accountId, account.platform === 'mastodon' ? 'reblogs' : 'renotes', 1);
+        this.animateAction(btn, 'boost');
+      }
+
+      await this.refreshSinglePostCard(postId, platform, accountId, targetPostId);
+    } catch (err) {
+      alert(`작업 실패: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.title = originalTitle;
+    }
+  }
+
+  bumpPostCounter(postId, platform, accountId, key, amount = 1) {
+    const post = this.findPost(postId, platform, accountId);
+    if (!post) return;
+    post.stats = post.stats || {};
+    post.stats[key] = (post.stats[key] || 0) + amount;
+
+    const card = this.timelineFeed?.querySelector(`.post-card[data-post-id="${postId}"][data-platform="${platform}"][data-account-id="${accountId}"]`)
+      || this.timelineFeed?.querySelector(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
+    if (!card) return;
+
+    const action = key === 'replies' ? 'reply' : (key === 'reblogs' || key === 'renotes') ? 'boost' : 'fav';
+    const actionBtn = card.querySelector(`.post-action[data-action="${action}"]`);
+    if (!actionBtn) return;
+
+    let count = actionBtn.querySelector('.post-action-count');
+    if (!count) {
+      count = document.createElement('span');
+      count.className = 'post-action-count';
+      actionBtn.appendChild(count);
+    }
+    const value = post.stats[key] || 0;
+    count.textContent = String(value);
+  }
+
+  animateAction(btn, action) {
+    btn.classList.remove('is-pop', 'is-active');
+    btn.classList.add('is-pop', 'is-active', `is-${action}`);
+    setTimeout(() => {
+      btn.classList.remove('is-pop');
+    }, 260);
+  }
+
+  async refreshSinglePostCard(postId, platform, accountId, targetPostId) {
+    const account = this.store.getById(accountId);
+    const client = this.store.getClient(accountId);
+    if (!account || !client) return;
+
+    let refreshed = null;
+    if (account.platform === 'mastodon') {
+      const status = await client.getStatus(targetPostId);
+      refreshed = { ...client.normalizePost(status), accountId };
+    } else {
+      const note = await client.getNote(targetPostId);
+      refreshed = { ...client.normalizePost(note), accountId };
+    }
+
+    if (!refreshed) return;
+
+    const index = this.cachedPosts?.findIndex(p => p.id === postId && p.platform === platform && p.accountId === accountId);
+    if (typeof index === 'number' && index >= 0) {
+      this.cachedPosts[index] = refreshed;
+    }
+
+    const current = this.timelineFeed?.querySelector(`.post-card[data-post-id="${postId}"][data-platform="${platform}"][data-account-id="${accountId}"]`)
+      || this.timelineFeed?.querySelector(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
+    if (!current) return;
+
+    const nextCard = renderPost(refreshed);
+    current.replaceWith(nextCard);
+  }
+
+
   // ===== Auto Refresh =====
 
   startAutoRefresh() {
@@ -336,73 +590,53 @@ class StarShipApp {
   // ===== Add Account Modal =====
 
   openAddAccountModal() {
-    this.platformSelect.value = '';
     this.instanceUrl.value = '';
     this.accessToken.value = '';
     this.accountLabel.value = '';
     this.addAccountError.style.display = 'none';
     this.btnConfirmAdd.disabled = false;
     this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
-    this.btnOAuthLogin.textContent = '로그인으로 연결';
     document.getElementById('manual-token-section').removeAttribute('open');
     this.modalAddAccount.style.display = 'flex';
-    this.platformSelect.focus();
+    this.instanceUrl.focus();
+    this.updateOAuthButton();
   }
 
   updateOAuthButton() {
-    const platform = this.platformSelect.value;
-    const labels = {
-      misskey: 'Misskey 로그인으로 연결',
-      iceshrimp: 'Iceshrimp 로그인으로 연결',
-      cherrypick: 'CherryPick 로그인으로 연결',
-      mastodon: 'Mastodon 로그인으로 연결',
-    };
-    this.btnOAuthLogin.textContent = labels[platform] || '로그인으로 연결';
+    this.btnOAuthLogin.textContent = '로그인으로 연결';
   }
 
-  updateTokenHint() {
-    const platform = this.platformSelect.value;
-    const hints = {
-      misskey: 'Misskey 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      iceshrimp: 'Iceshrimp 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      cherrypick: 'CherryPick 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      mastodon: 'Mastodon 인스턴스 → 설정 → 개발 → 새 애플리케이션 생성 후 액세스 토큰 복사',
-    };
-    this.tokenHint.textContent = hints[platform] || '인스턴스 설정에서 API 토큰을 생성하세요.';
-
-    const placeholders = {
-      misskey: 'https://misskey.io',
-      iceshrimp: 'https://iceshrimp.example.com',
-      cherrypick: 'https://cherrypick.example.com',
-      mastodon: 'https://mastodon.social',
-    };
-    this.instanceUrl.placeholder = placeholders[platform] || 'https://example.com';
-  }
 
   // ===== OAuth / MiAuth 로그인 =====
 
   async handleOAuthLogin() {
-    const platform = this.platformSelect.value;
-    const instanceUrl = this.instanceUrl.value.trim();
+    let platform;
+    const rawInstanceUrl = this.instanceUrl.value.trim();
 
     // 단계별 유효성 검사 → 어떤 필드가 빠졌는지 명확히 안내
-    if (!platform) {
-      this.showAddError('먼저 플랫폼을 선택하세요.');
-      this.platformSelect.focus();
-      return;
-    }
-    if (!instanceUrl) {
-      this.showAddError('인스턴스 URL을 입력하세요. (예: https://misskey.io)');
+    if (!rawInstanceUrl) {
+      this.showAddError('인스턴스 URL을 입력하세요. (예: misskey.io)');
       this.instanceUrl.focus();
       return;
     }
 
+    let instanceUrl;
     try {
-      new URL(instanceUrl);
-    } catch {
-      this.showAddError('올바른 URL 형식이 아닙니다. (예: https://misskey.io)');
+      instanceUrl = normalizeInstanceUrl(rawInstanceUrl);
+    } catch (err) {
+      this.showAddError(err.message);
       this.instanceUrl.focus();
       return;
+    }
+
+    if (!platform) {
+      try {
+        platform = await detectPlatform(instanceUrl);
+      } catch (err) {
+        this.showAddError(err.message);
+        this.instanceUrl.focus();
+        return;
+      }
     }
 
     this.btnOAuthLogin.disabled = true;
@@ -444,16 +678,12 @@ class StarShipApp {
   // ===== 수동 토큰 추가 =====
 
   async handleAddAccount() {
-    const platform = this.platformSelect.value;
-    const instanceUrl = this.instanceUrl.value.trim();
+    let platform;
+    const rawInstanceUrl = this.instanceUrl.value.trim();
     const accessToken = this.accessToken.value.trim();
     const label = this.accountLabel.value.trim();
 
-    if (!platform) {
-      this.showAddError('플랫폼을 선택하세요.');
-      return;
-    }
-    if (!instanceUrl) {
+    if (!rawInstanceUrl) {
       this.showAddError('인스턴스 URL을 입력하세요.');
       return;
     }
@@ -462,11 +692,21 @@ class StarShipApp {
       return;
     }
 
+    let instanceUrl;
     try {
-      new URL(instanceUrl);
-    } catch {
-      this.showAddError('올바른 URL 형식이 아닙니다. (예: https://misskey.io)');
+      instanceUrl = normalizeInstanceUrl(rawInstanceUrl);
+    } catch (err) {
+      this.showAddError(err.message);
       return;
+    }
+
+    if (!platform) {
+      try {
+        platform = await detectPlatform(instanceUrl);
+      } catch (err) {
+        this.showAddError(err.message);
+        return;
+      }
     }
 
     this.btnConfirmAdd.disabled = true;

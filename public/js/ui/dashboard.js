@@ -8,6 +8,8 @@ export function renderPost(post) {
   card.className = `post-card platform-${post.platform}`;
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
+  if (post.accountId) card.dataset.accountId = post.accountId;
+  if (post.dedupeKey) card.dataset.dedupeKey = post.dedupeKey;
 
   let html = '';
 
@@ -31,9 +33,17 @@ export function renderPost(post) {
     html += `<div class="cw-content" id="${cwId}">`;
   }
 
+  const sourceMarkers = Array.isArray(post.sourceAccounts) ? post.sourceAccounts : [];
+  const markerHtml = sourceMarkers.length > 0
+    ? `<div class="post-source-markers" aria-label="표시 계정">${sourceMarkers
+      .map((source) => `<span class="post-source-marker" style="--marker-color:${escapeHtml(source.color || '#8b93c9')}" title="${escapeHtml(source.label || source.accountId || '')}"></span>`)
+      .join('')}</div>`
+    : '';
+
   // Header
   html += `
     <div class="post-header">
+      ${markerHtml}
       <img class="post-avatar" src="${displayPost.author.avatarUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'}"
            alt="${escapeHtml(displayPost.author.displayName)}"
            loading="lazy"
@@ -82,14 +92,16 @@ export function renderPost(post) {
 
   html += `
     <div class="post-actions">
-      <button class="post-action" data-action="reply" title="답글">💬 ${replyCount > 0 ? replyCount : ''}</button>
-      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">🔁 ${boostCount > 0 ? boostCount : ''}</button>
-      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">⭐ ${favCount > 0 ? favCount : ''}</button>
-      <button class="post-action" data-action="open" title="원본 열기">🔗</button>
+      <button class="post-action reply" data-action="reply" title="댓글" aria-label="댓글">${actionIcon('reply')}${replyCount > 0 ? `<span class="post-action-count">${replyCount}</span>` : ''}</button>
+      <button class="post-action boost" data-action="boost" title="${post.platform === 'mastodon' ? '리포스트' : '리노트'}" aria-label="${post.platform === 'mastodon' ? '리포스트' : '리노트'}">${actionIcon('boost')}${boostCount > 0 ? `<span class="post-action-count">${boostCount}</span>` : ''}</button>
+      <button class="post-action fav" data-action="fav" title="좋아요" aria-label="좋아요">${actionIcon('star')}${favCount > 0 ? `<span class="post-action-count">${favCount}</span>` : ''}</button>
+      <button class="post-action open" data-action="open" title="원문 열기" aria-label="원문 열기">${actionIcon('more')}</button>
     </div>
   `;
 
   card.innerHTML = html;
+  card.dataset.targetPostId = displayPost.id || post.id;
+  card.dataset.postUrl = displayPost.url || post.url || '';
   return card;
 }
 
@@ -98,11 +110,11 @@ export function renderNotification(notif) {
   card.className = `notif-card platform-${notif.platform}`;
 
   let html = `
-    <div class="notif-icon">${notif.icon}</div>
+    <div class="notif-icon">${renderNotifIcon(notif)}</div>
     <div class="notif-body">
       <div class="notif-text">
-        ${notif.actor ? `<strong>${escapeHtml(notif.actor.displayName)}</strong>` : ''}
-        ${escapeHtml(notif.label)}
+        ${notif.actor ? `<strong>${renderTextWithEmojis(notif.actor.displayName, notif.emojiMap)}</strong>` : ''}
+        ${renderTextWithEmojis(notif.label, notif.emojiMap)}
       </div>
       <div class="notif-time">${timeAgo(notif.createdAt)}</div>
   `;
@@ -194,6 +206,38 @@ export function renderLoadingText(message = '불러오는 중...') {
 }
 
 // Helpers
+
+
+function actionIcon(type) {
+  const icons = {
+    reply: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 9L4 12.5L9 16"/><path d="M5.2 12.5H13.6C16.7 12.5 19.2 14.9 19.2 18"/></svg>',
+    boost: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7H18"/><path d="M15 4L18 7L15 10"/><path d="M17 17H6"/><path d="M9 14L6 17L9 20"/></svg>',
+    star: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.8L14.6 9.1L20.5 9.9L16.2 14L17.2 20L12 17.2L6.8 20L7.8 14L3.5 9.9L9.4 9.1Z"/></svg>',
+    more: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="6" cy="12" r="1.35" fill="currentColor"/><circle cx="12" cy="12" r="1.35" fill="currentColor"/><circle cx="18" cy="12" r="1.35" fill="currentColor"/></svg>',
+  };
+  return icons[type] || '';
+}
+
+
+
+function renderTextWithEmojis(text, emojiMap = {}) {
+  const safe = escapeHtml(text || '');
+  if (!safe) return '';
+  return safe.replace(/:([a-zA-Z0-9_.+-]+(?:@[a-zA-Z0-9.-]+)?):/g, (match, name) => {
+    const baseName = name.split('@')[0];
+    const url = emojiMap?.[name] || emojiMap?.[`:${name}:`] || emojiMap?.[baseName] || emojiMap?.[`:${baseName}:`];
+    if (!url) return match;
+    return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${escapeHtml(name)}:" loading="lazy">`;
+  });
+}
+
+function renderNotifIcon(notif) {
+  if (notif.reactionEmojiUrl) {
+    return `<img class="inline-emoji notif-inline-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.icon || 'reaction')}" loading="lazy">`;
+  }
+  return escapeHtml(notif.icon || '🔔');
+}
+
 
 function escapeHtml(text) {
   if (!text) return '';

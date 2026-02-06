@@ -28,6 +28,7 @@ export class MastodonClient {
       method,
       headers,
       body: body ? JSON.stringify(body) : null,
+      cache: 'no-store',
     });
 
     if (!res.ok) {
@@ -72,6 +73,12 @@ export class MastodonClient {
 
   async bookmark(id) {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
+  }
+
+  async createStatus(status, inReplyToId = null) {
+    const body = { status };
+    if (inReplyToId) body.in_reply_to_id = inReplyToId;
+    return this.request('POST', '/api/v1/statuses', body);
   }
 
   normalizePost(status) {

@@ -40,17 +40,32 @@ body {
 }
 
 /* ===== Scrollbar ===== */
-::-webkit-scrollbar {
+/* Hide only the outer page scrollbar */
+html, body {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Keep timeline/notification column scrollbars visible */
+.column-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+.column-content::-webkit-scrollbar {
   width: 6px;
 }
-::-webkit-scrollbar-track {
+.column-content::-webkit-scrollbar-track {
   background: transparent;
 }
-::-webkit-scrollbar-thumb {
+.column-content::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover {
+.column-content::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
@@ -243,7 +258,7 @@ body {
 /* ===== Columns Layout ===== */
 .columns-container {
   display: grid;
-  grid-template-columns: 1fr 1fr 320px;
+  grid-template-columns: 1fr 1fr;
   gap: 1rem;
   height: 100%;
 }
@@ -292,6 +307,21 @@ body {
   background: var(--bg-hover);
 }
 
+.post-card.is-new {
+  animation: post-card-drop-in 0.55s ease;
+}
+
+@keyframes post-card-drop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .post-card.platform-misskey { border-left-color: var(--accent-misskey); }
 .post-card.platform-iceshrimp { border-left-color: var(--accent-iceshrimp); }
 .post-card.platform-cherrypick { border-left-color: var(--accent-cherrypick); }
@@ -302,6 +332,21 @@ body {
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.post-source-markers {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-right: 0.1rem;
+}
+
+.post-source-marker {
+  width: 0.35rem;
+  height: 0.95rem;
+  border-radius: 999px;
+  background: var(--marker-color, #8b93c9);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .post-avatar {
@@ -368,30 +413,101 @@ body {
 
 .post-actions {
   display: flex;
-  gap: 1rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-color);
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
 }
 
 .post-action {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.8rem;
+  background: linear-gradient(180deg, rgba(55, 58, 102, 0.36), rgba(35, 37, 73, 0.34));
+  border: 1px solid rgba(130, 142, 224, 0.24);
+  color: #9ca9d9;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 34px;
+  padding: 0.34rem 0.6rem;
+  border-radius: 999px;
   font-family: inherit;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
-.post-action:hover {
-  color: var(--accent-primary);
-  background: rgba(124, 125, 255, 0.1);
+.post-action svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.post-action svg path,
+.post-action svg circle {
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.post-action-count {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #bcc4eb;
+  min-width: 0.7rem;
+}
+
+.post-action.reply:hover {
+  color: #7fd4ff;
+  border-color: rgba(127, 212, 255, 0.5);
+  background: rgba(61, 119, 171, 0.26);
+}
+
+.post-action.boost:hover {
+  color: #7cf59f;
+  border-color: rgba(124, 245, 159, 0.5);
+  background: rgba(57, 128, 85, 0.26);
+}
+
+.post-action.fav:hover {
+  color: #ffba6a;
+  border-color: rgba(255, 186, 106, 0.5);
+  background: rgba(147, 96, 40, 0.27);
+}
+
+.post-action.open:hover {
+  color: #b7c2ff;
+  border-color: rgba(147, 159, 245, 0.5);
+  background: rgba(88, 92, 165, 0.27);
+}
+
+.post-action:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+
+.post-action.is-active.fav {
+  color: #ffba6a;
+  border-color: rgba(255, 186, 106, 0.6);
+}
+
+.post-action.is-active.boost {
+  color: #7cf59f;
+  border-color: rgba(124, 245, 159, 0.6);
+}
+
+.post-action.is-active.reply {
+  color: #7fd4ff;
+  border-color: rgba(127, 212, 255, 0.6);
+}
+
+.post-action.is-pop {
+  animation: post-action-pop 0.24s ease;
+}
+
+@keyframes post-action-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
 }
 
 /* ===== Notification Card ===== */
@@ -716,9 +832,6 @@ select.input {
   .columns-container {
     grid-template-columns: 1fr 1fr;
   }
-  #col-accounts {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 768px) {
@@ -740,4 +853,18 @@ select.input {
   .column {
     max-height: 60vh;
   }
+}
+
+
+.inline-emoji {
+  width: 1.25em;
+  height: 1.25em;
+  vertical-align: -0.2em;
+  object-fit: contain;
+}
+
+.notif-inline-emoji {
+  width: 1.5em;
+  height: 1.5em;
+  vertical-align: middle;
 }
