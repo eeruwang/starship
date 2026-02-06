@@ -82,10 +82,11 @@ export function renderPost(post) {
 
   html += `
     <div class="post-actions">
-      <button class="post-action" data-action="reply" title="답글">💬 ${replyCount > 0 ? replyCount : ''}</button>
-      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">🔁 ${boostCount > 0 ? boostCount : ''}</button>
-      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">⭐ ${favCount > 0 ? favCount : ''}</button>
-      <button class="post-action" data-action="open" title="원본 열기">🔗</button>
+      <button class="post-action" data-action="reply" title="답글">${actionIcon('reply')}</button>
+      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">${actionIcon('boost')}${boostCount > 0 ? `<span class="post-action-count">${boostCount}</span>` : ''}</button>
+      <button class="post-action" data-action="fav" title="즐겨찾기">${actionIcon('star')}${favCount > 0 ? `<span class="post-action-count">${favCount}</span>` : ''}</button>
+      <button class="post-action" data-action="react" title="리액션">${actionIcon('smile')}</button>
+      <button class="post-action" data-action="open" title="더보기">${actionIcon('more')}</button>
     </div>
   `;
 
@@ -194,6 +195,19 @@ export function renderLoadingText(message = '불러오는 중...') {
 }
 
 // Helpers
+
+
+function actionIcon(type) {
+  const icons = {
+    reply: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 8L4 12L10 16"/><path d="M5 12H14C17.3 12 20 14.7 20 18"/></svg>',
+    boost: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7H17V17H7Z"/><path d="M12 3V7"/></svg>',
+    star: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5L14.7 9L20.8 9.9L16.4 14.2L17.5 20.4L12 17.5L6.5 20.4L7.6 14.2L3.2 9.9L9.3 9Z"/></svg>',
+    smile: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="0.8" fill="currentColor"/><circle cx="15" cy="10" r="0.8" fill="currentColor"/><path d="M8.5 14C9.3 15.2 10.5 16 12 16C13.5 16 14.7 15.2 15.5 14"/></svg>',
+    more: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="6" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18" cy="12" r="1.2" fill="currentColor"/></svg>',
+  };
+  return icons[type] || '';
+}
+
 
 
 function renderTextWithEmojis(text, emojiMap = {}) {

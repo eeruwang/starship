@@ -377,21 +377,39 @@ body {
 .post-action {
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: 0.8rem;
+  color: #6f8392;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  gap: 0.35rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 6px;
   font-family: inherit;
   transition: all 0.2s;
 }
 
+.post-action svg {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+.post-action svg path,
+.post-action svg circle {
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.post-action-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  min-width: 0.75rem;
+}
+
 .post-action:hover {
-  color: var(--accent-primary);
-  background: rgba(124, 125, 255, 0.1);
+  color: #4f6676;
+  background: rgba(124, 125, 255, 0.08);
 }
 
 /* ===== Notification Card ===== */
