@@ -292,6 +292,21 @@ body {
   background: var(--bg-hover);
 }
 
+.post-card.is-new {
+  animation: post-card-drop-in 0.55s ease;
+}
+
+@keyframes post-card-drop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .post-card.platform-misskey { border-left-color: var(--accent-misskey); }
 .post-card.platform-iceshrimp { border-left-color: var(--accent-iceshrimp); }
 .post-card.platform-cherrypick { border-left-color: var(--accent-cherrypick); }

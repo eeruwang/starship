@@ -13,6 +13,7 @@ class StarShipApp {
     this.activeFilter = 'all'; // 'all' or account id
     this.autoRefreshTimer = null;
     this.AUTO_REFRESH_INTERVAL = 60000; // 1 minute
+    this.cachedTimelineFilter = null;
 
     this.initElements();
     this.bindEvents();
@@ -195,11 +196,19 @@ class StarShipApp {
     const accounts = this.getFilteredAccounts();
     if (accounts.length === 0) {
       this.timelineFeed.innerHTML = '<div class="loading-text">표시할 타임라인이 없습니다.</div>';
+      this.cachedPosts = [];
+      this.cachedTimelineFilter = this.activeFilter;
       return;
     }
 
-    this.timelineFeed.innerHTML = '';
-    this.timelineFeed.appendChild(renderLoading());
+    const shouldShowLoader = !Array.isArray(this.cachedPosts)
+      || this.cachedPosts.length === 0
+      || this.cachedTimelineFilter !== this.activeFilter;
+
+    if (shouldShowLoader) {
+      this.timelineFeed.innerHTML = '';
+      this.timelineFeed.appendChild(renderLoading());
+    }
 
     try {
       const allPosts = [];
@@ -228,23 +237,68 @@ class StarShipApp {
       // Sort by date descending
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
-      this.timelineFeed.innerHTML = '';
-
       if (allPosts.length === 0) {
+        this.timelineFeed.innerHTML = '';
         this.timelineFeed.appendChild(renderLoadingText('타임라인에 표시할 게시물이 없습니다.'));
+        this.cachedPosts = [];
+        this.cachedTimelineFilter = this.activeFilter;
         return;
       }
 
-      // Store posts for URL lookup
-      this.cachedPosts = allPosts;
+      const makeKey = (post) => `${post.platform}:${post.accountId || ''}:${post.id}`;
 
-      for (const post of allPosts) {
-        this.timelineFeed.appendChild(renderPost(post));
+      const canIncremental = !shouldShowLoader
+        && this.cachedTimelineFilter === this.activeFilter
+        && this.timelineFeed.children.length > 0;
+
+      if (!canIncremental) {
+        this.timelineFeed.innerHTML = '';
+        for (const post of allPosts) {
+          this.timelineFeed.appendChild(renderPost(post));
+        }
+        this.cachedPosts = allPosts;
+        this.cachedTimelineFilter = this.activeFilter;
+        return;
       }
+
+      const existingKeys = new Set((this.cachedPosts || []).map(makeKey));
+      const newPosts = allPosts.filter((post) => !existingKeys.has(makeKey(post)));
+
+      if (newPosts.length === 0) {
+        this.cachedPosts = allPosts;
+        this.cachedTimelineFilter = this.activeFilter;
+        return;
+      }
+
+      const prevScrollTop = this.timelineFeed.scrollTop;
+      const prevScrollHeight = this.timelineFeed.scrollHeight;
+
+      for (let i = newPosts.length - 1; i >= 0; i -= 1) {
+        const card = renderPost(newPosts[i]);
+        card.classList.add('is-new');
+        setTimeout(() => card.classList.remove('is-new'), 700);
+        this.timelineFeed.prepend(card);
+      }
+
+      const delta = this.timelineFeed.scrollHeight - prevScrollHeight;
+      this.timelineFeed.scrollTop = prevScrollTop + delta;
+
+      const merged = [...newPosts, ...(this.cachedPosts || [])];
+      const deduped = [];
+      const seen = new Set();
+      for (const post of merged) {
+        const key = makeKey(post);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(post);
+      }
+      this.cachedPosts = deduped.slice(0, 300);
+      this.cachedTimelineFilter = this.activeFilter;
     } catch (err) {
       this.timelineFeed.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
     }
   }
+
 
   async loadNotifications() {
     const accounts = this.getFilteredAccounts();
