@@ -87,7 +87,7 @@ export class MisskeyClient {
       id: note.id,
       platform: this.platformType,
       createdAt: new Date(note.createdAt),
-      content: this.mfmToHtml(actualNote.text || '', actualNote.emojis || note.emojis || {}),
+      content: this.mfmToHtml(actualNote.text || '', this.buildEmojiMap(actualNote, note)),
       contentWarning: actualNote.cw || null,
       author: actualAuthor,
       media: (actualNote.files || []).map(f => ({
@@ -110,6 +110,46 @@ export class MisskeyClient {
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
     };
+  }
+
+
+  buildEmojiMap(actualNote, originalNote) {
+    const map = {};
+
+    const addFromRecord = (source) => {
+      if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+      for (const [key, value] of Object.entries(source)) {
+        if (typeof value !== 'string' || !value) continue;
+        map[key] = value;
+        const base = key.split('@')[0];
+        if (base && !map[base]) map[base] = value;
+      }
+    };
+
+    const addFromArray = (source) => {
+      if (!Array.isArray(source)) return;
+      for (const emoji of source) {
+        if (!emoji || typeof emoji !== 'object') continue;
+        const name = emoji.name;
+        const url = emoji.url || emoji.staticUrl || emoji.publicUrl;
+        if (!name || !url) continue;
+        map[name] = url;
+        const base = name.split('@')[0];
+        if (base && !map[base]) map[base] = url;
+      }
+    };
+
+    addFromRecord(actualNote?.emojis);
+    addFromRecord(originalNote?.emojis);
+    addFromArray(actualNote?.emojiDefinitions);
+    addFromArray(originalNote?.emojiDefinitions);
+
+    const mentionedUsers = [actualNote?.user, originalNote?.user].filter(Boolean);
+    for (const user of mentionedUsers) {
+      addFromArray(user?.emojis);
+    }
+
+    return map;
   }
 
   normalizeNotification(notif) {
@@ -162,7 +202,7 @@ export class MisskeyClient {
     html = html.replace(/(^|[\s(])((?:https?:\/\/)[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
 
     // Custom emoji (:blobcat:)
-    html = html.replace(/:([a-zA-Z0-9_+-]+):/g, (match, name) => {
+    html = html.replace(/:([a-zA-Z0-9_.+-]+(?:@[a-zA-Z0-9.-]+)?):/g, (match, name) => {
       const url = emojis?.[name];
       if (!url) return match;
       return `<img class="inline-emoji" src="${url}" alt=":${name}:" loading="lazy">`;
