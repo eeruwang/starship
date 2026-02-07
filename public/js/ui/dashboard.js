@@ -25,6 +25,25 @@ export function renderPost(post) {
 
   const displayPost = post.reblog || post;
 
+  // Reply context
+  if (displayPost.replyTo) {
+    const parentContent = stripHtml(displayPost.replyTo.content);
+    const excerpt = parentContent.slice(0, 80) + (parentContent.length > 80 ? '...' : '');
+    html += `
+      <div class="reply-context">
+        <div class="reply-context-header">
+          <img class="reply-context-avatar" src="${displayPost.replyTo.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <span class="reply-context-author">${escapeHtml(displayPost.replyTo.author.displayName)}</span>
+        </div>
+        <div class="reply-context-content">${escapeHtml(excerpt)}</div>
+      </div>
+    `;
+  } else if (displayPost.replyToAcct) {
+    html += `<div class="reply-indicator">↩ @${escapeHtml(displayPost.replyToAcct)} 에게 답글</div>`;
+  } else if (displayPost.replyToId) {
+    html += `<div class="reply-indicator">↩ 답글</div>`;
+  }
+
   // CW
   if (displayPost.contentWarning) {
     const cwId = `cw-${post.id}`;
@@ -43,6 +62,7 @@ export function renderPost(post) {
       <img class="post-avatar" src="${displayPost.author.avatarUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'}"
            alt="${escapeHtml(displayPost.author.displayName)}"
            loading="lazy"
+           referrerpolicy="no-referrer"
            onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'">
       <div class="post-meta">
         <div class="post-author">${escapeHtml(displayPost.author.displayName)}</div>
@@ -63,7 +83,7 @@ export function renderPost(post) {
       if (m.type === 'video') {
         html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
       } else {
-        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" data-full-url="${m.url}" data-lightbox="true">`;
+        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
       }
     }
     html += '</div>';
@@ -131,8 +151,21 @@ export function renderNotification(notif) {
       : `<span class="notif-svg-icon">${icon}</span>`;
   }
 
-  let html = `
-    <div class="notif-icon">${iconHtml}</div>
+  let html = '';
+
+  // Actor avatar with notification type badge overlay
+  if (notif.actor && notif.actor.avatarUrl) {
+    html += `
+      <div class="notif-actor-wrap">
+        <img class="notif-avatar" src="${escapeHtml(notif.actor.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+        <span class="notif-type-badge">${iconHtml}</span>
+      </div>
+    `;
+  } else {
+    html += `<div class="notif-icon">${iconHtml}</div>`;
+  }
+
+  html += `
     <div class="notif-body">
       <div class="notif-text">
         ${notif.actor ? `<strong>${escapeHtml(notif.actor.displayName)}</strong>` : ''}

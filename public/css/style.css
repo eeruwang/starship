@@ -602,6 +602,51 @@ body {
   object-fit: contain;
 }
 
+/* ===== Reply Context ===== */
+.reply-context {
+  background: var(--bg-primary);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.5rem;
+  border-left: 2px solid var(--border-color);
+  font-size: 0.8rem;
+}
+
+.reply-context-header {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.15rem;
+}
+
+.reply-context-avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.reply-context-author {
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.reply-context-content {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply-indicator {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-bottom: 0.3rem;
+}
+
 /* ===== Notification Card ===== */
 .notif-card {
   background: var(--bg-card);
@@ -618,6 +663,53 @@ body {
 .notif-card.platform-iceshrimp { border-left-color: var(--accent-iceshrimp); }
 .notif-card.platform-cherrypick { border-left-color: var(--accent-cherrypick); }
 .notif-card.platform-mastodon { border-left-color: var(--accent-mastodon); }
+
+.notif-actor-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+
+.notif-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.notif-type-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -5px;
+  width: 20px;
+  height: 20px;
+  background: var(--bg-secondary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-card);
+}
+
+.notif-type-badge .notif-svg-icon {
+  color: var(--accent-primary);
+}
+
+.notif-type-badge .notif-svg-icon svg {
+  width: 10px;
+  height: 10px;
+}
+
+.notif-type-badge .notif-emoji {
+  font-size: 0.55rem;
+  line-height: 1;
+}
+
+.notif-type-badge .notif-custom-emoji {
+  width: 12px;
+  height: 12px;
+}
 
 .notif-icon {
   flex-shrink: 0;

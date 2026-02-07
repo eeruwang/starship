@@ -517,6 +517,22 @@ class StarShipApp {
 
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
+      // Deduplicate posts by canonical URI (same post seen from different accounts)
+      if (accounts.length > 1) {
+        const seen = new Set();
+        const deduped = [];
+        for (const post of allPosts) {
+          const displayPost = post.reblog || post;
+          const key = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            deduped.push(post);
+          }
+        }
+        allPosts.length = 0;
+        allPosts.push(...deduped);
+      }
+
       // Cache posts
       this.cachePosts(allPosts);
 

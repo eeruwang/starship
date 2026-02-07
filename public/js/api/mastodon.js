@@ -135,6 +135,12 @@ export class MastodonClient {
         displayName: acct.display_name || acct.username,
         username: acct.username,
       } : null,
+      canonicalUri: status.uri || status.url,
+      replyTo: null,
+      replyToId: status.in_reply_to_id || null,
+      replyToAcct: status.in_reply_to_id
+        ? ((status.mentions || []).find(m => m.id === status.in_reply_to_account_id)?.acct || null)
+        : null,
       url: status.url,
       raw: status,
     };
@@ -161,6 +167,7 @@ export class MastodonClient {
       type: notif.type,
       icon: info.icon,
       reactionEmoji: null,
+      reactionEmojiUrl: null,
       label: info.label,
       createdAt: new Date(notif.created_at),
       actor: {

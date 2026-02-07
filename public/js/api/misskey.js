@@ -138,6 +138,13 @@ export class MisskeyClient {
       } : null,
       reactions: actualNote.reactions || {},
       reactionEmojis: actualNote.reactionEmojis || {},
+      canonicalUri: actualNote.uri || `${this.instanceUrl}/notes/${actualNote.id}`,
+      replyTo: actualNote.reply ? {
+        id: actualNote.reply.id,
+        content: this.mfmToHtml(actualNote.reply.text || ''),
+        author: this.normalizeUser(actualNote.reply.user),
+      } : null,
+      replyToId: actualNote.replyId || null,
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
     };
