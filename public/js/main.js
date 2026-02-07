@@ -213,13 +213,19 @@ class StarShipApp {
           const client = this.store.getClient(account.id);
           if (!client) return [];
 
-          if (account.platform === 'mastodon') {
-            const statuses = await client.getHomeTimeline(30);
-            return statuses.map(s => client.normalizePost(s));
-          } else {
-            const notes = await client.getHomeTimeline(30);
-            return notes.map(n => client.normalizePost(n));
+          const timeline = await client.getHomeTimeline(30);
+          const posts = timeline.map(item => client.normalizePost(item));
+
+          // Attach source account info
+          for (const post of posts) {
+            post._seenBy = [{
+              platform: account.platform,
+              avatarUrl: account.profile.avatarUrl,
+              label: account.label || account.profile.displayName,
+            }];
           }
+
+          return posts;
         })
       );
 
@@ -232,15 +238,26 @@ class StarShipApp {
       // Sort by date descending
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
-      // Deduplicate: remove duplicate notes seen from multiple accounts
-      const seen = new Set();
-      const uniquePosts = allPosts.filter(post => {
+      // Deduplicate: merge duplicate notes seen from multiple accounts
+      const seen = new Map();
+      const uniquePosts = [];
+      for (const post of allPosts) {
         const key = post.uri || post.url;
-        if (!key) return true;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+        if (!key) {
+          uniquePosts.push(post);
+          continue;
+        }
+        const existing = seen.get(key);
+        if (existing) {
+          // Merge seenBy from duplicate into first occurrence
+          if (post._seenBy) {
+            existing._seenBy.push(...post._seenBy);
+          }
+        } else {
+          seen.set(key, post);
+          uniquePosts.push(post);
+        }
+      }
 
       this.timelineFeed.innerHTML = '';
 

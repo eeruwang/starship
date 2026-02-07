@@ -670,6 +670,50 @@ select.input {
   font-size: 0.85rem;
 }
 
+/* ===== Multi-account seen-by indicator ===== */
+.post-card.multi-account {
+  border-left-style: solid;
+}
+
+.seen-by-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.seen-by-avatars {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.seen-by-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid transparent;
+  margin-left: -8px;
+  background: var(--bg-card);
+}
+
+.seen-by-avatar:first-child {
+  margin-left: 0;
+}
+
+.seen-by-avatar.misskey { border-color: var(--accent-misskey); }
+.seen-by-avatar.iceshrimp { border-color: var(--accent-iceshrimp); }
+.seen-by-avatar.cherrypick { border-color: var(--accent-cherrypick); }
+.seen-by-avatar.mastodon { border-color: var(--accent-mastodon); }
+
+.seen-by-text {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
 /* ===== Renote / Boost indicator ===== */
 .renote-indicator, .boost-indicator {
   display: flex;

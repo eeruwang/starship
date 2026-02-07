@@ -9,7 +9,38 @@ export function renderPost(post) {
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
 
+  // Multi-account left border: gradient of platform colors
+  if (post._seenBy && post._seenBy.length > 1) {
+    card.classList.add('multi-account');
+    const platformColors = {
+      misskey: '#96d04a',
+      iceshrimp: '#e36a8a',
+      cherrypick: '#ff6b9d',
+      mastodon: '#6364ff',
+    };
+    const colors = post._seenBy.map(a => platformColors[a.platform] || '#7c7dff');
+    const segments = colors.map((c, i) => {
+      const start = (i / colors.length) * 100;
+      const end = ((i + 1) / colors.length) * 100;
+      return `${c} ${start}%, ${c} ${end}%`;
+    }).join(', ');
+    card.style.borderImage = `linear-gradient(to bottom, ${segments}) 1`;
+    card.style.borderLeftWidth = '4px';
+  }
+
   let html = '';
+
+  // Multi-account seen-by indicator with overlapping avatars
+  if (post._seenBy && post._seenBy.length > 1) {
+    html += `<div class="seen-by-indicator">`;
+    html += `<div class="seen-by-avatars">`;
+    for (const acct of post._seenBy) {
+      html += `<img class="seen-by-avatar ${acct.platform}" src="${acct.avatarUrl || ''}" alt="${escapeHtml(acct.label)}" title="${escapeHtml(acct.label)}" loading="lazy" onerror="this.style.display='none'">`;
+    }
+    html += `</div>`;
+    html += `<span class="seen-by-text">${post._seenBy.length}개 계정에서 수신</span>`;
+    html += `</div>`;
+  }
 
   // Renote / Boost indicator
   if (post.rebloggedBy) {
