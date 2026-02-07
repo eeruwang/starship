@@ -7,55 +7,32 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header class="app-header">
-    <div class="header-left">
-      <h1 class="logo">StarShip</h1>
-      <span class="tagline">Fediverse Multi-Account Dashboard</span>
-    </div>
-    <div class="header-right">
-      <button id="btn-add-account" class="btn btn-primary">+ 계정 추가</button>
-      <button id="btn-refresh-all" class="btn btn-secondary">새로고침</button>
-      <button id="btn-settings" class="btn btn-icon" title="설정">⚙</button>
-    </div>
-  </header>
+  <div id="app-root">
+    <header class="app-header">
+      <div class="header-left">
+        <h1 class="logo">StarShip</h1>
+        <span class="tagline">Fediverse Multi-Account Dashboard</span>
+      </div>
+      <div class="header-right">
+        <button id="btn-add-account" class="btn btn-primary">+ 계정 추가</button>
+        <button id="btn-refresh-all" class="btn btn-secondary">새로고침</button>
+        <button id="btn-settings" class="btn btn-icon" title="설정">⚙</button>
+      </div>
+    </header>
 
-  <nav class="account-tabs" id="account-tabs">
-    <button class="tab active" data-tab="all">전체</button>
-  </nav>
+    <nav class="column-toggle-bar" id="column-toggle-bar"></nav>
 
-  <main class="dashboard" id="dashboard">
-    <div class="empty-state" id="empty-state">
-      <div class="empty-icon">🌐</div>
-      <h2>Fediverse 계정을 연결하세요</h2>
-      <p>Misskey, Iceshrimp, CherryPick, Mastodon 계정을 추가하여<br>모든 타임라인을 한 곳에서 확인하세요.</p>
-      <button class="btn btn-primary btn-large" id="btn-add-first">계정 추가하기</button>
-    </div>
+    <main class="dashboard" id="dashboard">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">🌐</div>
+        <h2>Fediverse 계정을 연결하세요</h2>
+        <p>Misskey, Iceshrimp, CherryPick, Mastodon 계정을 추가하여<br>모든 타임라인을 한 곳에서 확인하세요.</p>
+        <button class="btn btn-primary btn-large" id="btn-add-first">계정 추가하기</button>
+      </div>
 
-    <div class="columns-container" id="columns-container" style="display:none;">
-      <section class="column" id="col-timeline">
-        <div class="column-header">
-          <h2>타임라인</h2>
-          <button class="btn btn-icon btn-small" data-action="refresh-timeline" title="새로고침">↻</button>
-        </div>
-        <div class="column-content" id="timeline-feed"></div>
-      </section>
-
-      <section class="column" id="col-notifications">
-        <div class="column-header">
-          <h2>알림</h2>
-          <button class="btn btn-icon btn-small" data-action="refresh-notifications" title="새로고침">↻</button>
-        </div>
-        <div class="column-content" id="notifications-feed"></div>
-      </section>
-
-      <section class="column" id="col-accounts">
-        <div class="column-header">
-          <h2>계정 목록</h2>
-        </div>
-        <div class="column-content" id="accounts-list"></div>
-      </section>
-    </div>
-  </main>
+      <div class="columns-container" id="columns-container" style="display:none;"></div>
+    </main>
+  </div>
 
   <!-- 계정 추가 모달 -->
   <div class="modal-overlay" id="modal-add-account" style="display:none;">
@@ -118,15 +95,45 @@
     </div>
   </div>
 
-  <!-- 게시물 상세 모달 -->
-  <div class="modal-overlay" id="modal-post-detail" style="display:none;">
-    <div class="modal modal-wide">
+  <!-- 새 글 작성 모달 -->
+  <div class="modal-overlay" id="modal-compose" style="display:none;">
+    <div class="modal">
       <div class="modal-header">
-        <h2>게시물 상세</h2>
-        <button class="btn btn-icon modal-close" data-close-modal="modal-post-detail">✕</button>
+        <h2>새 글 작성</h2>
+        <button class="btn btn-icon modal-close" data-close-modal="modal-compose">✕</button>
       </div>
-      <div class="modal-body" id="post-detail-content"></div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="compose-account">게시 계정</label>
+          <select id="compose-account" class="input"></select>
+        </div>
+        <div class="form-group">
+          <label for="compose-cw">내용 경고 (선택)</label>
+          <input type="text" id="compose-cw" class="input" placeholder="내용 경고 텍스트">
+        </div>
+        <div class="form-group">
+          <label for="compose-text">내용</label>
+          <textarea id="compose-text" class="input" rows="4" placeholder="무슨 일이 일어나고 있나요?"></textarea>
+        </div>
+        <div class="form-group">
+          <label>이미지 첨부</label>
+          <input type="file" id="compose-files" accept="image/*" multiple style="display:none;">
+          <button class="btn btn-secondary btn-small" id="btn-compose-attach">이미지 추가</button>
+          <div class="compose-image-preview" id="compose-image-preview"></div>
+        </div>
+        <div id="compose-error" class="form-error" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-modal="modal-compose">취소</button>
+        <button class="btn btn-primary" id="btn-compose-submit">게시</button>
+      </div>
     </div>
+  </div>
+
+  <!-- 이미지 라이트박스 -->
+  <div class="lightbox-overlay" id="lightbox" style="display:none;">
+    <button class="lightbox-close" id="lightbox-close">✕</button>
+    <img id="lightbox-img" src="" alt="">
   </div>
 
   <script type="module" src="js/main.js"></script>

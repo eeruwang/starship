@@ -93,11 +93,13 @@ export async function completeMastodonOAuth(code, pending) {
 const MISSKEY_PERMISSIONS = [
   'read:account',
   'read:blocks',
+  'read:drive',
   'read:favorites',
   'read:following',
   'read:mutes',
   'read:notifications',
   'read:reactions',
+  'write:drive',
   'write:favorites',
   'write:notes',
   'write:reactions',

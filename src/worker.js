@@ -77,7 +77,12 @@ async function handleProxy(request, url) {
     // 요청 본문 (POST 등)
     let body = null;
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      body = await request.text();
+      // For multipart form data (file uploads), pass the body as-is
+      if (contentType && contentType.includes('multipart/form-data')) {
+        body = await request.arrayBuffer();
+      } else {
+        body = await request.text();
+      }
     }
 
     const proxyRes = await fetch(targetUrl, {

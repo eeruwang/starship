@@ -8,6 +8,7 @@ export function renderPost(post) {
   card.className = `post-card platform-${post.platform}`;
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
+  if (post.accountId) card.dataset.accountId = post.accountId;
 
   let html = '';
 
@@ -51,12 +52,13 @@ export function renderPost(post) {
 
   // Media
   if (displayPost.media && displayPost.media.length > 0) {
-    html += '<div class="post-media">';
+    const count = Math.min(displayPost.media.length, 4);
+    html += `<div class="post-media media-${count}">`;
     for (const m of displayPost.media) {
       if (m.type === 'video') {
         html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
       } else {
-        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy">`;
+        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" data-full-url="${m.url}" data-lightbox="true">`;
       }
     }
     html += '</div>';

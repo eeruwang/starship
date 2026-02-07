@@ -74,6 +74,36 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
   }
 
+  async createStatus(text, options = {}) {
+    const body = { status: text };
+    if (options.spoilerText) body.spoiler_text = options.spoilerText;
+    if (options.mediaIds && options.mediaIds.length > 0) body.media_ids = options.mediaIds;
+    if (options.inReplyToId) body.in_reply_to_id = options.inReplyToId;
+    return this.request('POST', '/api/v1/statuses', body);
+  }
+
+  async uploadMedia(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const targetUrl = `${this.instanceUrl}/api/v2/media`;
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.accessToken}` },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Media upload error ${res.status}: ${errText}`);
+    }
+    return res.json();
+  }
+
   normalizePost(status) {
     const acct = status.account;
     return {

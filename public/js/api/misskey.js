@@ -66,6 +66,36 @@ export class MisskeyClient {
     return this.request('notes/create', { renoteId: noteId });
   }
 
+  async createNote(text, options = {}) {
+    const body = { text };
+    if (options.cw) body.cw = options.cw;
+    if (options.fileIds && options.fileIds.length > 0) body.fileIds = options.fileIds;
+    if (options.replyId) body.replyId = options.replyId;
+    return this.request('notes/create', body);
+  }
+
+  async uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('i', this.accessToken);
+
+    const targetUrl = `${this.instanceUrl}/api/drive/files/create`;
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`File upload error ${res.status}: ${errText}`);
+    }
+    return res.json();
+  }
+
   normalizeUser(user) {
     return {
       id: user.id,
