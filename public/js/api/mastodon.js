@@ -105,6 +105,7 @@ export class MastodonClient {
         displayName: acct.display_name || acct.username,
         username: acct.username,
       } : null,
+      uri: status.uri,
       url: status.url,
       raw: status,
     };

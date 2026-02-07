@@ -232,17 +232,27 @@ class StarShipApp {
       // Sort by date descending
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
+      // Deduplicate: remove duplicate notes seen from multiple accounts
+      const seen = new Set();
+      const uniquePosts = allPosts.filter(post => {
+        const key = post.uri || post.url;
+        if (!key) return true;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
       this.timelineFeed.innerHTML = '';
 
-      if (allPosts.length === 0) {
+      if (uniquePosts.length === 0) {
         this.timelineFeed.appendChild(renderLoadingText('타임라인에 표시할 게시물이 없습니다.'));
         return;
       }
 
       // Store posts for URL lookup
-      this.cachedPosts = allPosts;
+      this.cachedPosts = uniquePosts;
 
-      for (const post of allPosts) {
+      for (const post of uniquePosts) {
         this.timelineFeed.appendChild(renderPost(post));
       }
     } catch (err) {
