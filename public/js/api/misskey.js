@@ -67,6 +67,14 @@ export class MisskeyClient {
     return this.request('notes/create', { renoteId: noteId });
   }
 
+  async createNote(text, options = {}) {
+    const body = { text };
+    if (options.cw) body.cw = options.cw;
+    if (options.replyId) body.replyId = options.replyId;
+    if (options.visibility) body.visibility = options.visibility;
+    return this.request('notes/create', body);
+  }
+
   normalizeUser(user) {
     // Build emoji map from user's custom emojis (for display name)
     const userEmojis = {};
@@ -113,6 +121,23 @@ export class MisskeyClient {
     const actualAuthor = isRenote ? this.normalizeUser(note.renote.user) : author;
     const emojiMap = this.buildEmojiMap(actualNote);
 
+    // Parent post for replies
+    let replyTo = null;
+    if (note.reply) {
+      const replyAuthor = this.normalizeUser(note.reply.user);
+      const replyEmojiMap = this.buildEmojiMap(note.reply);
+      replyTo = {
+        id: note.reply.id,
+        author: replyAuthor,
+        content: this.mfmToHtml(note.reply.text || '', replyEmojiMap),
+        createdAt: new Date(note.reply.createdAt),
+        url: `${this.instanceUrl}/notes/${note.reply.id}`,
+      };
+    } else if (actualNote.replyId) {
+      // We know it's a reply but don't have parent data
+      replyTo = { id: actualNote.replyId, partial: true };
+    }
+
     return {
       id: note.id,
       platform: this.platformType,
@@ -134,6 +159,7 @@ export class MisskeyClient {
       reblog: isRenote ? this.normalizePost(note.renote) : null,
       rebloggedBy: isRenote ? {
         displayName: author.displayName,
+        displayNameHtml: author.displayNameHtml,
         username: author.username,
       } : null,
       reactions: actualNote.reactions || {},
@@ -141,37 +167,80 @@ export class MisskeyClient {
       instanceUrl: this.instanceUrl,
       uri: note.uri || null,
       url: `${this.instanceUrl}/notes/${note.id}`,
+      replyTo,
       raw: note,
     };
   }
 
   normalizeNotification(notif) {
-    const typeMap = {
-      'reaction': { icon: '💖', label: '리액션' },
-      'reply': { icon: '💬', label: '답글' },
-      'renote': { icon: '🔁', label: '리노트' },
-      'quote': { icon: '💬', label: '인용' },
-      'mention': { icon: '📢', label: '멘션' },
-      'follow': { icon: '👤', label: '팔로우' },
-      'followRequestAccepted': { icon: '✅', label: '팔로우 수락' },
-      'receiveFollowRequest': { icon: '🔔', label: '팔로우 요청' },
-      'pollEnded': { icon: '📊', label: '투표 종료' },
-      'achievementEarned': { icon: '🏆', label: '업적 획득' },
-      'app': { icon: '📱', label: '앱 알림' },
-      'note': { icon: '📝', label: '새 노트' },
+    const typeLabels = {
+      'reaction': '리액션',
+      'reply': '답글',
+      'renote': '리노트',
+      'quote': '인용',
+      'mention': '멘션',
+      'follow': '팔로우',
+      'followRequestAccepted': '팔로우 수락',
+      'receiveFollowRequest': '팔로우 요청',
+      'pollEnded': '투표 종료',
+      'achievementEarned': '업적 획득',
+      'app': '앱 알림',
+      'note': '새 노트',
     };
 
-    const info = typeMap[notif.type] || { icon: '🔔', label: notif.type };
+    const label = typeLabels[notif.type] || notif.type;
+
+    // Resolve reaction emoji
+    let reaction = null;
+    if (notif.type === 'reaction' && notif.reaction) {
+      const customMatch = notif.reaction.match(/^:(.+):$/);
+      if (customMatch) {
+        const emojiName = customMatch[1];
+        let emojiUrl = null;
+
+        // Try reactionEmojis from the note
+        if (notif.note?.reactionEmojis) {
+          emojiUrl = notif.note.reactionEmojis[emojiName];
+          if (!emojiUrl) {
+            const baseName = emojiName.includes('@') ? emojiName.split('@')[0] : emojiName;
+            emojiUrl = notif.note.reactionEmojis[baseName];
+          }
+        }
+
+        // Try instance emoji cache
+        if (!emojiUrl && this._emojiCache) {
+          const baseName = emojiName.includes('@') ? emojiName.split('@')[0] : emojiName;
+          emojiUrl = this._emojiCache[emojiName] || this._emojiCache[baseName];
+        }
+
+        // Fallback: try remote instance emoji endpoint
+        if (!emojiUrl && emojiName.includes('@')) {
+          const [name, host] = emojiName.split('@');
+          emojiUrl = `https://${host}/emoji/${encodeURIComponent(name)}.webp`;
+        }
+
+        // Fallback: try local instance emoji endpoint
+        if (!emojiUrl) {
+          const baseName = emojiName.includes('@') ? emojiName.split('@')[0] : emojiName;
+          emojiUrl = `${this.instanceUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+        }
+
+        reaction = { type: 'image', url: emojiUrl, alt: notif.reaction };
+      } else {
+        // Unicode emoji
+        reaction = { type: 'text', value: notif.reaction };
+      }
+    }
 
     return {
       id: notif.id,
       platform: this.platformType,
       type: notif.type,
-      icon: notif.type === 'reaction' ? (notif.reaction || info.icon) : info.icon,
-      label: info.label,
+      label,
       createdAt: new Date(notif.createdAt),
       actor: notif.user ? this.normalizeUser(notif.user) : null,
       post: notif.note ? this.normalizePost(notif.note) : null,
+      reaction,
     };
   }
 
@@ -253,18 +322,32 @@ export class MisskeyClient {
     html = html.replace(/<i>(.+?)<\/i>/g, '<em>$1</em>');
     // Strikethrough
     html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-    // Custom emoji :name: or :name@host:
+
+    // Custom emoji :name: or :name@host: — do BEFORE URL processing
+    // Use placeholder tokens to prevent URL regex from matching inside img tags
+    const emojiTokens = [];
     html = html.replace(/:([a-zA-Z0-9_]+(?:@[\w.-]+)?):/g, (match, name) => {
       const baseName = name.includes('@') ? name.split('@')[0] : name;
       const url = emojiMap[name] || emojiMap[baseName];
       if (url) {
-        return `<img class="inline-emoji" src="${url}" alt=":${name}:" title=":${name}:">`;
+        const token = `\x00EMOJI_${emojiTokens.length}\x00`;
+        emojiTokens.push(`<img class="inline-emoji" src="${url}" alt=":${name}:" title=":${name}:">`);
+        return token;
       }
       if (this.instanceUrl && !name.includes('@')) {
-        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" onerror="this.replaceWith(document.createTextNode(':${name}:'))">`;
+        const token = `\x00EMOJI_${emojiTokens.length}\x00`;
+        emojiTokens.push(`<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" onerror="this.parentNode.replaceChild(document.createTextNode(':${name}:'),this)">`);
+        return token;
+      }
+      if (name.includes('@')) {
+        const [eName, host] = name.split('@');
+        const token = `\x00EMOJI_${emojiTokens.length}\x00`;
+        emojiTokens.push(`<img class="inline-emoji" src="https://${host}/emoji/${encodeURIComponent(eName)}.webp" alt=":${name}:" title=":${name}:" onerror="this.parentNode.replaceChild(document.createTextNode(':${name}:'),this)">`);
+        return token;
       }
       return match;
     });
+
     // Mentions
     html = html.replace(/@([\w.-]+)(?:@([\w.-]+))?/g, (match, user, host) => {
       return `<span class="mention">@${user}${host ? '@' + host : ''}</span>`;
@@ -272,10 +355,16 @@ export class MisskeyClient {
     // Hashtags
     html = html.replace(/#([\w\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\u4e00-\u9faf\uac00-\ud7af]+)/g,
       '<span class="hashtag">#$1</span>');
-    // URLs
-    html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    // URLs — won't match inside emoji tokens (they use \x00)
+    html = html.replace(/(https?:\/\/[^\s<\x00]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
     // Newlines
     html = html.replace(/\n/g, '<br>');
+
+    // Restore emoji tokens
+    for (let i = 0; i < emojiTokens.length; i++) {
+      html = html.replace(`\x00EMOJI_${i}\x00`, emojiTokens[i]);
+    }
+
     return html;
   }
 

@@ -74,65 +74,88 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
   }
 
+  async createStatus(text, options = {}) {
+    const body = { status: text };
+    if (options.cw) body.spoiler_text = options.cw;
+    if (options.replyId) body.in_reply_to_id = options.replyId;
+    if (options.visibility) body.visibility = options.visibility;
+    return this.request('POST', '/api/v1/statuses', body);
+  }
+
   normalizePost(status) {
     const acct = status.account;
+    const isReblog = !!status.reblog;
+    const actualStatus = isReblog ? status.reblog : status;
+    const actualAcct = isReblog ? status.reblog.account : acct;
+
+    // Reply info
+    let replyTo = null;
+    if (actualStatus.in_reply_to_id) {
+      replyTo = {
+        id: actualStatus.in_reply_to_id,
+        accountId: actualStatus.in_reply_to_account_id,
+        partial: true,
+      };
+    }
+
     return {
       id: status.id,
       platform: 'mastodon',
       createdAt: new Date(status.created_at),
-      content: status.content,
-      contentWarning: status.spoiler_text || null,
+      content: actualStatus.content,
+      contentWarning: actualStatus.spoiler_text || null,
       author: {
-        id: acct.id,
-        displayName: acct.display_name || acct.username,
-        displayNameHtml: this.renderDisplayName(acct),
-        username: acct.username,
-        acct: acct.acct,
-        avatarUrl: acct.avatar,
+        id: actualAcct.id,
+        displayName: actualAcct.display_name || actualAcct.username,
+        displayNameHtml: this.renderDisplayName(actualAcct),
+        username: actualAcct.username,
+        acct: actualAcct.acct,
+        avatarUrl: actualAcct.avatar,
       },
-      media: (status.media_attachments || []).map(m => ({
+      media: (actualStatus.media_attachments || []).map(m => ({
         type: m.type,
         url: m.url,
         previewUrl: m.preview_url,
         description: m.description,
       })),
       stats: {
-        replies: status.replies_count || 0,
-        reblogs: status.reblogs_count || 0,
-        favourites: status.favourites_count || 0,
+        replies: actualStatus.replies_count || 0,
+        reblogs: actualStatus.reblogs_count || 0,
+        favourites: actualStatus.favourites_count || 0,
       },
-      reblog: status.reblog ? this.normalizePost(status.reblog) : null,
-      rebloggedBy: status.reblog ? {
+      reblog: isReblog ? this.normalizePost(status.reblog) : null,
+      rebloggedBy: isReblog ? {
         displayName: acct.display_name || acct.username,
+        displayNameHtml: this.renderDisplayName(acct),
         username: acct.username,
       } : null,
       uri: status.uri,
       url: status.url,
+      replyTo,
       raw: status,
     };
   }
 
   normalizeNotification(notif) {
-    const typeMap = {
-      'mention': { icon: '💬', label: '멘션' },
-      'reblog': { icon: '🔁', label: '부스트' },
-      'favourite': { icon: '⭐', label: '즐겨찾기' },
-      'follow': { icon: '👤', label: '팔로우' },
-      'follow_request': { icon: '🔔', label: '팔로우 요청' },
-      'poll': { icon: '📊', label: '투표 종료' },
-      'status': { icon: '📝', label: '새 게시물' },
-      'update': { icon: '✏️', label: '수정됨' },
+    const typeLabels = {
+      'mention': '멘션',
+      'reblog': '부스트',
+      'favourite': '즐겨찾기',
+      'follow': '팔로우',
+      'follow_request': '팔로우 요청',
+      'poll': '투표 종료',
+      'status': '새 게시물',
+      'update': '수정됨',
     };
 
-    const info = typeMap[notif.type] || { icon: '🔔', label: notif.type };
+    const label = typeLabels[notif.type] || notif.type;
     const acct = notif.account;
 
     return {
       id: notif.id,
       platform: 'mastodon',
       type: notif.type,
-      icon: info.icon,
-      label: info.label,
+      label,
       createdAt: new Date(notif.created_at),
       actor: {
         displayName: acct.display_name || acct.username,
@@ -141,6 +164,7 @@ export class MastodonClient {
         avatarUrl: acct.avatar,
       },
       post: notif.status ? this.normalizePost(notif.status) : null,
+      reaction: null,
     };
   }
 

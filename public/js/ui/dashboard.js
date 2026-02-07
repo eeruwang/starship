@@ -3,9 +3,41 @@
  * Renders timeline posts, notifications, and account cards.
  */
 
-export function renderPost(post) {
+// ===== SVG Notification Icons =====
+const NOTIF_ICONS = {
+  reaction: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff6b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+  reply: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6cb4ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  renote: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#96d04a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+  reblog: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#96d04a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+  follow: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c7dff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>',
+  follow_request: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffb340" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>',
+  receiveFollowRequest: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffb340" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>',
+  followRequestAccepted: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#96d04a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>',
+  mention: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e36a8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>',
+  quote: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e36a8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h2v4H8z"/><path d="M13 9h2v4h-2z"/></svg>',
+  favourite: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffb340" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  poll: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6cb4ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 12h2v5H7z"/><path d="M11 8h2v9h-2z"/><path d="M15 10h2v7h-2z"/></svg>',
+  pollEnded: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6cb4ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 12h2v5H7z"/><path d="M11 8h2v9h-2z"/><path d="M15 10h2v7h-2z"/></svg>',
+  status: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#96d04a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  note: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#96d04a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  update: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a9ab8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  achievementEarned: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffb340" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>',
+  app: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a9ab8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
+  default: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a9ab8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+};
+
+// ===== Post Action SVG Icons =====
+const iconReply = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+const iconBoost = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+const iconFav = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+const iconOpen = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+
+const FALLBACK_AVATAR = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>';
+
+export function renderPost(post, animate = false) {
   const card = document.createElement('div');
   card.className = `post-card platform-${post.platform}`;
+  if (animate) card.classList.add('post-new');
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
 
@@ -45,17 +77,36 @@ export function renderPost(post) {
   // Renote / Boost indicator
   if (post.rebloggedBy) {
     const boostLabel = post.platform === 'mastodon' ? '부스트' : '리노트';
-    html += `<div class="renote-indicator">🔁 ${escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
+    const boostIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+    html += `<div class="renote-indicator">${boostIcon} ${post.rebloggedBy.displayNameHtml || escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
   }
 
   const displayPost = post.reblog || post;
+
+  // Parent post (reply context)
+  if (post.replyTo && !post.replyTo.partial) {
+    html += `<div class="reply-context">`;
+    html += `<div class="reply-context-header">`;
+    html += `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>`;
+    html += `<img class="reply-context-avatar" src="${post.replyTo.author?.avatarUrl || FALLBACK_AVATAR}" loading="lazy" onerror="this.src='${FALLBACK_AVATAR}'">`;
+    html += `<span class="reply-context-name">${post.replyTo.author?.displayNameHtml || escapeHtml(post.replyTo.author?.displayName || '?')}</span>`;
+    html += `</div>`;
+    html += `<div class="reply-context-content">${post.replyTo.content}</div>`;
+    html += `</div>`;
+  } else if (post.replyTo && post.replyTo.partial) {
+    html += `<div class="reply-context reply-context-partial">`;
+    html += `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>`;
+    html += `<span class="reply-context-label">답글</span>`;
+    html += `</div>`;
+  }
 
   // CW
   if (displayPost.contentWarning) {
     const cwId = `cw-${post.id}`;
     html += `
       <div class="cw-warning">
-        ⚠️ ${escapeHtml(displayPost.contentWarning)}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        ${escapeHtml(displayPost.contentWarning)}
         <button class="cw-toggle" data-cw-target="${cwId}">내용 보기</button>
       </div>
     `;
@@ -65,10 +116,10 @@ export function renderPost(post) {
   // Header
   html += `
     <div class="post-header">
-      <img class="post-avatar" src="${displayPost.author.avatarUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'}"
+      <img class="post-avatar" src="${displayPost.author.avatarUrl || FALLBACK_AVATAR}"
            alt="${escapeHtml(displayPost.author.displayName)}"
            loading="lazy"
-           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'">
+           onerror="this.src='${FALLBACK_AVATAR}'">
       <div class="post-meta">
         <div class="post-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName)}</div>
         <div class="post-handle">@${escapeHtml(displayPost.author.acct)}</div>
@@ -99,7 +150,6 @@ export function renderPost(post) {
     const instanceUrl = displayPost.instanceUrl || '';
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-      // Check if custom emoji (e.g. :blobcat_basket@serafuku.moe: or :dogroll:)
       const customMatch = reaction.match(/^:(.+):$/);
       let emojiHtml;
       if (customMatch) {
@@ -108,14 +158,12 @@ export function renderPost(post) {
         if (emojiUrl) {
           emojiHtml = `<img class="reaction-emoji" src="${emojiUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy">`;
         } else if (instanceUrl && !emojiName.includes('@')) {
-          // Local emoji fallback: try instance emoji endpoint
           const fallbackUrl = `${instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp`;
-          emojiHtml = `<img class="reaction-emoji" src="${fallbackUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy" onerror="this.replaceWith(document.createTextNode(':${escapeHtml(emojiName)}:'))">`;
+          emojiHtml = `<img class="reaction-emoji" src="${fallbackUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy" onerror="this.parentNode.replaceChild(document.createTextNode(':${escapeHtml(emojiName)}:'),this)">`;
         } else if (instanceUrl && emojiName.includes('@')) {
-          // Remote emoji: try the remote instance
           const [name, host] = emojiName.split('@');
           const fallbackUrl = `https://${host}/emoji/${encodeURIComponent(name)}.webp`;
-          emojiHtml = `<img class="reaction-emoji" src="${fallbackUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy" onerror="this.replaceWith(document.createTextNode(':${escapeHtml(emojiName)}:'))">`;
+          emojiHtml = `<img class="reaction-emoji" src="${fallbackUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy" onerror="this.parentNode.replaceChild(document.createTextNode(':${escapeHtml(emojiName)}:'),this)">`;
         } else {
           emojiHtml = escapeHtml(reaction);
         }
@@ -136,11 +184,6 @@ export function renderPost(post) {
   const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
   const favCount = displayPost.stats?.favourites || displayPost.stats?.reactions || 0;
 
-  const iconReply = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-  const iconBoost = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
-  const iconFav = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
-  const iconOpen = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
-
   html += `
     <div class="post-actions">
       <button class="post-action" data-action="reply" title="답글">${iconReply}${replyCount > 0 ? `<span>${replyCount}</span>` : ''}</button>
@@ -154,19 +197,32 @@ export function renderPost(post) {
   return card;
 }
 
-export function renderNotification(notif) {
+export function renderNotification(notif, animate = false) {
   const card = document.createElement('div');
   card.className = `notif-card platform-${notif.platform}`;
+  if (animate) card.classList.add('notif-new');
 
-  const fallbackAvatar = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>';
+  // Get SVG icon for this notification type
+  const iconSvg = NOTIF_ICONS[notif.type] || NOTIF_ICONS.default;
+
+  // Reaction display
+  let reactionHtml = '';
+  if (notif.reaction) {
+    if (notif.reaction.type === 'image') {
+      reactionHtml = `<img class="notif-reaction-emoji" src="${notif.reaction.url}" alt="${escapeHtml(notif.reaction.alt)}" loading="lazy" onerror="this.style.display='none'">`;
+    } else if (notif.reaction.type === 'text') {
+      reactionHtml = `<span class="notif-reaction-text">${notif.reaction.value}</span>`;
+    }
+  }
 
   let html = `
-    <div class="notif-icon">${notif.icon}</div>
-    ${notif.actor ? `<img class="notif-avatar" src="${notif.actor.avatarUrl || fallbackAvatar}" alt="" loading="lazy" onerror="this.src='${fallbackAvatar}'">` : ''}
+    <div class="notif-icon">${iconSvg}</div>
+    ${notif.actor ? `<img class="notif-avatar" src="${notif.actor.avatarUrl || FALLBACK_AVATAR}" alt="" loading="lazy" onerror="this.src='${FALLBACK_AVATAR}'">` : ''}
     <div class="notif-body">
       <div class="notif-text">
         ${notif.actor ? `<strong>${notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)}</strong>` : ''}
         ${escapeHtml(notif.label)}
+        ${reactionHtml}
       </div>
       <div class="notif-time">${timeAgo(notif.createdAt)}</div>
   `;
@@ -198,7 +254,7 @@ export function renderAccountCard(account, onRemove) {
   card.innerHTML = `
     <div class="account-card-header">
       <img class="account-card-avatar" src="${p.avatarUrl || ''}" alt="${escapeHtml(p.displayName)}" loading="lazy"
-           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'">
+           onerror="this.src='${FALLBACK_AVATAR}'">
       <div class="account-card-info">
         <div class="account-card-name">${escapeHtml(p.displayName)}</div>
         <div class="account-card-handle">@${escapeHtml(p.acct)} · ${new URL(account.instanceUrl).hostname}</div>
@@ -252,6 +308,40 @@ export function renderLoadingText(message = '불러오는 중...') {
   div.className = 'loading-text';
   div.textContent = message;
   return div;
+}
+
+// ===== Column Creation =====
+
+export function createColumn(id, title, options = {}) {
+  const section = document.createElement('section');
+  section.className = 'column';
+  section.id = id;
+  section.dataset.columnId = id;
+
+  const closable = options.closable !== false;
+  const refreshAction = options.refreshAction || null;
+
+  let headerHtml = `<div class="column-header">
+    <h2>${escapeHtml(title)}</h2>
+    <div class="column-header-actions">`;
+
+  if (refreshAction) {
+    headerHtml += `<button class="btn btn-icon btn-small" data-action="${refreshAction}" title="새로고침">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>`;
+  }
+
+  if (closable) {
+    headerHtml += `<button class="btn btn-icon btn-small column-close" data-action="close-column" title="닫기">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>`;
+  }
+
+  headerHtml += `</div></div>`;
+
+  section.innerHTML = headerHtml + `<div class="column-content"></div>`;
+
+  return section;
 }
 
 // Helpers
