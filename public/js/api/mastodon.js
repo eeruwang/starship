@@ -85,6 +85,7 @@ export class MastodonClient {
       author: {
         id: acct.id,
         displayName: acct.display_name || acct.username,
+        displayNameHtml: this.renderDisplayName(acct),
         username: acct.username,
         acct: acct.acct,
         avatarUrl: acct.avatar,
@@ -135,10 +136,32 @@ export class MastodonClient {
       createdAt: new Date(notif.created_at),
       actor: {
         displayName: acct.display_name || acct.username,
+        displayNameHtml: this.renderDisplayName(acct),
         username: acct.username,
         avatarUrl: acct.avatar,
       },
       post: notif.status ? this.normalizePost(notif.status) : null,
     };
+  }
+
+  renderDisplayName(acct) {
+    const name = acct.display_name || acct.username;
+    let html = this.escapeHtml(name);
+    if (Array.isArray(acct.emojis)) {
+      for (const e of acct.emojis) {
+        if (e.shortcode && (e.url || e.static_url)) {
+          const re = new RegExp(`:${e.shortcode}:`, 'g');
+          html = html.replace(re, `<img class="inline-emoji" src="${e.url || e.static_url}" alt=":${e.shortcode}:" title=":${e.shortcode}:">`);
+        }
+      }
+    }
+    return html;
+  }
+
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }

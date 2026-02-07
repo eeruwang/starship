@@ -68,13 +68,41 @@ export class MisskeyClient {
   }
 
   normalizeUser(user) {
+    // Build emoji map from user's custom emojis (for display name)
+    const userEmojis = {};
+    if (Array.isArray(user.emojis)) {
+      for (const e of user.emojis) {
+        if (e.name && e.url) userEmojis[e.name] = e.url;
+      }
+    } else if (user.emojis && typeof user.emojis === 'object') {
+      Object.assign(userEmojis, user.emojis);
+    }
+    const mergedEmojis = { ...(this._emojiCache || {}), ...userEmojis };
+
+    const displayName = user.name || user.username;
+
     return {
       id: user.id,
-      displayName: user.name || user.username,
+      displayName,
+      displayNameHtml: this.renderEmojis(displayName, mergedEmojis),
       username: user.username,
       acct: user.host ? `${user.username}@${user.host}` : user.username,
       avatarUrl: user.avatarUrl,
     };
+  }
+
+  renderEmojis(text, emojiMap) {
+    if (!text) return '';
+    let html = this.escapeHtml(text);
+    html = html.replace(/:([a-zA-Z0-9_]+(?:@[\w.-]+)?):/g, (match, name) => {
+      const baseName = name.includes('@') ? name.split('@')[0] : name;
+      const url = emojiMap[name] || emojiMap[baseName];
+      if (url) {
+        return `<img class="inline-emoji" src="${url}" alt=":${name}:" title=":${name}:">`;
+      }
+      return match;
+    });
+    return html;
   }
 
   normalizePost(note) {

@@ -70,7 +70,7 @@ export function renderPost(post) {
            loading="lazy"
            onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'">
       <div class="post-meta">
-        <div class="post-author">${escapeHtml(displayPost.author.displayName)}</div>
+        <div class="post-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName)}</div>
         <div class="post-handle">@${escapeHtml(displayPost.author.acct)}</div>
       </div>
       <span class="post-time" title="${displayPost.createdAt.toLocaleString()}">${timeAgo(displayPost.createdAt)}</span>
@@ -158,21 +158,21 @@ export function renderNotification(notif) {
   const card = document.createElement('div');
   card.className = `notif-card platform-${notif.platform}`;
 
+  const fallbackAvatar = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>';
+
   let html = `
     <div class="notif-icon">${notif.icon}</div>
+    ${notif.actor ? `<img class="notif-avatar" src="${notif.actor.avatarUrl || fallbackAvatar}" alt="" loading="lazy" onerror="this.src='${fallbackAvatar}'">` : ''}
     <div class="notif-body">
       <div class="notif-text">
-        ${notif.actor ? `<strong>${escapeHtml(notif.actor.displayName)}</strong>` : ''}
+        ${notif.actor ? `<strong>${notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)}</strong>` : ''}
         ${escapeHtml(notif.label)}
       </div>
       <div class="notif-time">${timeAgo(notif.createdAt)}</div>
   `;
 
   if (notif.post) {
-    const excerpt = stripHtml(notif.post.content).slice(0, 100);
-    if (excerpt) {
-      html += `<div class="notif-excerpt">${escapeHtml(excerpt)}</div>`;
-    }
+    html += `<div class="notif-excerpt">${notif.post.content}</div>`;
   }
 
   html += '</div>';

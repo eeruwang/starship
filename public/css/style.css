@@ -438,8 +438,16 @@ body {
 .notif-icon {
   font-size: 1.2rem;
   flex-shrink: 0;
-  width: 28px;
+  width: 24px;
   text-align: center;
+}
+
+.notif-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .notif-body {
@@ -465,13 +473,15 @@ body {
 .notif-excerpt {
   color: var(--text-secondary);
   font-size: 0.8rem;
+  line-height: 1.4;
   margin-top: 0.25rem;
   padding: 0.4rem;
   background: var(--bg-primary);
   border-radius: 4px;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 /* ===== Account Card ===== */
