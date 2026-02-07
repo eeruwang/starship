@@ -148,6 +148,7 @@ export class MisskeyClient {
         author: this.normalizeUser(actualNote.reply.user),
       } : null,
       replyToId: actualNote.replyId || null,
+      instanceUrl: this.instanceUrl,
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
     };
@@ -191,10 +192,30 @@ export class MisskeyClient {
     let reactionEmojiUrl = null;
     if (notif.type === 'reaction' && notif.reaction) {
       const stripped = notif.reaction.replace(/^:/, '').replace(/:$/, '');
-      if (stripped !== notif.reaction && notif.note?.reactionEmojis) {
-        reactionEmojiUrl = notif.note.reactionEmojis[stripped]
-          || notif.note.reactionEmojis[stripped + '@.']
-          || null;
+      if (stripped !== notif.reaction) {
+        // Try reactionEmojis first
+        if (notif.note?.reactionEmojis) {
+          reactionEmojiUrl = notif.note.reactionEmojis[stripped]
+            || notif.note.reactionEmojis[stripped + '@.']
+            || null;
+        }
+        // Try note.emojis
+        if (!reactionEmojiUrl && notif.note?.emojis) {
+          const emojis = notif.note.emojis;
+          if (typeof emojis === 'object' && !Array.isArray(emojis)) {
+            reactionEmojiUrl = emojis[stripped] || emojis[stripped + '@.'] || null;
+          } else if (Array.isArray(emojis)) {
+            const found = emojis.find(e => e.name === stripped || e.name === stripped + '@.');
+            if (found) reactionEmojiUrl = found.url;
+          }
+        }
+        // Fallback: instance emoji URL for local emojis
+        if (!reactionEmojiUrl) {
+          const baseName = stripped.replace(/@\.$/, '');
+          if (!baseName.includes('@')) {
+            reactionEmojiUrl = `${this.instanceUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+          }
+        }
       }
     }
 
@@ -238,7 +259,7 @@ export class MisskeyClient {
       }
       // Fallback: try instance emoji URL for local emojis
       if (!name.includes('@')) {
-        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(':${name}:')">`;
+        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
       }
       return match;
     });

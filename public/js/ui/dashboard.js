@@ -62,19 +62,7 @@ export function renderPost(post) {
     html += `<div class="reply-indicator">↩ 답글</div>`;
   }
 
-  // CW
-  if (displayPost.contentWarning) {
-    const cwId = `cw-${post.id}`;
-    html += `
-      <div class="cw-warning">
-        <span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(displayPost.contentWarning)}
-        <button class="cw-toggle" data-cw-target="${cwId}">내용 보기</button>
-      </div>
-    `;
-    html += `<div class="cw-content" id="${cwId}">`;
-  }
-
-  // Header
+  // Header (always visible, even under CW)
   html += `
     <div class="post-header">
       <img class="post-avatar" src="${displayPost.author.avatarUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'}"
@@ -89,6 +77,18 @@ export function renderPost(post) {
       <span class="post-time" title="${displayPost.createdAt.toLocaleString()}">${timeAgo(displayPost.createdAt)}</span>
     </div>
   `;
+
+  // CW (after header, only hides content/media/reactions)
+  if (displayPost.contentWarning) {
+    const cwId = `cw-${post.id}`;
+    html += `
+      <div class="cw-warning">
+        <span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(displayPost.contentWarning)}
+        <button class="cw-toggle" data-cw-target="${cwId}">내용 보기</button>
+      </div>
+    `;
+    html += `<div class="cw-content" id="${cwId}">`;
+  }
 
   // Content
   html += `<div class="post-content">${displayPost.content}</div>`;
@@ -111,7 +111,7 @@ export function renderPost(post) {
   if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis);
+      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
       html += `<span class="reaction-badge">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
     html += '</div>';
@@ -160,7 +160,7 @@ export function renderNotification(notif) {
 
   let iconHtml;
   if (notif.reactionEmojiUrl) {
-    iconHtml = `<img class="notif-custom-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.reactionEmoji || '')}" title="${escapeHtml(notif.reactionEmoji || '')}">`;
+    iconHtml = `<img class="notif-custom-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.reactionEmoji || '')}" title="${escapeHtml(notif.reactionEmoji || '')}" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
   } else {
     const icon = getNotifIcon(notif.type, notif.reactionEmoji);
     const isEmoji = typeof icon === 'string' && !icon.startsWith('<svg');
@@ -321,7 +321,7 @@ function formatNumber(n) {
   return String(n);
 }
 
-function resolveReactionHtml(reaction, reactionEmojis, emojis) {
+function resolveReactionHtml(reaction, reactionEmojis, emojis, instanceUrl) {
   // Check if it's a custom emoji (:name: or :name@.:)
   const match = reaction.match(/^:(.+):$/);
   if (match) {
@@ -331,6 +331,11 @@ function resolveReactionHtml(reaction, reactionEmojis, emojis) {
              || null;
     if (url) {
       return `<img class="custom-emoji" src="${escapeHtml(url)}" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}" referrerpolicy="no-referrer">`;
+    }
+    // Fallback: try instance emoji URL for local emojis
+    const baseName = name.replace(/@\.$/, ''); // strip @. suffix
+    if (instanceUrl && !baseName.includes('@')) {
+      return `<img class="custom-emoji" src="${escapeHtml(instanceUrl)}/emoji/${encodeURIComponent(baseName)}.webp" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
     }
   }
   return reaction;

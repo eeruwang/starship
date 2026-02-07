@@ -147,6 +147,7 @@ export class MastodonClient {
       } : null,
       emojis: emojiMap,
       canonicalUri: status.uri || status.url,
+      instanceUrl: this.instanceUrl,
       replyTo: null,
       replyToId: status.in_reply_to_id || null,
       replyToAcct: status.in_reply_to_id
