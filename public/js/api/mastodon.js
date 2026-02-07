@@ -16,7 +16,7 @@ export class MastodonClient {
     const headers = {
       'Authorization': `Bearer ${this.accessToken}`,
     };
-    if (body) {
+    if (body && !(body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
     }
 
@@ -27,7 +27,7 @@ export class MastodonClient {
     const res = await fetch(fetchUrl, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : null,
+      body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : null,
     });
 
     if (!res.ok) {
@@ -74,10 +74,25 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
   }
 
+  async reply(id, status) {
+    return this.request('POST', '/api/v1/statuses', { status, in_reply_to_id: id });
+  }
+
+  async uploadMedia(file) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.request('POST', '/api/v2/media', form);
+  }
+
+  async createPost(status, mediaIds = []) {
+    return this.request('POST', '/api/v1/statuses', { status, media_ids: mediaIds });
+  }
+
   normalizePost(status) {
     const acct = status.account;
     return {
       id: status.id,
+      targetId: status.reblog ? status.reblog.id : status.id,
       platform: 'mastodon',
       createdAt: new Date(status.created_at),
       content: status.content,

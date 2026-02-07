@@ -66,6 +66,38 @@ export class MisskeyClient {
     return this.request('notes/create', { renoteId: noteId });
   }
 
+
+  async uploadFile(file) {
+    const form = new FormData();
+    form.append('i', this.accessToken);
+    form.append('file', file);
+
+    const targetUrl = `${this.instanceUrl}/api/drive/files/create`;
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
+      method: 'POST',
+      body: form,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Misskey API error ${res.status}: ${errText}`);
+    }
+
+    return res.json();
+  }
+
+  async createNote(text, fileIds = []) {
+    return this.request('notes/create', { text, fileIds });
+  }
+
+  async reply(noteId, text) {
+    return this.request('notes/create', { text, replyId: noteId });
+  }
+
   normalizeUser(user) {
     return {
       id: user.id,
@@ -85,6 +117,7 @@ export class MisskeyClient {
 
     return {
       id: note.id,
+      targetId: actualNote.id,
       platform: this.platformType,
       createdAt: new Date(note.createdAt),
       content: this.mfmToHtml(actualNote.text || ''),

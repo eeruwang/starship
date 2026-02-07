@@ -741,3 +741,11 @@ select.input {
     max-height: 60vh;
   }
 }
+.column-actions { display:flex; gap:0.25rem; }
+.post-media-image { cursor: zoom-in; }
+.image-modal { max-width: 90vw; }
+.image-viewer-body { display:flex; justify-content:center; align-items:center; }
+.image-viewer-body img { max-width: 100%; max-height: 70vh; object-fit: contain; }
+textarea.input { resize: vertical; min-height: 120px; }
+.tab.active-account { box-shadow: inset 0 0 0 1px var(--accent-primary); }
+.column-content { overscroll-behavior: contain; }

@@ -8,6 +8,7 @@ export function renderPost(post) {
   card.className = `post-card platform-${post.platform}`;
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
+  card.dataset.accountId = post.accountId || '';
 
   let html = '';
 
@@ -56,7 +57,7 @@ export function renderPost(post) {
       if (m.type === 'video') {
         html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
       } else {
-        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy">`;
+        html += `<img class="post-media-image" data-full-image="${m.url}" src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy">`;
       }
     }
     html += '</div>';
@@ -84,7 +85,7 @@ export function renderPost(post) {
     <div class="post-actions">
       <button class="post-action" data-action="reply" title="답글">💬 ${replyCount > 0 ? replyCount : ''}</button>
       <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">🔁 ${boostCount > 0 ? boostCount : ''}</button>
-      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">⭐ ${favCount > 0 ? favCount : ''}</button>
+      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '좋아요' : '리액션'}">⭐ ${favCount > 0 ? favCount : ''}</button>
       <button class="post-action" data-action="open" title="원본 열기">🔗</button>
     </div>
   `;
