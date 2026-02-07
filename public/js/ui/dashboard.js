@@ -8,12 +8,32 @@ import {
   getNotifIcon,
 } from './icons.js';
 
+const PLATFORM_COLORS = {
+  misskey: '#96d04a',
+  iceshrimp: '#e36a8a',
+  cherrypick: '#ff6b9d',
+  mastodon: '#6364ff',
+};
+
 export function renderPost(post) {
   const card = document.createElement('div');
   card.className = `post-card platform-${post.platform}`;
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
   if (post.accountId) card.dataset.accountId = post.accountId;
+
+  // Merged account border gradient
+  if (post.mergedAccounts && post.mergedAccounts.length > 1) {
+    const colors = post.mergedAccounts.map(a => PLATFORM_COLORS[a.platform] || '#7c7dff');
+    const segmentSize = 100 / colors.length;
+    const stops = colors.map((c, i) =>
+      `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
+    ).join(', ');
+    card.style.borderImage = `linear-gradient(to bottom, ${stops}) 1`;
+    card.style.borderLeftWidth = '4px';
+    card.style.borderLeftStyle = 'solid';
+    card.classList.add('merged-border');
+  }
 
   let html = '';
 
@@ -93,7 +113,7 @@ export function renderPost(post) {
   if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis);
+      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis);
       html += `<span class="reaction-badge">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
     html += '</div>';
@@ -296,12 +316,14 @@ function formatNumber(n) {
   return String(n);
 }
 
-function resolveReactionHtml(reaction, reactionEmojis) {
+function resolveReactionHtml(reaction, reactionEmojis, emojis) {
   // Check if it's a custom emoji (:name: or :name@.:)
   const match = reaction.match(/^:(.+):$/);
-  if (match && reactionEmojis) {
+  if (match) {
     const name = match[1];
-    const url = reactionEmojis[name] || reactionEmojis[name + '@.'] || null;
+    const url = (reactionEmojis && (reactionEmojis[name] || reactionEmojis[name + '@.']))
+             || (emojis && (emojis[name] || emojis[name + '@.']))
+             || null;
     if (url) {
       return `<img class="custom-emoji" src="${escapeHtml(url)}" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}">`;
     }

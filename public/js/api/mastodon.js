@@ -106,11 +106,21 @@ export class MastodonClient {
 
   normalizePost(status) {
     const acct = status.account;
+    // Process custom emojis in content
+    let content = status.content;
+    const emojiMap = {};
+    if (status.emojis && status.emojis.length > 0) {
+      for (const emoji of status.emojis) {
+        emojiMap[emoji.shortcode] = emoji.url;
+        content = content.replaceAll(`:${emoji.shortcode}:`,
+          `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:">`);
+      }
+    }
     return {
       id: status.id,
       platform: 'mastodon',
       createdAt: new Date(status.created_at),
-      content: status.content,
+      content: content,
       contentWarning: status.spoiler_text || null,
       author: {
         id: acct.id,
@@ -135,6 +145,7 @@ export class MastodonClient {
         displayName: acct.display_name || acct.username,
         username: acct.username,
       } : null,
+      emojis: emojiMap,
       canonicalUri: status.uri || status.url,
       replyTo: null,
       replyToId: status.in_reply_to_id || null,

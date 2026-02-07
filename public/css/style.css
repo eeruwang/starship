@@ -1119,6 +1119,132 @@ textarea.input {
   background: rgba(255,255,255,0.25);
 }
 
+/* ===== Inline Custom Emoji ===== */
+.inline-emoji {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  vertical-align: middle;
+  margin: 0 1px;
+}
+
+/* ===== Merged Border (dedup) ===== */
+.post-card.merged-border {
+  border-left-color: transparent;
+}
+
+/* ===== Compose Modal Redesign ===== */
+.compose-modal {
+  max-width: 520px;
+}
+
+.compose-modal .modal-body {
+  padding: 1rem 1.25rem;
+}
+
+.compose-modal .modal-header {
+  padding: 0.75rem 1.25rem;
+}
+
+.compose-accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.compose-account-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0.55;
+}
+
+.compose-account-toggle:hover {
+  opacity: 0.8;
+  background: var(--bg-hover);
+}
+
+.compose-account-toggle.active {
+  opacity: 1;
+  border-color: var(--accent-primary);
+  background: rgba(124, 125, 255, 0.12);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 1px rgba(124, 125, 255, 0.2);
+}
+
+.compose-account-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.compose-account-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compose-account-platform {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.compose-account-platform.misskey { background: rgba(150,208,74,0.2); color: var(--accent-misskey); }
+.compose-account-platform.iceshrimp { background: rgba(227,106,138,0.2); color: var(--accent-iceshrimp); }
+.compose-account-platform.cherrypick { background: rgba(255,107,157,0.2); color: var(--accent-cherrypick); }
+.compose-account-platform.mastodon { background: rgba(99,100,255,0.2); color: var(--accent-mastodon); }
+
+.compose-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.compose-bottom-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-top: 0.25rem;
+}
+
+.compose-bottom-bar .btn-icon {
+  color: var(--text-muted);
+  padding: 0.35rem;
+  min-width: 32px;
+}
+
+.compose-bottom-bar .btn-icon:hover {
+  color: var(--accent-primary);
+}
+
+.compose-char-hint {
+  flex: 1;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.compose-bottom-bar .btn-primary {
+  padding: 0.45rem 1.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 20px;
+}
+
 /* ===== Compose Area ===== */
 .compose-area {
   padding: 0.5rem;

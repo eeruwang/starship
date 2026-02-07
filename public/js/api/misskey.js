@@ -113,11 +113,13 @@ export class MisskeyClient {
     const actualNote = isRenote ? note.renote : note;
     const actualAuthor = isRenote ? this.normalizeUser(note.renote.user) : author;
 
+    const emojiMap = this.buildEmojiMap(actualNote);
+
     return {
       id: note.id,
       platform: this.platformType,
       createdAt: new Date(note.createdAt),
-      content: this.mfmToHtml(actualNote.text || ''),
+      content: this.mfmToHtml(actualNote.text || '', emojiMap),
       contentWarning: actualNote.cw || null,
       author: actualAuthor,
       media: (actualNote.files || []).map(f => ({
@@ -138,16 +140,33 @@ export class MisskeyClient {
       } : null,
       reactions: actualNote.reactions || {},
       reactionEmojis: actualNote.reactionEmojis || {},
+      emojis: emojiMap,
       canonicalUri: actualNote.uri || `${this.instanceUrl}/notes/${actualNote.id}`,
       replyTo: actualNote.reply ? {
         id: actualNote.reply.id,
-        content: this.mfmToHtml(actualNote.reply.text || ''),
+        content: this.mfmToHtml(actualNote.reply.text || '', this.buildEmojiMap(actualNote.reply)),
         author: this.normalizeUser(actualNote.reply.user),
       } : null,
       replyToId: actualNote.replyId || null,
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
     };
+  }
+
+  buildEmojiMap(note) {
+    const map = {};
+    if (note.emojis && typeof note.emojis === 'object' && !Array.isArray(note.emojis)) {
+      Object.assign(map, note.emojis);
+    }
+    if (Array.isArray(note.emojis)) {
+      for (const e of note.emojis) {
+        if (e.name && e.url) map[e.name] = e.url;
+      }
+    }
+    if (note.reactionEmojis) {
+      Object.assign(map, note.reactionEmojis);
+    }
+    return map;
   }
 
   normalizeNotification(notif) {
@@ -193,7 +212,7 @@ export class MisskeyClient {
     };
   }
 
-  mfmToHtml(text) {
+  mfmToHtml(text, emojis = {}) {
     if (!text) return '';
     let html = this.escapeHtml(text);
     // Bold
@@ -211,6 +230,14 @@ export class MisskeyClient {
       '<span class="hashtag">#$1</span>');
     // URLs
     html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    // Custom emojis :name: or :name@host:
+    html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
+      const url = emojis[name] || emojis[name + '@.'] || null;
+      if (url) {
+        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:">`;
+      }
+      return match;
+    });
     // Newlines
     html = html.replace(/\n/g, '<br>');
     return html;

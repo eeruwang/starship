@@ -17,6 +17,7 @@ class StarShipApp {
     this.postCache = new Map(); // key: `${platform}:${id}`, value: post
     this.POST_CACHE_MAX = 500;
     this.composeFiles = [];
+    this.composeSelectedAccounts = new Set();
 
     // Column state: which columns are visible
     this.columnState = this.loadColumnState();
@@ -62,7 +63,8 @@ class StarShipApp {
 
     // Compose modal
     this.modalCompose = document.getElementById('modal-compose');
-    this.composeAccount = document.getElementById('compose-account');
+    this.composeAccountsContainer = document.getElementById('compose-accounts');
+    this.composeTitle = document.getElementById('compose-title');
     this.composeCw = document.getElementById('compose-cw');
     this.composeText = document.getElementById('compose-text');
     this.composeFilesInput = document.getElementById('compose-files');
@@ -500,6 +502,7 @@ class StarShipApp {
             return items.map(item => {
               const post = client.normalizePost(item);
               post.accountId = account.id;
+              post.accountPlatform = account.platform;
               return post;
             });
           } catch (err) {
@@ -519,19 +522,30 @@ class StarShipApp {
 
       // Deduplicate posts by canonical URI (same post seen from different accounts)
       if (accounts.length > 1) {
-        const seen = new Set();
+        const seen = new Map(); // key -> index in deduped
         const deduped = [];
         for (const post of allPosts) {
           const displayPost = post.reblog || post;
           const key = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
           if (!seen.has(key)) {
-            seen.add(key);
+            post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform }];
+            seen.set(key, deduped.length);
             deduped.push(post);
+          } else {
+            // Merge: add this account's info to the existing post
+            const idx = seen.get(key);
+            const existing = deduped[idx];
+            if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.platform === (post.accountPlatform || post.platform))) {
+              existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform });
+            }
           }
         }
         allPosts.length = 0;
         allPosts.push(...deduped);
       }
+
+      // Fetch missing reply parents
+      await this.fetchMissingReplyParents(allPosts, accounts);
 
       // Cache posts
       this.cachePosts(allPosts);
@@ -703,6 +717,54 @@ class StarShipApp {
     }
   }
 
+  async fetchMissingReplyParents(posts, accounts) {
+    // Find posts that have replyToId but no replyTo content
+    const needsFetch = posts.filter(p => {
+      const dp = p.reblog || p;
+      return dp.replyToId && !dp.replyTo;
+    });
+
+    if (needsFetch.length === 0) return;
+
+    // Limit to 10 concurrent fetches
+    const toFetch = needsFetch.slice(0, 10);
+
+    await Promise.allSettled(toFetch.map(async (post) => {
+      const dp = post.reblog || post;
+      try {
+        const client = this.store.getClient(post.accountId);
+        if (!client) return;
+
+        const account = this.store.getById(post.accountId);
+        if (!account) return;
+
+        if (account.platform === 'mastodon') {
+          const parent = await client.getStatus(dp.replyToId);
+          if (parent) {
+            const normalized = client.normalizePost(parent);
+            dp.replyTo = {
+              id: normalized.id,
+              content: normalized.content,
+              author: normalized.author,
+            };
+          }
+        } else {
+          const parent = await client.getNote(dp.replyToId);
+          if (parent) {
+            const normalized = client.normalizePost(parent);
+            dp.replyTo = {
+              id: normalized.id,
+              content: normalized.content,
+              author: normalized.author,
+            };
+          }
+        }
+      } catch (err) {
+        // Silently fail - we'll just show the fallback indicator
+      }
+    }));
+  }
+
   findPostUrl(postId, platform) {
     const post = this.postCache.get(`${platform}:${postId}`);
     return post?.url || null;
@@ -832,17 +894,46 @@ class StarShipApp {
     const accounts = this.store.getAll();
     if (accounts.length === 0) return;
 
-    // Populate account selector
-    this.composeAccount.innerHTML = '';
+    // Build account toggle buttons
+    this.composeSelectedAccounts.clear();
+    this.composeAccountsContainer.innerHTML = '';
+
     for (const account of accounts) {
-      const opt = document.createElement('option');
-      opt.value = account.id;
-      opt.textContent = `${account.profile.displayName} (${account.platform})`;
-      this.composeAccount.appendChild(opt);
+      const p = account.profile;
+      const btn = document.createElement('button');
+      btn.className = 'compose-account-toggle';
+      btn.dataset.accountId = account.id;
+      btn.innerHTML = `
+        <img class="compose-account-avatar" src="${p.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+        <span class="compose-account-name">${this.escapeHtml(p.displayName)}</span>
+        <span class="compose-account-platform ${account.platform}">${account.platform}</span>
+      `;
+
+      // Pre-select preferred account or first if single
+      if (preferredAccountId === account.id || (!preferredAccountId && accounts.length === 1)) {
+        btn.classList.add('active');
+        this.composeSelectedAccounts.add(account.id);
+      }
+
+      btn.addEventListener('click', () => {
+        if (this.composeSelectedAccounts.has(account.id)) {
+          this.composeSelectedAccounts.delete(account.id);
+          btn.classList.remove('active');
+        } else {
+          this.composeSelectedAccounts.add(account.id);
+          btn.classList.add('active');
+        }
+      });
+
+      this.composeAccountsContainer.appendChild(btn);
     }
 
-    if (preferredAccountId) {
-      this.composeAccount.value = preferredAccountId;
+    // If no preferred and multiple accounts, select all
+    if (!preferredAccountId && accounts.length > 1) {
+      for (const account of accounts) {
+        this.composeSelectedAccounts.add(account.id);
+        this.composeAccountsContainer.querySelector(`[data-account-id="${account.id}"]`)?.classList.add('active');
+      }
     }
 
     // Reset
@@ -857,9 +948,11 @@ class StarShipApp {
     if (replyToId) {
       this.composeText.dataset.replyTo = replyToId;
       this.composeText.placeholder = '답글을 작성하세요...';
+      this.composeTitle.textContent = '답글 작성';
     } else {
       delete this.composeText.dataset.replyTo;
       this.composeText.placeholder = '무슨 일이 일어나고 있나요?';
+      this.composeTitle.textContent = '새 글 작성';
     }
 
     this.modalCompose.style.display = 'flex';
@@ -900,10 +993,16 @@ class StarShipApp {
   }
 
   async handleComposeSubmit() {
-    const accountId = this.composeAccount.value;
+    const selectedIds = [...this.composeSelectedAccounts];
     const text = this.composeText.value.trim();
     const cw = this.composeCw.value.trim();
     const replyToId = this.composeText.dataset.replyTo;
+
+    if (selectedIds.length === 0) {
+      this.composeError.textContent = '게시할 계정을 하나 이상 선택하세요.';
+      this.composeError.style.display = 'block';
+      return;
+    }
 
     if (!text && this.composeFiles.length === 0) {
       this.composeError.textContent = '내용을 입력하거나 이미지를 추가하세요.';
@@ -911,53 +1010,64 @@ class StarShipApp {
       return;
     }
 
-    const account = this.store.getById(accountId);
-    const client = this.store.getClient(accountId);
-    if (!account || !client) return;
-
     this.btnComposeSubmit.disabled = true;
     this.btnComposeSubmit.textContent = '게시 중...';
     this.composeError.style.display = 'none';
 
-    try {
-      // Upload files
-      let fileIds = [];
-      if (this.composeFiles.length > 0) {
-        for (const file of this.composeFiles) {
-          if (account.platform === 'mastodon') {
-            const result = await client.uploadMedia(file);
-            fileIds.push(result.id);
-          } else {
-            const result = await client.uploadFile(file);
-            fileIds.push(result.id);
+    const errors = [];
+
+    for (const accountId of selectedIds) {
+      const account = this.store.getById(accountId);
+      const client = this.store.getClient(accountId);
+      if (!account || !client) continue;
+
+      try {
+        // Upload files per account
+        let fileIds = [];
+        if (this.composeFiles.length > 0) {
+          for (const file of this.composeFiles) {
+            if (account.platform === 'mastodon') {
+              const result = await client.uploadMedia(file);
+              fileIds.push(result.id);
+            } else {
+              const result = await client.uploadFile(file);
+              fileIds.push(result.id);
+            }
           }
         }
-      }
 
-      // Create post
-      if (account.platform === 'mastodon') {
-        await client.createStatus(text, {
-          spoilerText: cw || undefined,
-          mediaIds: fileIds.length > 0 ? fileIds : undefined,
-          inReplyToId: replyToId || undefined,
-        });
-      } else {
-        await client.createNote(text, {
-          cw: cw || undefined,
-          fileIds: fileIds.length > 0 ? fileIds : undefined,
-          replyId: replyToId || undefined,
-        });
+        // Create post
+        if (account.platform === 'mastodon') {
+          await client.createStatus(text, {
+            spoilerText: cw || undefined,
+            mediaIds: fileIds.length > 0 ? fileIds : undefined,
+            inReplyToId: replyToId || undefined,
+          });
+        } else {
+          await client.createNote(text, {
+            cw: cw || undefined,
+            fileIds: fileIds.length > 0 ? fileIds : undefined,
+            replyId: replyToId || undefined,
+          });
+        }
+      } catch (err) {
+        errors.push(`${account.profile.displayName}: ${err.message}`);
       }
+    }
 
+    if (errors.length > 0) {
+      this.composeError.textContent = `일부 계정 게시 실패: ${errors.join('; ')}`;
+      this.composeError.style.display = 'block';
+    }
+
+    if (errors.length < selectedIds.length) {
+      // At least one succeeded
       this.modalCompose.style.display = 'none';
       this.refreshAll();
-    } catch (err) {
-      this.composeError.textContent = `게시 실패: ${err.message}`;
-      this.composeError.style.display = 'block';
-    } finally {
-      this.btnComposeSubmit.disabled = false;
-      this.btnComposeSubmit.textContent = '게시';
     }
+
+    this.btnComposeSubmit.disabled = false;
+    this.btnComposeSubmit.textContent = '게시';
   }
 
   // ===== Auto Refresh =====

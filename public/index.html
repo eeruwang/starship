@@ -99,35 +99,32 @@
 
   <!-- 새 글 작성 모달 -->
   <div class="modal-overlay" id="modal-compose" style="display:none;">
-    <div class="modal">
+    <div class="modal compose-modal">
       <div class="modal-header">
-        <h2>새 글 작성</h2>
+        <h2 id="compose-title">새 글 작성</h2>
         <button class="btn btn-icon modal-close" data-close-modal="modal-compose"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label for="compose-account">게시 계정</label>
-          <select id="compose-account" class="input"></select>
+          <label>게시 계정</label>
+          <div class="compose-accounts" id="compose-accounts"></div>
         </div>
         <div class="form-group">
-          <label for="compose-cw">내용 경고 (선택)</label>
-          <input type="text" id="compose-cw" class="input" placeholder="내용 경고 텍스트">
+          <input type="text" id="compose-cw" class="input" placeholder="내용 경고 (선택)">
         </div>
         <div class="form-group">
-          <label for="compose-text">내용</label>
-          <textarea id="compose-text" class="input" rows="4" placeholder="무슨 일이 일어나고 있나요?"></textarea>
+          <textarea id="compose-text" class="input compose-textarea" rows="5" placeholder="무슨 일이 일어나고 있나요?"></textarea>
         </div>
-        <div class="form-group">
-          <label>이미지 첨부</label>
+        <div class="compose-bottom-bar">
           <input type="file" id="compose-files" accept="image/*" multiple style="display:none;">
-          <button class="btn btn-secondary btn-small" id="btn-compose-attach">이미지 추가</button>
-          <div class="compose-image-preview" id="compose-image-preview"></div>
+          <button class="btn btn-icon" id="btn-compose-attach" title="이미지 첨부">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </button>
+          <div class="compose-char-hint" id="compose-char-hint"></div>
+          <button class="btn btn-primary" id="btn-compose-submit">게시</button>
         </div>
+        <div class="compose-image-preview" id="compose-image-preview"></div>
         <div id="compose-error" class="form-error" style="display:none;"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-close-modal="modal-compose">취소</button>
-        <button class="btn btn-primary" id="btn-compose-submit">게시</button>
       </div>
     </div>
   </div>
