@@ -22,16 +22,14 @@ export function renderPost(post) {
   card.dataset.platform = post.platform;
   if (post.accountId) card.dataset.accountId = post.accountId;
 
-  // Merged account border gradient
+  // Merged account border gradient (pseudo-element via CSS custom property)
   if (post.mergedAccounts && post.mergedAccounts.length > 1) {
     const colors = post.mergedAccounts.map(a => PLATFORM_COLORS[a.platform] || '#7c7dff');
     const segmentSize = 100 / colors.length;
     const stops = colors.map((c, i) =>
       `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
     ).join(', ');
-    card.style.borderImage = `linear-gradient(to bottom, ${stops}) 1`;
-    card.style.borderLeftWidth = '4px';
-    card.style.borderLeftStyle = 'solid';
+    card.style.setProperty('--merged-gradient', `linear-gradient(to bottom, ${stops})`);
     card.classList.add('merged-border');
   }
 
@@ -194,10 +192,17 @@ export function renderNotification(notif) {
       <div class="notif-time">${timeAgo(notif.createdAt)}</div>
   `;
 
-  if (notif.post) {
-    const excerpt = stripHtml(notif.post.content).slice(0, 100);
-    if (excerpt) {
-      html += `<div class="notif-excerpt">${escapeHtml(excerpt)}</div>`;
+  if (notif.post && notif.post.content) {
+    html += `<div class="notif-post-content">${notif.post.content}</div>`;
+    // Media thumbnails
+    if (notif.post.media && notif.post.media.length > 0) {
+      html += `<div class="notif-media">`;
+      for (const m of notif.post.media.slice(0, 4)) {
+        if (m.type !== 'video') {
+          html += `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.display='none'">`;
+        }
+      }
+      html += `</div>`;
     }
   }
 
@@ -325,7 +330,7 @@ function resolveReactionHtml(reaction, reactionEmojis, emojis) {
              || (emojis && (emojis[name] || emojis[name + '@.']))
              || null;
     if (url) {
-      return `<img class="custom-emoji" src="${escapeHtml(url)}" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}">`;
+      return `<img class="custom-emoji" src="${escapeHtml(url)}" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}" referrerpolicy="no-referrer">`;
     }
   }
   return reaction;

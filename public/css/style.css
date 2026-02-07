@@ -1130,7 +1130,62 @@ textarea.input {
 
 /* ===== Merged Border (dedup) ===== */
 .post-card.merged-border {
-  border-left-color: transparent;
+  border-left-color: transparent !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.post-card.merged-border::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--merged-gradient);
+}
+
+/* ===== Notification Post Content ===== */
+.notif-post-content {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-top: 0.3rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  word-break: break-word;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.notif-post-content a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.notif-post-content .inline-emoji {
+  width: 16px;
+  height: 16px;
+}
+
+.notif-post-content .mention,
+.notif-post-content .hashtag {
+  color: var(--accent-primary);
+}
+
+.notif-media {
+  display: flex;
+  gap: 3px;
+  margin-top: 0.25rem;
+}
+
+.notif-media img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 /* ===== Compose Modal Redesign ===== */

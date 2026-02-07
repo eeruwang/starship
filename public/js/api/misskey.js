@@ -234,7 +234,11 @@ export class MisskeyClient {
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
       const url = emojis[name] || emojis[name + '@.'] || null;
       if (url) {
-        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:">`;
+        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
+      }
+      // Fallback: try instance emoji URL for local emojis
+      if (!name.includes('@')) {
+        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(':${name}:')">`;
       }
       return match;
     });

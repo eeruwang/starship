@@ -812,11 +812,54 @@ class StarShipApp {
         btnElement.classList.add('active');
       } else if (action === 'reply') {
         this.openComposeModal(postId, accountId);
+        return; // Don't refresh for reply
       }
+
+      // Re-fetch the note and update the card in-place
+      await this.refreshSinglePost(postId, platform, accountId);
     } catch (err) {
       console.error(`Action ${action} failed:`, err);
     } finally {
       btnElement.style.opacity = '1';
+    }
+  }
+
+  async refreshSinglePost(postId, platform, accountId) {
+    try {
+      const client = this.store.getClient(accountId);
+      const account = this.store.getById(accountId);
+      if (!client || !account) return;
+
+      let rawPost;
+      if (account.platform === 'mastodon') {
+        rawPost = await client.getStatus(postId);
+      } else {
+        rawPost = await client.getNote(postId);
+      }
+      if (!rawPost) return;
+
+      const updatedPost = client.normalizePost(rawPost);
+      updatedPost.accountId = accountId;
+      updatedPost.accountPlatform = account.platform;
+
+      // Find and update all matching cards in the DOM
+      const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
+      for (const card of cards) {
+        // Preserve mergedAccounts if present
+        const oldCacheKey = `${platform}:${postId}`;
+        const cachedPost = this.postCache.get(oldCacheKey);
+        if (cachedPost?.mergedAccounts) {
+          updatedPost.mergedAccounts = cachedPost.mergedAccounts;
+        }
+
+        const newCard = renderPost(updatedPost);
+        card.replaceWith(newCard);
+      }
+
+      // Update cache
+      this.postCache.set(`${platform}:${postId}`, updatedPost);
+    } catch (err) {
+      // Silently fail - the action already succeeded
     }
   }
 

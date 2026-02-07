@@ -113,7 +113,7 @@ export class MastodonClient {
       for (const emoji of status.emojis) {
         emojiMap[emoji.shortcode] = emoji.url;
         content = content.replaceAll(`:${emoji.shortcode}:`,
-          `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:">`);
+          `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
       }
     }
     return {
