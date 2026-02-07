@@ -213,6 +213,11 @@ class StarShipApp {
           const client = this.store.getClient(account.id);
           if (!client) return [];
 
+          // Cache instance emojis before normalizing (Misskey-family only)
+          if (client.fetchEmojis) {
+            await client.fetchEmojis();
+          }
+
           const timeline = await client.getHomeTimeline(30);
           const posts = timeline.map(item => client.normalizePost(item));
 

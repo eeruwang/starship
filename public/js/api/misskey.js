@@ -11,6 +11,7 @@ export class MisskeyClient {
     this.platformType = platformType; // 'misskey' | 'iceshrimp' | 'cherrypick'
     // localhost가 아니면 Worker 프록시 사용 (Cloudflare 배포 환경)
     this.useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    this._emojiCache = null;
   }
 
   async request(endpoint, body = {}) {
@@ -145,8 +146,31 @@ export class MisskeyClient {
     };
   }
 
+  async fetchEmojis() {
+    if (this._emojiCache) return this._emojiCache;
+    try {
+      const result = await this.request('emojis');
+      this._emojiCache = {};
+      for (const e of (result.emojis || [])) {
+        if (e.name && e.url) this._emojiCache[e.name] = e.url;
+      }
+    } catch {
+      this._emojiCache = {};
+    }
+    return this._emojiCache;
+  }
+
   buildEmojiMap(note) {
     const map = {};
+    // From instance emoji cache: resolve only reaction keys
+    if (this._emojiCache && note.reactions) {
+      for (const reactionKey of Object.keys(note.reactions)) {
+        const match = reactionKey.match(/^:(.+):$/);
+        if (match && this._emojiCache[match[1]]) {
+          map[match[1]] = this._emojiCache[match[1]];
+        }
+      }
+    }
     // From emojis array (some forks use this)
     if (Array.isArray(note.emojis)) {
       for (const e of note.emojis) {
