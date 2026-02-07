@@ -282,11 +282,25 @@ class StarShipApp {
       };
 
       // Update existing cards in-place when content/stats changed.
+      // Also remove stale/duplicate cards that should no longer appear after dedupe.
+      const seenKeys = new Set();
       for (const card of this.timelineFeed.querySelectorAll('.post-card')) {
         const key = card.dataset.dedupeKey || `${card.dataset.platform}:${card.dataset.accountId || ''}:${card.dataset.postId}`;
         const prev = prevByKey.get(key);
         const next = nextByKey.get(key);
-        if (!next || !isPostChanged(prev, next)) continue;
+
+        if (!next) {
+          card.remove();
+          continue;
+        }
+
+        if (seenKeys.has(key)) {
+          card.remove();
+          continue;
+        }
+        seenKeys.add(key);
+
+        if (!isPostChanged(prev, next)) continue;
 
         const replacement = renderPost(next);
         card.replaceWith(replacement);
