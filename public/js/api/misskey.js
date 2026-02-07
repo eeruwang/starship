@@ -107,6 +107,7 @@ export class MisskeyClient {
         username: author.username,
       } : null,
       reactions: actualNote.reactions || {},
+      reactionEmojis: actualNote.reactionEmojis || {},
       uri: note.uri || null,
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,

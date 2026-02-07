@@ -95,9 +95,24 @@ export function renderPost(post) {
 
   // Reactions (Misskey)
   if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
+    const emojiMap = displayPost.reactionEmojis || {};
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-      html += `<span class="reaction-badge">${reaction} ${count}</span>`;
+      // Check if custom emoji (e.g. :blobcat_basket@serafuku.moe:)
+      const customMatch = reaction.match(/^:(.+):$/);
+      let emojiHtml;
+      if (customMatch) {
+        const emojiName = customMatch[1];
+        const emojiUrl = emojiMap[emojiName];
+        if (emojiUrl) {
+          emojiHtml = `<img class="reaction-emoji" src="${emojiUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy">`;
+        } else {
+          emojiHtml = escapeHtml(reaction);
+        }
+      } else {
+        emojiHtml = reaction;
+      }
+      html += `<span class="reaction-badge">${emojiHtml} ${count}</span>`;
     }
     html += '</div>';
   }

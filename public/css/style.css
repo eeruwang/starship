@@ -714,6 +714,33 @@ select.input {
   white-space: nowrap;
 }
 
+/* ===== Reactions ===== */
+.post-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.reaction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.reaction-emoji {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
 /* ===== Renote / Boost indicator ===== */
 .renote-indicator, .boost-indicator {
   display: flex;
