@@ -72,7 +72,30 @@ export class MisskeyClient {
     if (options.cw) body.cw = options.cw;
     if (options.replyId) body.replyId = options.replyId;
     if (options.visibility) body.visibility = options.visibility;
+    if (options.fileIds && options.fileIds.length > 0) body.fileIds = options.fileIds;
     return this.request('notes/create', body);
+  }
+
+  async uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('i', this.accessToken);
+
+    const targetUrl = `${this.instanceUrl}/api/drive/files/create`;
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`파일 업로드 실패 ${res.status}: ${errText}`);
+    }
+    return res.json();
   }
 
   normalizeUser(user) {

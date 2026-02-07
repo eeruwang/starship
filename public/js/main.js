@@ -9,15 +9,20 @@ import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth 
 class StarShipApp {
   constructor() {
     this.store = new AccountStore();
-    this.activeFilter = 'all'; // 'all' or account id
     this.autoRefreshTimer = null;
-    this.AUTO_REFRESH_INTERVAL = 60000; // 1 minute
+    this.AUTO_REFRESH_INTERVAL = 60000;
 
     // Column management
     this.columns = []; // { id, type, title, accountId? }
-    this.cachedPosts = [];
-    this.cachedPostIds = new Set();
-    this.cachedNotifIds = new Set();
+    this.postMap = new Map(); // `${platform}_${id}` → post (with _seenBy)
+    this.focusedColumnIndex = -1;
+
+    // Compose
+    this.composeImages = []; // File objects
+    this.replyContext = null; // { post }
+
+    // Action picker
+    this.activeActionPicker = null;
 
     this.initElements();
     this.bindEvents();
@@ -26,16 +31,11 @@ class StarShipApp {
   }
 
   initElements() {
-    // Header buttons
     this.btnAddAccount = document.getElementById('btn-add-account');
     this.btnRefreshAll = document.getElementById('btn-refresh-all');
     this.btnCompose = document.getElementById('btn-compose');
     this.btnAddColumn = document.getElementById('btn-add-column');
-
-    // Tab bar
     this.accountTabs = document.getElementById('account-tabs');
-
-    // Dashboard
     this.emptyState = document.getElementById('empty-state');
     this.columnsContainer = document.getElementById('columns-container');
 
@@ -59,6 +59,10 @@ class StarShipApp {
     this.composeCount = document.getElementById('compose-count');
     this.btnComposeSubmit = document.getElementById('btn-compose-submit');
     this.composeError = document.getElementById('compose-error');
+    this.composeImagesContainer = document.getElementById('compose-images');
+    this.composeFileInput = document.getElementById('compose-file-input');
+    this.btnComposeAddImage = document.getElementById('btn-compose-add-image');
+    this.composeReplyContainer = document.getElementById('compose-reply-container');
 
     // Modal: Add column
     this.modalAddColumn = document.getElementById('modal-add-column');
@@ -102,7 +106,7 @@ class StarShipApp {
     // Manual token add
     this.btnConfirmAdd.addEventListener('click', () => this.handleAddAccount());
 
-    // Compose
+    // Compose text counter
     this.composeText?.addEventListener('input', () => {
       if (this.composeCount) {
         this.composeCount.textContent = this.composeText.value.length;
@@ -110,11 +114,15 @@ class StarShipApp {
     });
     this.btnComposeSubmit?.addEventListener('click', () => this.handleCompose());
 
+    // Compose image upload
+    this.btnComposeAddImage?.addEventListener('click', () => this.composeFileInput?.click());
+    this.composeFileInput?.addEventListener('change', (e) => this.handleComposeImageSelect(e));
+
     // Tab clicks (delegated)
     this.accountTabs.addEventListener('click', (e) => {
-      const tab = e.target.closest('.tab');
+      const tab = e.target.closest('.tab-toggle');
       if (!tab) return;
-      this.setActiveFilter(tab.dataset.tab);
+      this.handleTabClick(tab);
     });
 
     // CW toggle (delegated)
@@ -136,6 +144,18 @@ class StarShipApp {
       if (postUrl) window.open(postUrl, '_blank', 'noopener');
     });
 
+    // Post actions: reply, boost, fav (delegated)
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.post-action[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'open') return; // handled above
+
+      const card = btn.closest('.post-card');
+      if (!card) return;
+      this.handlePostAction(card.dataset.postId, card.dataset.platform, action, btn);
+    });
+
     // Column close button (delegated)
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action="close-column"]');
@@ -147,21 +167,15 @@ class StarShipApp {
 
     // Column refresh buttons (delegated)
     document.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-action="refresh-timeline"]');
-      if (btn) { this.loadTimelines(); return; }
-      const btn2 = e.target.closest('[data-action="refresh-notifications"]');
-      if (btn2) { this.loadNotifications(); return; }
-    });
-
-    // Add column from modal (delegated)
-    document.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-add-column]');
+      const btn = e.target.closest('[data-action="refresh-column"]');
       if (!btn) return;
-      const type = btn.dataset.addColumn;
-      const accountId = btn.dataset.accountId || null;
-      const title = btn.dataset.columnTitle || type;
-      this.addColumn(type, title, accountId);
-      this.modalAddColumn.style.display = 'none';
+      const column = btn.closest('.column');
+      if (!column) return;
+      const colData = this.columns.find(c => c.id === column.dataset.columnId);
+      if (!colData) return;
+      if (colData.type === 'timeline') this.loadTimelineForColumn(colData.id, colData.accountId);
+      if (colData.type === 'notifications') this.loadNotificationsForColumn(colData.id, colData.accountId);
+      if (colData.type === 'accounts') this.renderAccountsColumn(colData.id);
     });
 
     // Double-click on column header → scroll to top
@@ -171,15 +185,64 @@ class StarShipApp {
       const column = header.closest('.column');
       if (!column) return;
       const content = column.querySelector('.column-content');
-      if (content) {
-        content.scrollTo({ top: 0, behavior: 'smooth' });
+      if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Image lightbox (delegated)
+    document.addEventListener('click', (e) => {
+      const img = e.target.closest('.lightbox-trigger');
+      if (!img) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.openLightbox(img.dataset.lightboxSrc || img.src);
+    });
+
+    // Close action picker on outside click
+    document.addEventListener('mousedown', (e) => {
+      if (this.activeActionPicker && !e.target.closest('.action-picker') && !e.target.closest('.post-action')) {
+        this.closeActionPicker();
       }
     });
 
-    // Keyboard shortcut: Escape to close modals
+    // Horizontal wheel scroll on columns container
+    this.columnsContainer.addEventListener('wheel', (e) => {
+      // Only convert vertical scroll to horizontal when not over scrollable column content
+      const columnContent = e.target.closest('.column-content');
+      if (columnContent) return; // let column content scroll vertically normally
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        this.columnsContainer.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
+
+    // Arrow key navigation between columns
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+        this.closeLightbox();
+        this.closeActionPicker();
+        return;
+      }
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        // Don't navigate if modal is open or input is focused
+        if (document.querySelector('.modal-overlay[style*="flex"]')) return;
+        if (document.querySelector('.lightbox-overlay')) return;
+        if (document.activeElement?.matches('input, textarea, select')) return;
+
+        const columns = this.columnsContainer.querySelectorAll('.column');
+        if (columns.length === 0) return;
+
+        e.preventDefault();
+        if (e.key === 'ArrowRight') {
+          this.focusedColumnIndex = Math.min(this.focusedColumnIndex + 1, columns.length - 1);
+        } else {
+          this.focusedColumnIndex = Math.max(this.focusedColumnIndex - 1, 0);
+        }
+
+        columns.forEach(c => c.classList.remove('column-focused'));
+        columns[this.focusedColumnIndex]?.classList.add('column-focused');
+        columns[this.focusedColumnIndex]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
       }
     });
   }
@@ -189,33 +252,28 @@ class StarShipApp {
   setupDefaultColumns() {
     this.columns = [];
     this.columnsContainer.innerHTML = '';
-
-    // Default: timeline, notifications, accounts
-    this.addColumn('timeline', '타임라인', null, false);
-    this.addColumn('notifications', '알림', null, false);
-    this.addColumn('accounts', '계정 목록', null, false);
+    // Default: timeline + notifications (both closable)
+    this.addColumn('timeline', '타임라인', null);
+    this.addColumn('notifications', '알림', null);
   }
 
-  addColumn(type, title, accountId = null, closable = true) {
+  addColumn(type, title, accountId = null) {
     const id = `col-${type}-${accountId || 'all'}-${Date.now()}`;
-    const col = { id, type, title, accountId, closable };
+    const col = { id, type, title, accountId };
     this.columns.push(col);
 
-    let refreshAction = null;
-    if (type === 'timeline') refreshAction = 'refresh-timeline';
-    if (type === 'notifications') refreshAction = 'refresh-notifications';
-
-    const el = createColumn(id, title, { closable, refreshAction });
+    const el = createColumn(id, title, { closable: true, refreshable: type !== 'accounts' });
     this.columnsContainer.appendChild(el);
 
-    // Load data for the new column
+    // Scroll new column into view
+    setTimeout(() => el.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' }), 50);
+
+    // Load data
     if (type === 'timeline') this.loadTimelineForColumn(id, accountId);
     if (type === 'notifications') this.loadNotificationsForColumn(id, accountId);
     if (type === 'accounts') this.renderAccountsColumn(id);
 
-    // Close modal if open
-    if (this.modalAddColumn) this.modalAddColumn.style.display = 'none';
-
+    this.renderTabs();
     return id;
   }
 
@@ -224,6 +282,81 @@ class StarShipApp {
     if (idx >= 0) this.columns.splice(idx, 1);
     const el = document.getElementById(columnId);
     if (el) el.remove();
+    this.renderTabs();
+  }
+
+  toggleColumn(type, accountId = null) {
+    const existing = this.columns.find(c => c.type === type && c.accountId === accountId);
+    if (existing) {
+      this.removeColumn(existing.id);
+    } else {
+      const title = this.getColumnTitle(type, accountId);
+      this.addColumn(type, title, accountId);
+    }
+  }
+
+  getColumnTitle(type, accountId) {
+    if (type === 'timeline' && !accountId) return '타임라인';
+    if (type === 'notifications') return '알림';
+    if (accountId) {
+      const acct = this.store.getById(accountId);
+      return acct?.label || acct?.profile?.displayName || '?';
+    }
+    return type;
+  }
+
+  // ===== Tab Bar =====
+
+  renderTabs() {
+    this.accountTabs.innerHTML = '';
+
+    // "전체" toggle
+    const hasMainTimeline = this.columns.some(c => c.type === 'timeline' && !c.accountId);
+    const allTab = document.createElement('button');
+    allTab.className = `tab-toggle ${hasMainTimeline ? 'active' : ''}`;
+    allTab.dataset.tabAction = 'toggle-timeline';
+    allTab.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/><path d="M3 6h18"/><path d="M3 18h18"/></svg> 전체`;
+    this.accountTabs.appendChild(allTab);
+
+    // "알림" toggle
+    const hasNotifications = this.columns.some(c => c.type === 'notifications' && !c.accountId);
+    const notifTab = document.createElement('button');
+    notifTab.className = `tab-toggle ${hasNotifications ? 'active' : ''}`;
+    notifTab.dataset.tabAction = 'toggle-notifications';
+    notifTab.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> 알림`;
+    this.accountTabs.appendChild(notifTab);
+
+    // Separator
+    const accounts = this.store.getAll();
+    if (accounts.length > 0) {
+      const sep = document.createElement('div');
+      sep.className = 'tab-separator';
+      this.accountTabs.appendChild(sep);
+    }
+
+    // Per-account toggles
+    for (const account of accounts) {
+      const hasColumn = this.columns.some(c => c.type === 'timeline' && c.accountId === account.id);
+      const tab = document.createElement('button');
+      tab.className = `tab-toggle ${hasColumn ? 'active' : ''} ${account.platform}`;
+      tab.dataset.tabAction = 'toggle-account';
+      tab.dataset.accountId = account.id;
+      tab.innerHTML = `<span class="tab-dot" style="background: var(--accent-${account.platform})"></span>${this.escapeHtml(account.label || account.profile.displayName)}`;
+      this.accountTabs.appendChild(tab);
+    }
+  }
+
+  handleTabClick(tab) {
+    const action = tab.dataset.tabAction;
+    if (!action) return;
+
+    if (action === 'toggle-timeline') {
+      this.toggleColumn('timeline', null);
+    } else if (action === 'toggle-notifications') {
+      this.toggleColumn('notifications', null);
+    } else if (action === 'toggle-account') {
+      this.toggleColumn('timeline', tab.dataset.accountId);
+    }
   }
 
   // ===== Rendering =====
@@ -243,24 +376,6 @@ class StarShipApp {
     } else {
       this.columns = [];
       this.columnsContainer.innerHTML = '';
-    }
-  }
-
-  renderTabs() {
-    this.accountTabs.innerHTML = '';
-
-    const allTab = document.createElement('button');
-    allTab.className = `tab ${this.activeFilter === 'all' ? 'active' : ''}`;
-    allTab.dataset.tab = 'all';
-    allTab.textContent = '전체';
-    this.accountTabs.appendChild(allTab);
-
-    for (const account of this.store.getAll()) {
-      const tab = document.createElement('button');
-      tab.className = `tab ${this.activeFilter === account.id ? 'active' : ''}`;
-      tab.dataset.tab = account.id;
-      tab.innerHTML = `<span class="platform-dot ${account.platform}"></span>${this.escapeHtml(account.label || account.profile.displayName)}`;
-      this.accountTabs.appendChild(tab);
     }
   }
 
@@ -287,12 +402,6 @@ class StarShipApp {
     }
   }
 
-  setActiveFilter(filter) {
-    this.activeFilter = filter;
-    this.renderTabs();
-    this.refreshAll();
-  }
-
   // ===== Data Loading =====
 
   async refreshAll() {
@@ -309,31 +418,16 @@ class StarShipApp {
     await Promise.all(promises);
   }
 
-  async loadTimelines() {
-    for (const col of this.columns) {
-      if (col.type === 'timeline') {
-        await this.loadTimelineForColumn(col.id, col.accountId);
-      }
-    }
-  }
-
-  async loadNotifications() {
-    for (const col of this.columns) {
-      if (col.type === 'notifications') {
-        await this.loadNotificationsForColumn(col.id, col.accountId);
-      }
-    }
-  }
-
   async loadTimelineForColumn(columnId, accountId = null) {
     const col = document.getElementById(columnId);
     if (!col) return;
     const content = col.querySelector('.column-content');
     if (!content) return;
 
+    // For specific account, get only that account. For "all", get all accounts.
     const accounts = accountId
       ? [this.store.getById(accountId)].filter(Boolean)
-      : this.getFilteredAccounts();
+      : this.store.getAll();
 
     if (accounts.length === 0) {
       if (!content.querySelector('.post-card')) {
@@ -366,9 +460,11 @@ class StarShipApp {
 
           for (const post of posts) {
             post._seenBy = [{
+              accountId: account.id,
               platform: account.platform,
               avatarUrl: account.profile.avatarUrl,
               label: account.label || account.profile.displayName,
+              postId: post.id,
             }];
           }
 
@@ -385,11 +481,10 @@ class StarShipApp {
       // Sort by date descending
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
-      // Deduplicate: merge posts with same content URI (including reposts)
+      // Deduplicate: merge posts with same content URI
       const seen = new Map();
       const uniquePosts = [];
       for (const post of allPosts) {
-        // For reposts/renotes, use the original post's URI as dedup key
         const originalUri = post.reblog ? (post.reblog.uri || post.reblog.url) : null;
         const selfUri = post.uri || post.url;
         const key = originalUri || selfUri;
@@ -401,11 +496,9 @@ class StarShipApp {
 
         const existing = seen.get(key);
         if (existing) {
-          // Merge seenBy
           if (post._seenBy) {
             existing._seenBy.push(...post._seenBy);
           }
-          // Prefer the direct post over repost
           if (existing.reblog && !post.reblog) {
             post._seenBy = existing._seenBy;
             const idx = uniquePosts.indexOf(existing);
@@ -415,23 +508,36 @@ class StarShipApp {
         } else {
           seen.set(key, post);
           uniquePosts.push(post);
-          // Also index by self URI for cross-referencing
           if (selfUri && selfUri !== key) {
             seen.set(selfUri, post);
           }
         }
       }
 
-      // Incremental update: compare with existing posts and animate new ones
+      // Update global post map for action lookups
+      for (const post of uniquePosts) {
+        const mapKey = `${post.platform}_${post.id}`;
+        const existingPost = this.postMap.get(mapKey);
+        if (existingPost && existingPost._seenBy) {
+          // Merge seenBy from existing map entry
+          const existingIds = new Set(existingPost._seenBy.map(s => s.accountId));
+          for (const s of (post._seenBy || [])) {
+            if (!existingIds.has(s.accountId)) {
+              existingPost._seenBy.push(s);
+            }
+          }
+          post._seenBy = existingPost._seenBy;
+        }
+        this.postMap.set(mapKey, post);
+      }
+
+      // Incremental update
       const existingIds = new Set();
       content.querySelectorAll('.post-card').forEach(el => {
         existingIds.add(`${el.dataset.platform}_${el.dataset.postId}`);
       });
 
-      this.cachedPosts = uniquePosts;
-
       if (isFirstLoad || existingIds.size === 0) {
-        // First load: render everything
         content.innerHTML = '';
         if (uniquePosts.length === 0) {
           content.appendChild(renderLoadingText('타임라인에 표시할 게시물이 없습니다.'));
@@ -441,7 +547,6 @@ class StarShipApp {
           content.appendChild(renderPost(post, false));
         }
       } else {
-        // Incremental update: prepend new posts with animation
         const newPosts = uniquePosts.filter(p => !existingIds.has(`${p.platform}_${p.id}`));
         if (newPosts.length > 0) {
           const fragment = document.createDocumentFragment();
@@ -450,7 +555,6 @@ class StarShipApp {
           }
           content.prepend(fragment);
 
-          // Remove animation class after animation completes
           setTimeout(() => {
             content.querySelectorAll('.post-new').forEach(el => {
               el.classList.remove('post-new');
@@ -459,6 +563,7 @@ class StarShipApp {
         }
       }
     } catch (err) {
+      console.error('Timeline load error:', err);
       if (isFirstLoad) {
         content.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
       }
@@ -473,7 +578,7 @@ class StarShipApp {
 
     const accounts = accountId
       ? [this.store.getById(accountId)].filter(Boolean)
-      : this.getFilteredAccounts();
+      : this.store.getAll();
 
     if (accounts.length === 0) {
       if (!content.querySelector('.notif-card')) {
@@ -497,7 +602,6 @@ class StarShipApp {
           const client = this.store.getClient(account.id);
           if (!client) return [];
 
-          // Cache emojis for notification reaction resolution
           if (client.fetchEmojis) {
             await client.fetchEmojis();
           }
@@ -515,7 +619,6 @@ class StarShipApp {
 
       allNotifs.sort((a, b) => b.createdAt - a.createdAt);
 
-      // Incremental update
       const existingIds = new Set();
       content.querySelectorAll('.notif-card').forEach(el => {
         const id = el.dataset?.notifId;
@@ -534,7 +637,6 @@ class StarShipApp {
           content.appendChild(card);
         }
       } else {
-        // Prepend new notifications with animation
         const newNotifs = allNotifs.filter(n => !existingIds.has(`${n.platform}_${n.id}`));
         if (newNotifs.length > 0) {
           const fragment = document.createDocumentFragment();
@@ -553,24 +655,150 @@ class StarShipApp {
         }
       }
     } catch (err) {
+      console.error('Notifications load error:', err);
       if (isFirstLoad) {
         content.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
       }
     }
   }
 
-  getFilteredAccounts() {
-    if (this.activeFilter === 'all') {
-      return this.store.getAll();
-    }
-    const account = this.store.getById(this.activeFilter);
-    return account ? [account] : [];
+  findPostUrl(postId, platform) {
+    const key = `${platform}_${postId}`;
+    const post = this.postMap.get(key);
+    return post?.url || null;
   }
 
-  findPostUrl(postId, platform) {
-    if (!this.cachedPosts) return null;
-    const post = this.cachedPosts.find(p => p.id === postId && p.platform === platform);
-    return post?.url || null;
+  // ===== Post Actions =====
+
+  handlePostAction(postId, platform, action, btnElement) {
+    const key = `${platform}_${postId}`;
+    const post = this.postMap.get(key);
+    if (!post) return;
+
+    const seenBy = post._seenBy || [];
+    if (seenBy.length === 0) return;
+
+    if (action === 'reply') {
+      this.replyContext = { post };
+      this.openComposeModal();
+      return;
+    }
+
+    if (seenBy.length === 1) {
+      this.performAction(seenBy[0], postId, platform, action, btnElement);
+    } else {
+      this.showActionPicker(seenBy, postId, platform, action, btnElement);
+    }
+  }
+
+  async performAction(seenByEntry, postId, platform, action, btnElement) {
+    const client = this.store.getClient(seenByEntry.accountId);
+    if (!client) return;
+
+    const noteId = seenByEntry.postId || postId;
+
+    if (btnElement) {
+      btnElement.classList.add('action-loading');
+    }
+
+    try {
+      if (action === 'fav') {
+        if (platform === 'mastodon') {
+          await client.favourite(noteId);
+        } else {
+          await client.createReaction(noteId, '❤');
+        }
+        if (btnElement) btnElement.classList.add('done');
+      } else if (action === 'boost') {
+        if (platform === 'mastodon') {
+          await client.reblog(noteId);
+        } else {
+          await client.renote(noteId);
+        }
+        if (btnElement) btnElement.classList.add('done');
+      }
+    } catch (err) {
+      console.error(`Action ${action} failed:`, err);
+    } finally {
+      if (btnElement) btnElement.classList.remove('action-loading');
+    }
+  }
+
+  showActionPicker(seenBy, postId, platform, action, anchorElement) {
+    this.closeActionPicker();
+
+    const picker = document.createElement('div');
+    picker.className = 'action-picker';
+
+    const actionLabels = {
+      fav: '어느 계정으로 좋아요?',
+      boost: '어느 계정으로 리노트/부스트?',
+    };
+
+    let html = `<div class="action-picker-title">${actionLabels[action] || '계정 선택'}</div>`;
+
+    for (const entry of seenBy) {
+      html += `<button class="action-picker-option" data-account-id="${entry.accountId}" data-post-id="${entry.postId || postId}">
+        <img class="action-picker-avatar" src="${entry.avatarUrl || ''}" onerror="this.style.display='none'">
+        <span class="action-picker-dot" style="background: var(--accent-${entry.platform})"></span>
+        ${this.escapeHtml(entry.label)}
+      </button>`;
+    }
+
+    picker.innerHTML = html;
+
+    // Position near the button
+    const rect = anchorElement.getBoundingClientRect();
+    picker.style.left = `${Math.min(rect.left, window.innerWidth - 220)}px`;
+    picker.style.top = `${rect.bottom + 4}px`;
+
+    document.body.appendChild(picker);
+    this.activeActionPicker = picker;
+
+    // Handle option clicks
+    picker.addEventListener('click', (e) => {
+      const option = e.target.closest('.action-picker-option');
+      if (!option) return;
+
+      const accountId = option.dataset.accountId;
+      const optPostId = option.dataset.postId;
+      const entry = seenBy.find(s => s.accountId === accountId);
+      if (entry) {
+        this.performAction(entry, optPostId, platform, action, anchorElement);
+      }
+      this.closeActionPicker();
+    });
+  }
+
+  closeActionPicker() {
+    if (this.activeActionPicker) {
+      this.activeActionPicker.remove();
+      this.activeActionPicker = null;
+    }
+  }
+
+  // ===== Image Lightbox =====
+
+  openLightbox(imageUrl) {
+    this.closeLightbox();
+    const overlay = document.createElement('div');
+    overlay.className = 'lightbox-overlay';
+    overlay.innerHTML = `
+      <img src="${imageUrl}" alt="">
+      <button class="lightbox-close">&times;</button>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target.classList.contains('lightbox-close')) {
+        this.closeLightbox();
+      }
+    });
+
+    document.body.appendChild(overlay);
+  }
+
+  closeLightbox() {
+    document.querySelectorAll('.lightbox-overlay').forEach(el => el.remove());
   }
 
   // ===== Auto Refresh =====
@@ -597,17 +825,51 @@ class StarShipApp {
     if (!this.modalCompose) return;
     this.composeText.value = '';
     this.composeCw.value = '';
+    this.composeImages = [];
     if (this.composeCount) this.composeCount.textContent = '0';
     if (this.composeError) this.composeError.style.display = 'none';
+    if (this.composeImagesContainer) this.composeImagesContainer.innerHTML = '';
+
+    // Reply context
+    if (this.composeReplyContainer) {
+      this.composeReplyContainer.innerHTML = '';
+      if (this.replyContext) {
+        const post = this.replyContext.post;
+        const displayPost = post.reblog || post;
+        this.composeReplyContainer.innerHTML = `
+          <div class="compose-reply-context">
+            <div class="compose-reply-info">
+              <div class="compose-reply-author">${displayPost.author.displayNameHtml || this.escapeHtml(displayPost.author.displayName)}에게 답글</div>
+              <div class="compose-reply-text">${displayPost.content}</div>
+            </div>
+            <button class="compose-reply-close" data-action="clear-reply">&times;</button>
+          </div>
+        `;
+        // Clear reply handler
+        this.composeReplyContainer.querySelector('[data-action="clear-reply"]')?.addEventListener('click', () => {
+          this.replyContext = null;
+          this.composeReplyContainer.innerHTML = '';
+        });
+        // Pre-fill @mention
+        const acct = displayPost.author.acct;
+        this.composeText.value = `@${acct} `;
+      }
+    }
 
     // Populate account checkboxes
     const accounts = this.store.getAll();
     this.composeAccounts.innerHTML = '';
+
+    // If replying, filter to accounts that can see this post
+    const replySeenBy = this.replyContext?.post?._seenBy;
+    const availableAccountIds = replySeenBy ? new Set(replySeenBy.map(s => s.accountId)) : null;
+
     for (const account of accounts) {
+      const isAvailable = !availableAccountIds || availableAccountIds.has(account.id);
       const label = document.createElement('label');
       label.className = 'compose-account-option';
       label.innerHTML = `
-        <input type="checkbox" name="compose-account" value="${account.id}" checked>
+        <input type="checkbox" name="compose-account" value="${account.id}" ${isAvailable ? 'checked' : 'disabled'}>
         <img class="compose-account-avatar" src="${account.profile.avatarUrl || ''}" onerror="this.style.display='none'">
         <span class="compose-account-name">${this.escapeHtml(account.label || account.profile.displayName)}</span>
         <span class="platform-dot ${account.platform}"></span>
@@ -617,12 +879,55 @@ class StarShipApp {
 
     this.modalCompose.style.display = 'flex';
     this.composeText.focus();
+    // Set cursor at end
+    const len = this.composeText.value.length;
+    this.composeText.setSelectionRange(len, len);
+  }
+
+  handleComposeImageSelect(e) {
+    const files = Array.from(e.target.files || []);
+    for (const file of files) {
+      if (this.composeImages.length >= 4) break;
+      if (!file.type.startsWith('image/')) continue;
+      this.composeImages.push(file);
+    }
+    this.renderComposeImages();
+    // Reset file input
+    this.composeFileInput.value = '';
+  }
+
+  renderComposeImages() {
+    if (!this.composeImagesContainer) return;
+    this.composeImagesContainer.innerHTML = '';
+
+    for (let i = 0; i < this.composeImages.length; i++) {
+      const file = this.composeImages[i];
+      const preview = document.createElement('div');
+      preview.className = 'compose-image-preview';
+
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.onload = () => URL.revokeObjectURL(img.src);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'compose-image-remove';
+      removeBtn.textContent = '\u00d7';
+      removeBtn.dataset.index = i;
+      removeBtn.addEventListener('click', () => {
+        this.composeImages.splice(i, 1);
+        this.renderComposeImages();
+      });
+
+      preview.appendChild(img);
+      preview.appendChild(removeBtn);
+      this.composeImagesContainer.appendChild(preview);
+    }
   }
 
   async handleCompose() {
     const text = this.composeText.value.trim();
-    if (!text) {
-      this.showComposeError('내용을 입력하세요.');
+    if (!text && this.composeImages.length === 0) {
+      this.showComposeError('내용을 입력하거나 이미지를 추가하세요.');
       return;
     }
 
@@ -649,10 +954,40 @@ class StarShipApp {
           const client = this.store.getClient(account.id);
           if (!client) throw new Error('클라이언트를 찾을 수 없습니다.');
 
+          // Upload images
+          let mediaIds = [];
+          if (this.composeImages.length > 0) {
+            for (const file of this.composeImages) {
+              if (account.platform === 'mastodon') {
+                const result = await client.uploadMedia(file);
+                mediaIds.push(result.id);
+              } else {
+                const result = await client.uploadFile(file);
+                mediaIds.push(result.id);
+              }
+            }
+          }
+
+          // Determine replyId for this account
+          let replyId = null;
+          if (this.replyContext) {
+            const seenBy = this.replyContext.post._seenBy || [];
+            const entry = seenBy.find(s => s.accountId === account.id);
+            if (entry) replyId = entry.postId;
+          }
+
           if (account.platform === 'mastodon') {
-            return client.createStatus(text, { cw });
+            return client.createStatus(text, {
+              cw,
+              replyId,
+              mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
+            });
           } else {
-            return client.createNote(text, { cw });
+            return client.createNote(text, {
+              cw,
+              replyId,
+              fileIds: mediaIds.length > 0 ? mediaIds : undefined,
+            });
           }
         })
       );
@@ -662,8 +997,8 @@ class StarShipApp {
         const msg = failures.map(f => f.reason?.message || '알 수 없는 오류').join(', ');
         this.showComposeError(`일부 계정에서 게시 실패: ${msg}`);
       } else {
+        this.replyContext = null;
         this.modalCompose.style.display = 'none';
-        // Refresh timelines to show new post
         setTimeout(() => this.refreshAll(), 1000);
       }
     } catch (err) {
@@ -690,7 +1025,6 @@ class StarShipApp {
 
     let html = '<div class="add-column-options">';
 
-    // Timeline options
     html += '<h3 class="add-column-section">타임라인</h3>';
     html += `<button class="add-column-btn" data-add-column="timeline" data-column-title="전체 타임라인">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/><path d="M3 6h18"/><path d="M3 18h18"/></svg>
@@ -698,27 +1032,18 @@ class StarShipApp {
     </button>`;
 
     for (const account of this.store.getAll()) {
-      html += `<button class="add-column-btn" data-add-column="timeline" data-account-id="${account.id}" data-column-title="${this.escapeHtml(account.label || account.profile.displayName)} 타임라인">
+      html += `<button class="add-column-btn" data-add-column="timeline" data-account-id="${account.id}" data-column-title="${this.escapeHtml(account.label || account.profile.displayName)}">
         <span class="platform-dot ${account.platform}"></span>
         ${this.escapeHtml(account.label || account.profile.displayName)} 타임라인
       </button>`;
     }
 
-    // Notification options
     html += '<h3 class="add-column-section">알림</h3>';
-    html += `<button class="add-column-btn" data-add-column="notifications" data-column-title="전체 알림">
+    html += `<button class="add-column-btn" data-add-column="notifications" data-column-title="알림">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       전체 알림
     </button>`;
 
-    for (const account of this.store.getAll()) {
-      html += `<button class="add-column-btn" data-add-column="notifications" data-account-id="${account.id}" data-column-title="${this.escapeHtml(account.label || account.profile.displayName)} 알림">
-        <span class="platform-dot ${account.platform}"></span>
-        ${this.escapeHtml(account.label || account.profile.displayName)} 알림
-      </button>`;
-    }
-
-    // Accounts
     html += '<h3 class="add-column-section">기타</h3>';
     html += `<button class="add-column-btn" data-add-column="accounts" data-column-title="계정 목록">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -727,6 +1052,18 @@ class StarShipApp {
 
     html += '</div>';
     body.innerHTML = html;
+
+    // Handle clicks
+    body.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-add-column]');
+      if (!btn) return;
+      const type = btn.dataset.addColumn;
+      const accountId = btn.dataset.accountId || null;
+      const title = btn.dataset.columnTitle || type;
+      this.addColumn(type, title, accountId);
+      this.modalAddColumn.style.display = 'none';
+    }, { once: false });
+
     this.modalAddColumn.style.display = 'flex';
   }
 
@@ -883,7 +1220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const app = new StarShipApp();
   window.app = app;
 
-  // 리다이렉트 방식 OAuth 콜백 처리 (팝업 차단된 경우)
+  // 리다이렉트 방식 OAuth 콜백 처리
   const authResult = localStorage.getItem('starship_auth_result');
   if (authResult) {
     localStorage.removeItem('starship_auth_result');

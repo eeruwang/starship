@@ -79,7 +79,30 @@ export class MastodonClient {
     if (options.cw) body.spoiler_text = options.cw;
     if (options.replyId) body.in_reply_to_id = options.replyId;
     if (options.visibility) body.visibility = options.visibility;
+    if (options.mediaIds && options.mediaIds.length > 0) body.media_ids = options.mediaIds;
     return this.request('POST', '/api/v1/statuses', body);
+  }
+
+  async uploadMedia(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const targetUrl = `${this.instanceUrl}/api/v2/media`;
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.accessToken}` },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`미디어 업로드 실패 ${res.status}: ${errText}`);
+    }
+    return res.json();
   }
 
   normalizePost(status) {

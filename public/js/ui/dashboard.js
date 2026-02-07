@@ -40,6 +40,7 @@ export function renderPost(post, animate = false) {
   if (animate) card.classList.add('post-new');
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
+  card.dataset.postUri = post.uri || post.url || '';
 
   // Multi-account left border: gradient of platform colors
   if (post._seenBy && post._seenBy.length > 1) {
@@ -131,14 +132,15 @@ export function renderPost(post, animate = false) {
   // Content
   html += `<div class="post-content">${displayPost.content}</div>`;
 
-  // Media
+  // Media - with lightbox trigger
   if (displayPost.media && displayPost.media.length > 0) {
-    html += '<div class="post-media">';
+    const mediaCount = Math.min(displayPost.media.length, 4);
+    html += `<div class="post-media media-${mediaCount}">`;
     for (const m of displayPost.media) {
       if (m.type === 'video') {
         html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
       } else {
-        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy">`;
+        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" data-lightbox-src="${m.url}" class="lightbox-trigger">`;
       }
     }
     html += '</div>';
@@ -318,15 +320,15 @@ export function createColumn(id, title, options = {}) {
   section.id = id;
   section.dataset.columnId = id;
 
-  const closable = options.closable !== false;
-  const refreshAction = options.refreshAction || null;
+  const closable = options.closable !== false; // default true
+  const refreshable = options.refreshable !== false; // default true
 
   let headerHtml = `<div class="column-header">
     <h2>${escapeHtml(title)}</h2>
     <div class="column-header-actions">`;
 
-  if (refreshAction) {
-    headerHtml += `<button class="btn btn-icon btn-small" data-action="${refreshAction}" title="새로고침">
+  if (refreshable) {
+    headerHtml += `<button class="btn btn-icon btn-small" data-action="refresh-column" title="새로고침">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>`;
   }
