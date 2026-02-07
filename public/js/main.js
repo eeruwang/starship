@@ -359,11 +359,13 @@ class StarShipApp {
 
     // Some federated APIs (especially remote Misskey notes) expose local ids/urls per instance.
     // Build a stable fallback signature from author + original text + creation time.
-    const authorKey = (canonical.author?.acct || canonical.author?.username || '').toLowerCase();
+    const authorKey = this.getCanonicalAuthorKey(canonical, normalizedUri);
     const rawText = this.normalizeTextForDedupe(canonicalRaw.text || canonicalRaw.content || canonical.content || '');
-    const createdAtKey = canonicalRaw.createdAt
+    const createdAtKey = this.normalizeCreatedAtForDedupe(
+      canonicalRaw.createdAt
       || canonicalRaw.created_at
-      || (canonical.createdAt instanceof Date ? canonical.createdAt.toISOString() : String(canonical.createdAt || ''));
+      || canonical.createdAt
+    );
     const mediaKey = Array.isArray(canonicalRaw.files)
       ? canonicalRaw.files.map((f) => f?.url || f?.name || '').join('|')
       : '';
@@ -376,6 +378,26 @@ class StarShipApp {
     }
 
     return baseFallback;
+  }
+
+
+  getCanonicalAuthorKey(canonical, normalizedUri = '') {
+    const acctRaw = String(canonical.author?.acct || canonical.author?.username || '').trim().toLowerCase();
+    if (!acctRaw) return '';
+
+    if (acctRaw.includes('@')) {
+      return acctRaw;
+    }
+
+    const hostFromUri = normalizedUri.split('/')[0] || '';
+    return hostFromUri ? `${acctRaw}@${hostFromUri}` : acctRaw;
+  }
+
+  normalizeCreatedAtForDedupe(rawValue) {
+    if (!rawValue) return '';
+    const asDate = rawValue instanceof Date ? rawValue : new Date(rawValue);
+    if (Number.isNaN(asDate.getTime())) return String(rawValue);
+    return asDate.toISOString();
   }
 
   normalizeTextForDedupe(raw = '') {
