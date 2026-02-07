@@ -107,7 +107,8 @@ export class MisskeyClient {
         username: author.username,
       } : null,
       reactions: actualNote.reactions || {},
-      reactionEmojis: actualNote.reactionEmojis || {},
+      reactionEmojis: this.buildEmojiMap(actualNote),
+      instanceUrl: this.instanceUrl,
       uri: note.uri || null,
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
@@ -142,6 +143,23 @@ export class MisskeyClient {
       actor: notif.user ? this.normalizeUser(notif.user) : null,
       post: notif.note ? this.normalizePost(notif.note) : null,
     };
+  }
+
+  buildEmojiMap(note) {
+    const map = {};
+    // From emojis array (some forks use this)
+    if (Array.isArray(note.emojis)) {
+      for (const e of note.emojis) {
+        if (e.name && e.url) map[e.name] = e.url;
+      }
+    } else if (note.emojis && typeof note.emojis === 'object') {
+      Object.assign(map, note.emojis);
+    }
+    // reactionEmojis takes priority
+    if (note.reactionEmojis) {
+      Object.assign(map, note.reactionEmojis);
+    }
+    return map;
   }
 
   mfmToHtml(text) {

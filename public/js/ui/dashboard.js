@@ -96,9 +96,10 @@ export function renderPost(post) {
   // Reactions (Misskey)
   if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
     const emojiMap = displayPost.reactionEmojis || {};
+    const instanceUrl = displayPost.instanceUrl || '';
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-      // Check if custom emoji (e.g. :blobcat_basket@serafuku.moe:)
+      // Check if custom emoji (e.g. :blobcat_basket@serafuku.moe: or :dogroll:)
       const customMatch = reaction.match(/^:(.+):$/);
       let emojiHtml;
       if (customMatch) {
@@ -106,6 +107,15 @@ export function renderPost(post) {
         const emojiUrl = emojiMap[emojiName];
         if (emojiUrl) {
           emojiHtml = `<img class="reaction-emoji" src="${emojiUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy">`;
+        } else if (instanceUrl && !emojiName.includes('@')) {
+          // Local emoji fallback: try instance emoji endpoint
+          const fallbackUrl = `${instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp`;
+          emojiHtml = `<img class="reaction-emoji" src="${fallbackUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy" onerror="this.replaceWith(document.createTextNode(':${escapeHtml(emojiName)}:'))">`;
+        } else if (instanceUrl && emojiName.includes('@')) {
+          // Remote emoji: try the remote instance
+          const [name, host] = emojiName.split('@');
+          const fallbackUrl = `https://${host}/emoji/${encodeURIComponent(name)}.webp`;
+          emojiHtml = `<img class="reaction-emoji" src="${fallbackUrl}" alt=":${escapeHtml(emojiName)}:" title=":${escapeHtml(emojiName)}:" loading="lazy" onerror="this.replaceWith(document.createTextNode(':${escapeHtml(emojiName)}:'))">`;
         } else {
           emojiHtml = escapeHtml(reaction);
         }
@@ -126,12 +136,17 @@ export function renderPost(post) {
   const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
   const favCount = displayPost.stats?.favourites || displayPost.stats?.reactions || 0;
 
+  const iconReply = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  const iconBoost = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+  const iconFav = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+  const iconOpen = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+
   html += `
     <div class="post-actions">
-      <button class="post-action" data-action="reply" title="답글">💬 ${replyCount > 0 ? replyCount : ''}</button>
-      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">🔁 ${boostCount > 0 ? boostCount : ''}</button>
-      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">⭐ ${favCount > 0 ? favCount : ''}</button>
-      <button class="post-action" data-action="open" title="원본 열기">🔗</button>
+      <button class="post-action" data-action="reply" title="답글">${iconReply}${replyCount > 0 ? `<span>${replyCount}</span>` : ''}</button>
+      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">${iconBoost}${boostCount > 0 ? `<span>${boostCount}</span>` : ''}</button>
+      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">${iconFav}${favCount > 0 ? `<span>${favCount}</span>` : ''}</button>
+      <button class="post-action" data-action="open" title="원본 열기">${iconOpen}</button>
     </div>
   `;
 

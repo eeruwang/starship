@@ -382,14 +382,38 @@ body {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
   font-family: inherit;
   transition: all 0.2s;
 }
 
+.post-action svg {
+  flex-shrink: 0;
+}
+
 .post-action:hover {
+  color: var(--accent-primary);
+  background: rgba(124, 125, 255, 0.1);
+}
+
+.post-action[data-action="reply"]:hover {
+  color: #6cb4ee;
+  background: rgba(108, 180, 238, 0.1);
+}
+
+.post-action[data-action="boost"]:hover {
+  color: var(--accent-misskey);
+  background: rgba(150, 208, 74, 0.1);
+}
+
+.post-action[data-action="fav"]:hover {
+  color: #ffb340;
+  background: rgba(255, 179, 64, 0.1);
+}
+
+.post-action[data-action="open"]:hover {
   color: var(--accent-primary);
   background: rgba(124, 125, 255, 0.1);
 }
