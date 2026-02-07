@@ -576,11 +576,30 @@ body {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 0.1rem 0.4rem;
+  padding: 0.15rem 0.45rem;
   font-size: 0.75rem;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
+  line-height: 1;
+}
+
+.reaction-badge .custom-emoji {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.reaction-badge .reaction-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom emoji in notification icons */
+.notif-custom-emoji {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 /* ===== Notification Card ===== */
@@ -875,6 +894,22 @@ textarea.input {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.post-card.new-post,
+.notif-card.new-post {
+  animation: slideDown 0.3s ease forwards;
 }
 
 .loading-text {
@@ -1178,6 +1213,11 @@ textarea.input {
 .account-picker-item .picker-platform {
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+.account-picker-item.preferred {
+  background: rgba(124, 125, 255, 0.1);
+  border-left: 2px solid var(--accent-primary);
 }
 
 /* ===== App Layout ===== */

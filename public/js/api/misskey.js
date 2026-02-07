@@ -137,6 +137,7 @@ export class MisskeyClient {
         username: author.username,
       } : null,
       reactions: actualNote.reactions || {},
+      reactionEmojis: actualNote.reactionEmojis || {},
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
     };
@@ -160,12 +161,24 @@ export class MisskeyClient {
 
     const info = typeMap[notif.type] || { icon: '🔔', label: notif.type };
 
+    // Resolve custom emoji URL for reaction notifications
+    let reactionEmojiUrl = null;
+    if (notif.type === 'reaction' && notif.reaction) {
+      const stripped = notif.reaction.replace(/^:/, '').replace(/:$/, '');
+      if (stripped !== notif.reaction && notif.note?.reactionEmojis) {
+        reactionEmojiUrl = notif.note.reactionEmojis[stripped]
+          || notif.note.reactionEmojis[stripped + '@.']
+          || null;
+      }
+    }
+
     return {
       id: notif.id,
       platform: this.platformType,
       type: notif.type,
       icon: notif.type === 'reaction' ? (notif.reaction || info.icon) : info.icon,
       reactionEmoji: notif.type === 'reaction' ? (notif.reaction || null) : null,
+      reactionEmojiUrl,
       label: info.label,
       createdAt: new Date(notif.createdAt),
       actor: notif.user ? this.normalizeUser(notif.user) : null,

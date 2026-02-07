@@ -14,7 +14,8 @@ class StarShipApp {
     this.autoRefreshTimer = null;
     this.AUTO_REFRESH_INTERVAL = 60000;
     this.focusedColumnIndex = 0;
-    this.cachedPosts = [];
+    this.postCache = new Map(); // key: `${platform}:${id}`, value: post
+    this.POST_CACHE_MAX = 500;
     this.composeFiles = [];
 
     // Column state: which columns are visible
@@ -478,8 +479,13 @@ class StarShipApp {
       return;
     }
 
-    container.innerHTML = '';
-    container.appendChild(renderLoading());
+    const existingCards = container.querySelectorAll('.post-card');
+    const isFirstLoad = existingCards.length === 0;
+
+    if (isFirstLoad) {
+      container.innerHTML = '';
+      container.appendChild(renderLoading());
+    }
 
     try {
       const allPosts = [];
@@ -511,23 +517,64 @@ class StarShipApp {
 
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
-      container.innerHTML = '';
+      // Cache posts
+      this.cachePosts(allPosts);
 
       if (allPosts.length === 0) {
-        container.appendChild(renderLoadingText('타임라인에 표시할 게시물이 없습니다.'));
+        if (isFirstLoad) {
+          container.innerHTML = '';
+          container.appendChild(renderLoadingText('타임라인에 표시할 게시물이 없습니다.'));
+        }
         return;
       }
 
-      // Update cached posts
-      this.cachedPosts = [...this.cachedPosts.filter(p =>
-        !allPosts.some(np => np.id === p.id && np.platform === p.platform)
-      ), ...allPosts];
+      if (isFirstLoad) {
+        // Full render on first load
+        container.innerHTML = '';
+        for (const post of allPosts) {
+          container.appendChild(renderPost(post));
+        }
+      } else {
+        // Smooth incremental update: prepend new posts with animation
+        const existingIds = new Set();
+        for (const card of existingCards) {
+          existingIds.add(`${card.dataset.platform}:${card.dataset.postId}`);
+        }
 
-      for (const post of allPosts) {
-        container.appendChild(renderPost(post));
+        const newPosts = allPosts.filter(p => !existingIds.has(`${p.platform}:${p.id}`));
+
+        if (newPosts.length > 0) {
+          const scrollTop = container.scrollTop;
+          const fragment = document.createDocumentFragment();
+
+          for (const post of newPosts) {
+            const el = renderPost(post);
+            el.classList.add('new-post');
+            fragment.appendChild(el);
+          }
+
+          container.insertBefore(fragment, container.firstChild);
+
+          // Keep scroll position stable if user was scrolled down
+          if (scrollTop > 0) {
+            let addedHeight = 0;
+            const newCards = container.querySelectorAll('.post-card.new-post');
+            for (const card of newCards) {
+              addedHeight += card.offsetHeight + 8;
+            }
+            container.scrollTop = scrollTop + addedHeight;
+          }
+
+          // Remove animation class after animation completes
+          setTimeout(() => {
+            container.querySelectorAll('.new-post').forEach(el => el.classList.remove('new-post'));
+          }, 400);
+        }
       }
     } catch (err) {
-      container.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+      if (isFirstLoad) {
+        container.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+      }
     }
   }
 
@@ -537,8 +584,13 @@ class StarShipApp {
       return;
     }
 
-    container.innerHTML = '';
-    container.appendChild(renderLoading());
+    const existingCards = container.querySelectorAll('.notif-card');
+    const isFirstLoad = existingCards.length === 0;
+
+    if (isFirstLoad) {
+      container.innerHTML = '';
+      container.appendChild(renderLoading());
+    }
 
     try {
       const allNotifs = [];
@@ -566,24 +618,77 @@ class StarShipApp {
 
       allNotifs.sort((a, b) => b.createdAt - a.createdAt);
 
-      container.innerHTML = '';
-
       if (allNotifs.length === 0) {
-        container.appendChild(renderLoadingText('새 알림이 없습니다.'));
+        if (isFirstLoad) {
+          container.innerHTML = '';
+          container.appendChild(renderLoadingText('새 알림이 없습니다.'));
+        }
         return;
       }
 
-      for (const notif of allNotifs) {
-        container.appendChild(renderNotification(notif));
+      if (isFirstLoad) {
+        container.innerHTML = '';
+        for (const notif of allNotifs) {
+          container.appendChild(renderNotification(notif));
+        }
+      } else {
+        // Smooth incremental update: prepend new notifications
+        const existingIds = new Set();
+        for (const card of existingCards) {
+          existingIds.add(`${card.dataset.platform}:${card.dataset.notifId}`);
+        }
+
+        const newNotifs = allNotifs.filter(n => !existingIds.has(`${n.platform}:${n.id}`));
+
+        if (newNotifs.length > 0) {
+          const scrollTop = container.scrollTop;
+          const fragment = document.createDocumentFragment();
+
+          for (const notif of newNotifs) {
+            const el = renderNotification(notif);
+            el.classList.add('new-post');
+            fragment.appendChild(el);
+          }
+
+          container.insertBefore(fragment, container.firstChild);
+
+          if (scrollTop > 0) {
+            let addedHeight = 0;
+            const newCards = container.querySelectorAll('.notif-card.new-post');
+            for (const card of newCards) {
+              addedHeight += card.offsetHeight + 8;
+            }
+            container.scrollTop = scrollTop + addedHeight;
+          }
+
+          setTimeout(() => {
+            container.querySelectorAll('.new-post').forEach(el => el.classList.remove('new-post'));
+          }, 400);
+        }
       }
     } catch (err) {
-      container.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+      if (isFirstLoad) {
+        container.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+      }
+    }
+  }
+
+  cachePosts(posts) {
+    for (const post of posts) {
+      this.postCache.set(`${post.platform}:${post.id}`, post);
+    }
+    // Evict oldest entries if over limit
+    if (this.postCache.size > this.POST_CACHE_MAX) {
+      const toDelete = this.postCache.size - this.POST_CACHE_MAX;
+      const keys = this.postCache.keys();
+      for (let i = 0; i < toDelete; i++) {
+        this.postCache.delete(keys.next().value);
+      }
     }
   }
 
   findPostUrl(postId, platform) {
-    if (!this.cachedPosts) return null;
-    const post = this.cachedPosts.find(p => p.id === postId && p.platform === platform);
+    const post = this.postCache.get(`${platform}:${postId}`);
     return post?.url || null;
   }
 
@@ -594,20 +699,16 @@ class StarShipApp {
 
     if (accounts.length === 0) return;
 
-    // If we have the accountId from the post, use it directly
-    if (accountId) {
-      await this.executePostAction(action, postId, platform, accountId, btnElement);
+    // Single account: use it directly
+    if (accounts.length === 1) {
+      await this.executePostAction(action, postId, platform, accounts[0].id, btnElement);
       return;
     }
 
-    // Multi-account: show picker
-    if (accounts.length > 1) {
-      this.showAccountPicker(btnElement, accounts, async (selectedAccountId) => {
-        await this.executePostAction(action, postId, platform, selectedAccountId, btnElement);
-      });
-    } else {
-      await this.executePostAction(action, postId, platform, accounts[0].id, btnElement);
-    }
+    // Multi-account: always show picker so user can choose
+    this.showAccountPicker(btnElement, accounts, async (selectedAccountId) => {
+      await this.executePostAction(action, postId, platform, selectedAccountId, btnElement);
+    }, accountId);
   }
 
   async executePostAction(action, postId, platform, accountId, btnElement) {
@@ -643,18 +744,29 @@ class StarShipApp {
 
   // ===== Account Picker =====
 
-  showAccountPicker(anchorElement, accounts, onSelect) {
+  showAccountPicker(anchorElement, accounts, onSelect, preferredAccountId = null) {
     this.closeAccountPicker();
 
     const picker = document.createElement('div');
     picker.className = 'account-picker';
     picker.id = 'account-picker-popup';
 
+    // Sort preferred account to top
+    const sortedAccounts = [...accounts];
+    if (preferredAccountId) {
+      sortedAccounts.sort((a, b) => {
+        if (a.id === preferredAccountId) return -1;
+        if (b.id === preferredAccountId) return 1;
+        return 0;
+      });
+    }
+
     let html = '<div class="account-picker-title">계정 선택</div>';
-    for (const account of accounts) {
+    for (const account of sortedAccounts) {
       const p = account.profile;
+      const isPreferred = account.id === preferredAccountId;
       html += `
-        <button class="account-picker-item" data-account-id="${account.id}">
+        <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}">
           <img src="${p.avatarUrl || ''}" alt="" onerror="this.style.display='none'">
           <span class="picker-name">${this.escapeHtml(p.displayName)}</span>
           <span class="picker-platform">${account.platform}</span>

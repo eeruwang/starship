@@ -73,7 +73,8 @@ export function renderPost(post) {
   if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-      html += `<span class="reaction-badge">${reaction} ${count}</span>`;
+      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis);
+      html += `<span class="reaction-badge">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
     html += '</div>';
   }
@@ -116,13 +117,19 @@ export function renderPost(post) {
 export function renderNotification(notif) {
   const card = document.createElement('div');
   card.className = `notif-card platform-${notif.platform}`;
+  card.dataset.notifId = notif.id;
+  card.dataset.platform = notif.platform;
 
-  const icon = getNotifIcon(notif.type, notif.reactionEmoji);
-  // If getNotifIcon returned an SVG string, use it; otherwise it's a single emoji char
-  const isEmoji = typeof icon === 'string' && !icon.startsWith('<svg');
-  const iconHtml = isEmoji
-    ? `<span class="notif-emoji">${icon}</span>`
-    : `<span class="notif-svg-icon">${icon}</span>`;
+  let iconHtml;
+  if (notif.reactionEmojiUrl) {
+    iconHtml = `<img class="notif-custom-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.reactionEmoji || '')}" title="${escapeHtml(notif.reactionEmoji || '')}">`;
+  } else {
+    const icon = getNotifIcon(notif.type, notif.reactionEmoji);
+    const isEmoji = typeof icon === 'string' && !icon.startsWith('<svg');
+    iconHtml = isEmoji
+      ? `<span class="notif-emoji">${icon}</span>`
+      : `<span class="notif-svg-icon">${icon}</span>`;
+  }
 
   let html = `
     <div class="notif-icon">${iconHtml}</div>
@@ -254,4 +261,17 @@ function formatNumber(n) {
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
   return String(n);
+}
+
+function resolveReactionHtml(reaction, reactionEmojis) {
+  // Check if it's a custom emoji (:name: or :name@.:)
+  const match = reaction.match(/^:(.+):$/);
+  if (match && reactionEmojis) {
+    const name = match[1];
+    const url = reactionEmojis[name] || reactionEmojis[name + '@.'] || null;
+    if (url) {
+      return `<img class="custom-emoji" src="${escapeHtml(url)}" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}">`;
+    }
+  }
+  return reaction;
 }
