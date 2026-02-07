@@ -160,6 +160,7 @@ export class MastodonClient {
       platform: 'mastodon',
       type: notif.type,
       icon: info.icon,
+      reactionEmoji: null,
       label: info.label,
       createdAt: new Date(notif.created_at),
       actor: {

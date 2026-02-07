@@ -43,18 +43,28 @@ body {
 
 /* ===== Scrollbar ===== */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
+  background: rgba(124, 125, 255, 0.2);
+  border-radius: 10px;
+  transition: background 0.2s;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: rgba(124, 125, 255, 0.45);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 125, 255, 0.2) transparent;
 }
 
 /* ===== Header ===== */
@@ -301,7 +311,19 @@ body {
 }
 
 .columns-container::-webkit-scrollbar {
-  height: 6px;
+  height: 4px;
+}
+.columns-container::-webkit-scrollbar-track {
+  background: rgba(58, 59, 90, 0.3);
+  border-radius: 4px;
+  margin: 0 0.75rem;
+}
+.columns-container::-webkit-scrollbar-thumb {
+  background: rgba(124, 125, 255, 0.35);
+  border-radius: 4px;
+}
+.columns-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 125, 255, 0.6);
 }
 
 .column {
@@ -340,7 +362,21 @@ body {
 .column-header-actions {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.15rem;
+}
+
+.column-header-actions .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.column-header-actions .btn-icon svg {
+  display: block;
 }
 
 .column-content {
@@ -461,7 +497,7 @@ body {
 
 .post-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border-color);
@@ -473,13 +509,32 @@ body {
   color: var(--text-muted);
   font-size: 0.8rem;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
   font-family: inherit;
   transition: all 0.2s;
+  line-height: 1;
+}
+
+.post-action .action-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.post-action .action-icon svg {
+  display: block;
+}
+
+.post-action .action-count {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-action.action-end {
+  margin-left: auto;
 }
 
 .post-action:hover {
@@ -489,19 +544,24 @@ body {
 
 .post-action[data-action="fav"]:hover,
 .post-action[data-action="fav"].active {
-  color: #ffaa44;
-  background: rgba(255, 170, 68, 0.1);
+  color: #f5a623;
+  background: rgba(245, 166, 35, 0.12);
 }
 
 .post-action[data-action="boost"]:hover,
 .post-action[data-action="boost"].active {
-  color: #44bb77;
-  background: rgba(68, 187, 119, 0.1);
+  color: #2ecc71;
+  background: rgba(46, 204, 113, 0.12);
 }
 
 .post-action[data-action="reply"]:hover {
-  color: #55aaff;
-  background: rgba(85, 170, 255, 0.1);
+  color: #3498db;
+  background: rgba(52, 152, 219, 0.12);
+}
+
+.post-action[data-action="open"]:hover {
+  color: var(--text-secondary);
+  background: rgba(154, 154, 184, 0.1);
 }
 
 /* ===== Reactions ===== */
@@ -541,10 +601,30 @@ body {
 .notif-card.platform-mastodon { border-left-color: var(--accent-mastodon); }
 
 .notif-icon {
-  font-size: 1.2rem;
   flex-shrink: 0;
-  width: 28px;
-  text-align: center;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  border-radius: 50%;
+}
+
+.notif-svg-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+}
+
+.notif-svg-icon svg {
+  display: block;
+}
+
+.notif-emoji {
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .notif-body {
@@ -804,6 +884,25 @@ textarea.input {
   font-size: 0.85rem;
 }
 
+/* ===== Inline Icons ===== */
+.icon-inline {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.icon-inline svg {
+  display: block;
+}
+
+.icon-inline.boost-icon {
+  color: #2ecc71;
+}
+
+.icon-inline.cw-icon {
+  color: #f5a623;
+}
+
 /* ===== Renote / Boost indicator ===== */
 .renote-indicator, .boost-indicator {
   display: flex;
@@ -818,12 +917,16 @@ textarea.input {
 
 /* ===== CW / Content Warning ===== */
 .cw-warning {
-  background: rgba(255,165,0,0.15);
-  color: #ffaa44;
+  background: rgba(245, 166, 35, 0.12);
+  color: #f5a623;
   padding: 0.4rem 0.6rem;
   border-radius: var(--radius);
   font-size: 0.85rem;
   margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .cw-toggle {

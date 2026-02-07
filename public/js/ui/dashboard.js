@@ -2,6 +2,11 @@
  * Dashboard UI
  * Renders timeline posts, notifications, and account cards.
  */
+import {
+  iconReply, iconBoost, iconStar, iconHeart, iconLink,
+  iconRefresh, iconClose, iconWarning, iconImage,
+  getNotifIcon,
+} from './icons.js';
 
 export function renderPost(post) {
   const card = document.createElement('div');
@@ -15,7 +20,7 @@ export function renderPost(post) {
   // Renote / Boost indicator
   if (post.rebloggedBy) {
     const boostLabel = post.platform === 'mastodon' ? '부스트' : '리노트';
-    html += `<div class="renote-indicator">🔁 ${escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
+    html += `<div class="renote-indicator"><span class="icon-inline boost-icon">${iconBoost}</span> ${escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
   }
 
   const displayPost = post.reblog || post;
@@ -25,7 +30,7 @@ export function renderPost(post) {
     const cwId = `cw-${post.id}`;
     html += `
       <div class="cw-warning">
-        ⚠️ ${escapeHtml(displayPost.contentWarning)}
+        <span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(displayPost.contentWarning)}
         <button class="cw-toggle" data-cw-target="${cwId}">내용 보기</button>
       </div>
     `;
@@ -82,12 +87,25 @@ export function renderPost(post) {
   const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
   const favCount = displayPost.stats?.favourites || displayPost.stats?.reactions || 0;
 
+  const favIcon = post.platform === 'mastodon' ? iconStar : iconHeart;
+
   html += `
     <div class="post-actions">
-      <button class="post-action" data-action="reply" title="답글">💬 ${replyCount > 0 ? replyCount : ''}</button>
-      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">🔁 ${boostCount > 0 ? boostCount : ''}</button>
-      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">⭐ ${favCount > 0 ? favCount : ''}</button>
-      <button class="post-action" data-action="open" title="원본 열기">🔗</button>
+      <button class="post-action" data-action="reply" title="답글">
+        <span class="action-icon">${iconReply}</span>
+        ${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}
+      </button>
+      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">
+        <span class="action-icon">${iconBoost}</span>
+        ${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}
+      </button>
+      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">
+        <span class="action-icon">${favIcon}</span>
+        ${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}
+      </button>
+      <button class="post-action action-end" data-action="open" title="원본 열기">
+        <span class="action-icon">${iconLink}</span>
+      </button>
     </div>
   `;
 
@@ -99,8 +117,15 @@ export function renderNotification(notif) {
   const card = document.createElement('div');
   card.className = `notif-card platform-${notif.platform}`;
 
+  const icon = getNotifIcon(notif.type, notif.reactionEmoji);
+  // If getNotifIcon returned an SVG string, use it; otherwise it's a single emoji char
+  const isEmoji = typeof icon === 'string' && !icon.startsWith('<svg');
+  const iconHtml = isEmoji
+    ? `<span class="notif-emoji">${icon}</span>`
+    : `<span class="notif-svg-icon">${icon}</span>`;
+
   let html = `
-    <div class="notif-icon">${notif.icon}</div>
+    <div class="notif-icon">${iconHtml}</div>
     <div class="notif-body">
       <div class="notif-text">
         ${notif.actor ? `<strong>${escapeHtml(notif.actor.displayName)}</strong>` : ''}
@@ -194,6 +219,9 @@ export function renderLoadingText(message = '불러오는 중...') {
   div.textContent = message;
   return div;
 }
+
+// Export icons for use in main.js column headers
+export { iconRefresh, iconClose, iconImage };
 
 // Helpers
 

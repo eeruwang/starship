@@ -165,6 +165,7 @@ export class MisskeyClient {
       platform: this.platformType,
       type: notif.type,
       icon: notif.type === 'reaction' ? (notif.reaction || info.icon) : info.icon,
+      reactionEmoji: notif.type === 'reaction' ? (notif.reaction || null) : null,
       label: info.label,
       createdAt: new Date(notif.createdAt),
       actor: notif.user ? this.normalizeUser(notif.user) : null,

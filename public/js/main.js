@@ -3,7 +3,7 @@
  * Fediverse multi-account dashboard for Misskey, Iceshrimp, CherryPick, and Mastodon.
  */
 import { AccountStore } from './accounts.js';
-import { renderPost, renderNotification, renderAccountCard, renderLoading, renderLoadingText } from './ui/dashboard.js';
+import { renderPost, renderNotification, renderAccountCard, renderLoading, renderLoadingText, iconRefresh, iconClose } from './ui/dashboard.js';
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from './auth.js';
 
 const COLUMN_STATE_KEY = 'starship_column_state';
@@ -418,8 +418,8 @@ class StarShipApp {
       <div class="column-header">
         <h2>${title}</h2>
         <div class="column-header-actions">
-          <button class="btn btn-icon btn-small" data-action="refresh-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="새로고침">↻</button>
-          <button class="btn btn-icon btn-small" data-action="close-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="닫기">✕</button>
+          <button class="btn btn-icon btn-small" data-action="refresh-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="새로고침">${iconRefresh}</button>
+          <button class="btn btn-icon btn-small" data-action="close-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="닫기">${iconClose}</button>
         </div>
       </div>
       <div class="column-content"></div>
