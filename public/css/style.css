@@ -765,6 +765,14 @@ select.input {
   vertical-align: middle;
 }
 
+.inline-emoji {
+  height: 1.5em;
+  width: auto;
+  object-fit: contain;
+  vertical-align: middle;
+  margin: 0 0.05em;
+}
+
 /* ===== Renote / Boost indicator ===== */
 .renote-indicator, .boost-indicator {
   display: flex;

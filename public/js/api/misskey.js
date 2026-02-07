@@ -83,12 +83,13 @@ export class MisskeyClient {
 
     const actualNote = isRenote ? note.renote : note;
     const actualAuthor = isRenote ? this.normalizeUser(note.renote.user) : author;
+    const emojiMap = this.buildEmojiMap(actualNote);
 
     return {
       id: note.id,
       platform: this.platformType,
       createdAt: new Date(note.createdAt),
-      content: this.mfmToHtml(actualNote.text || ''),
+      content: this.mfmToHtml(actualNote.text || '', emojiMap),
       contentWarning: actualNote.cw || null,
       author: actualAuthor,
       media: (actualNote.files || []).map(f => ({
@@ -108,7 +109,7 @@ export class MisskeyClient {
         username: author.username,
       } : null,
       reactions: actualNote.reactions || {},
-      reactionEmojis: this.buildEmojiMap(actualNote),
+      reactionEmojis: emojiMap,
       instanceUrl: this.instanceUrl,
       uri: note.uri || null,
       url: `${this.instanceUrl}/notes/${note.id}`,
@@ -148,26 +149,55 @@ export class MisskeyClient {
 
   async fetchEmojis() {
     if (this._emojiCache) return this._emojiCache;
+    this._emojiCache = {};
+
+    // Strategy 1: Misskey native api/emojis
     try {
       const result = await this.request('emojis');
-      this._emojiCache = {};
-      for (const e of (result.emojis || [])) {
-        if (e.name && e.url) this._emojiCache[e.name] = e.url;
+      const emojis = result.emojis || result;
+      if (Array.isArray(emojis)) {
+        for (const e of emojis) {
+          if (e.name && e.url) this._emojiCache[e.name] = e.url;
+        }
       }
-    } catch {
-      this._emojiCache = {};
+    } catch { /* endpoint might not exist */ }
+
+    // Strategy 2: Mastodon-compatible endpoint (widely supported across forks)
+    if (Object.keys(this._emojiCache).length === 0) {
+      try {
+        const targetUrl = `${this.instanceUrl}/api/v1/custom_emojis`;
+        const fetchUrl = this.useProxy
+          ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+          : targetUrl;
+        const res = await fetch(fetchUrl);
+        if (res.ok) {
+          const emojis = await res.json();
+          if (Array.isArray(emojis)) {
+            for (const e of emojis) {
+              if (e.shortcode && (e.url || e.static_url)) {
+                this._emojiCache[e.shortcode] = e.url || e.static_url;
+              }
+            }
+          }
+        }
+      } catch { /* endpoint might not exist */ }
     }
+
     return this._emojiCache;
   }
 
   buildEmojiMap(note) {
     const map = {};
-    // From instance emoji cache: resolve only reaction keys
+    // From instance emoji cache: resolve reaction keys
     if (this._emojiCache && note.reactions) {
       for (const reactionKey of Object.keys(note.reactions)) {
         const match = reactionKey.match(/^:(.+):$/);
-        if (match && this._emojiCache[match[1]]) {
-          map[match[1]] = this._emojiCache[match[1]];
+        if (match) {
+          const fullName = match[1];
+          // Strip @host to match local cache key (e.g. "dogroll@instance" → "dogroll")
+          const baseName = fullName.includes('@') ? fullName.split('@')[0] : fullName;
+          const url = this._emojiCache[fullName] || this._emojiCache[baseName];
+          if (url) map[fullName] = url;
         }
       }
     }
@@ -186,7 +216,7 @@ export class MisskeyClient {
     return map;
   }
 
-  mfmToHtml(text) {
+  mfmToHtml(text, emojiMap = {}) {
     if (!text) return '';
     let html = this.escapeHtml(text);
     // Bold
@@ -195,6 +225,18 @@ export class MisskeyClient {
     html = html.replace(/<i>(.+?)<\/i>/g, '<em>$1</em>');
     // Strikethrough
     html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    // Custom emoji :name: or :name@host:
+    html = html.replace(/:([a-zA-Z0-9_]+(?:@[\w.-]+)?):/g, (match, name) => {
+      const baseName = name.includes('@') ? name.split('@')[0] : name;
+      const url = emojiMap[name] || emojiMap[baseName];
+      if (url) {
+        return `<img class="inline-emoji" src="${url}" alt=":${name}:" title=":${name}:">`;
+      }
+      if (this.instanceUrl && !name.includes('@')) {
+        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" onerror="this.replaceWith(document.createTextNode(':${name}:'))">`;
+      }
+      return match;
+    });
     // Mentions
     html = html.replace(/@([\w.-]+)(?:@([\w.-]+))?/g, (match, user, host) => {
       return `<span class="mention">@${user}${host ? '@' + host : ''}</span>`;
