@@ -65,10 +65,19 @@
 
     <main class="dashboard" id="dashboard">
       <div class="empty-state" id="empty-state">
-        <div class="empty-icon">🌐</div>
-        <h2>Fediverse 계정을 연결하세요</h2>
-        <p>Misskey, Iceshrimp, CherryPick, Mastodon 계정을 추가하여<br>모든 타임라인을 한 곳에서 확인하세요.</p>
-        <button class="btn btn-primary btn-large" id="btn-add-first">계정 추가하기</button>
+        <div class="welcome-screen" id="welcome-screen">
+          <svg class="welcome-logo" width="72" height="72" viewBox="0 0 100 100"><defs><linearGradient id="wl-grad" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#6364ff"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs><path d="M50 8 L62 42 H80 L66 58 L72 90 L50 72 L28 90 L34 58 L20 42 H38 Z" fill="url(#wl-grad)" opacity="0.15"/><path d="M50 15 C50 15 44 35 44 50 C44 62 46 75 50 85 C54 75 56 62 56 50 C56 35 50 15 50 15Z" fill="url(#wl-grad)"/><path d="M50 30 L38 58 C42 55 46 53 50 53 C54 53 58 55 62 58 Z" fill="url(#wl-grad)" opacity="0.8"/><circle cx="50" cy="42" r="4" fill="#1a1b2e"/></svg>
+          <h2 class="welcome-title">StarShip</h2>
+          <p class="welcome-subtitle">Fediverse Multi-Account Dashboard</p>
+          <p class="welcome-message" id="welcome-message">로그인해 주세요</p>
+          <button class="btn btn-primary btn-large" id="btn-welcome-login">로그인</button>
+        </div>
+        <div class="add-account-prompt" id="add-account-prompt" style="display:none;">
+          <div class="empty-icon">🌐</div>
+          <h2>Fediverse 계정을 연결하세요</h2>
+          <p>Misskey, Iceshrimp, CherryPick, Mastodon 계정을 추가하여<br>모든 타임라인을 한 곳에서 확인하세요.</p>
+          <button class="btn btn-primary btn-large" id="btn-add-first">계정 추가하기</button>
+        </div>
       </div>
 
       <div class="columns-container" id="columns-container" style="display:none;"></div>

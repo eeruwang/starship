@@ -153,6 +153,7 @@ class StarShipApp {
     // Open add account modal
     this.btnAddAccount?.addEventListener('click', () => this.openAddAccountModal());
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
+    document.getElementById('btn-welcome-login')?.addEventListener('click', () => this.handleAuthButtonClick());
 
     // Header compose button
     document.getElementById('btn-compose-header').addEventListener('click', () => this.openComposeModal());
@@ -510,9 +511,27 @@ class StarShipApp {
 
   render() {
     const hasAccounts = !this.store.isEmpty();
+    const loggedIn = !!this._currentUser;
     this.emptyState.style.display = hasAccounts ? 'none' : 'flex';
     this.columnsContainer.style.display = hasAccounts ? 'flex' : 'none';
     this.toggleBar.style.display = hasAccounts ? 'flex' : 'none';
+
+    // Welcome vs add-account prompt
+    const welcome = document.getElementById('welcome-screen');
+    const addPrompt = document.getElementById('add-account-prompt');
+    if (!hasAccounts) {
+      if (loggedIn) {
+        welcome.style.display = 'none';
+        addPrompt.style.display = 'flex';
+      } else {
+        welcome.style.display = 'flex';
+        addPrompt.style.display = 'none';
+      }
+    }
+
+    // Hide/show header action buttons based on login state
+    document.getElementById('btn-compose-header').style.display = loggedIn ? '' : 'none';
+    document.getElementById('btn-refresh-all').style.display = loggedIn ? '' : 'none';
 
     // Ensure all accounts have a column state entry
     for (const account of this.store.getAll()) {
@@ -2865,7 +2884,13 @@ class StarShipApp {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
     } catch {}
     this._currentUser = null;
+    // Clear local data
+    this.store.replaceAll([]);
+    this.columnState = { all: true, notifications: true, accounts: {}, columnOrder: [] };
+    this.saveColumnState();
+    this.columnsContainer.innerHTML = '';
     this.updateAuthButton();
+    this.render();
   }
 
   async saveToCloud() {

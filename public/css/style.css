@@ -304,6 +304,46 @@ body {
   line-height: 1.8;
 }
 
+.welcome-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.welcome-logo {
+  filter: drop-shadow(0 0 30px rgba(124, 125, 255, 0.3));
+  margin-bottom: 0.5rem;
+}
+.welcome-title {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #a78bfa, #7c7dff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+.welcome-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted) !important;
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+.welcome-message {
+  font-size: 1rem;
+  color: var(--text-secondary) !important;
+  margin: 0.5rem 0 1rem;
+  line-height: 1.4;
+}
+
+.add-account-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
 /* ===== Columns Layout - Horizontal Scroll ===== */
 .columns-container {
   display: flex;
