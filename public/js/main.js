@@ -839,12 +839,15 @@ class StarShipApp {
       });
 
       // Deduplicate posts by canonical URI (same post seen from different accounts)
+      // Renotes/reblogs are kept as separate timeline entries from the original
       if (accounts.length > 1) {
         const seen = new Map(); // key -> index in deduped
         const deduped = [];
         for (const post of allPosts) {
           const displayPost = post.reblog || post;
-          const key = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
+          const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
+          // Renotes/reblogs get a unique key so they don't merge with the original
+          const key = post.rebloggedBy ? `reblog:${post.id}:${baseKey}` : baseKey;
           if (!seen.has(key)) {
             post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
             seen.set(key, deduped.length);
@@ -896,9 +899,11 @@ class StarShipApp {
         const newPosts = allPosts.filter(p => {
           // Check platform:id
           if (existingKeys.has(`${p.platform}:${p.id}`)) return false;
-          // Check canonicalUri
-          const displayPost = p.reblog || p;
-          if (displayPost.canonicalUri && existingKeys.has(`uri:${displayPost.canonicalUri}`)) return false;
+          // For non-renote posts, also check canonicalUri to avoid duplicates
+          if (!p.rebloggedBy) {
+            const displayPost = p.reblog || p;
+            if (displayPost.canonicalUri && existingKeys.has(`uri:${displayPost.canonicalUri}`)) return false;
+          }
           return true;
         });
 
@@ -1174,6 +1179,8 @@ class StarShipApp {
 
     // Look up cached post to check current fav/boost state
     const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    // For renotes/reblogs, actions target the original post
+    const actionPostId = cachedPost?.reblog?.id || postId;
 
     try {
       // Immediate visual feedback: add processing state
@@ -1184,16 +1191,16 @@ class StarShipApp {
         if (alreadyFaved) {
           // Unlike / unreact
           if (accountPlatform === 'mastodon') {
-            await client.unfavourite(postId);
+            await client.unfavourite(actionPostId);
           } else {
-            await client.deleteReaction(postId);
+            await client.deleteReaction(actionPostId);
           }
           btnElement.classList.remove('processing', 'active');
         } else {
           if (accountPlatform === 'mastodon') {
-            await client.favourite(postId);
+            await client.favourite(actionPostId);
           } else {
-            await client.createReaction(postId, '❤');
+            await client.createReaction(actionPostId, '❤');
           }
           btnElement.classList.remove('processing');
           btnElement.classList.add('active', 'just-activated');
@@ -1210,9 +1217,9 @@ class StarShipApp {
           if (cachedPost) cachedPost.reblogged = false;
         } else {
           if (accountPlatform === 'mastodon') {
-            await client.reblog(postId);
+            await client.reblog(actionPostId);
           } else {
-            await client.renote(postId);
+            await client.renote(actionPostId);
           }
           btnElement.classList.remove('processing');
           btnElement.classList.add('active', 'just-activated');
@@ -1232,7 +1239,7 @@ class StarShipApp {
         btnElement.classList.remove('processing');
         // Small delay to ensure any previous picker (account picker) is fully cleaned up
         await new Promise(r => setTimeout(r, 50));
-        await this.showReactionPicker(btnElement, postId, platform, accountId);
+        await this.showReactionPicker(btnElement, actionPostId, platform, accountId);
         return;
       }
 
