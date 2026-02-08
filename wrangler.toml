@@ -19,3 +19,9 @@ directory = "./public"
 binding = "FEDI_ACCOUNTS"
 database_name = "fedi-accounts"
 database_id = "01f5e825-6777-4b3e-8716-2c02fe91555a"
+
+# Cloudflare Turnstile (회원가입 인간 확인)
+# 대시보드 > Turnstile에서 키 생성 후 아래에 입력
+# TURNSTILE_SECRET은 wrangler secret으로 설정: wrangler secret put TURNSTILE_SECRET
+[vars]
+TURNSTILE_SITE_KEY = ""

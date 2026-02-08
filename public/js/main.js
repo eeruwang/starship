@@ -34,6 +34,10 @@ class StarShipApp {
     this.bindEvents();
     this.render();
     this.startAutoRefresh();
+    this._siteInfo = { registrationOpen: true, turnstileSiteKey: null };
+    this._turnstileWidgetId = null;
+    this._turnstileToken = null;
+    this.fetchSiteInfo();
     this.checkAuth();
   }
 
@@ -2603,15 +2607,22 @@ class StarShipApp {
       const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
       const data = await res.json();
       if (data.loggedIn) {
-        this._currentUser = { username: data.username };
+        this._currentUser = { username: data.username, role: data.role };
         this.updateAuthButton();
-        // Load cloud data on login
         await this.loadCloudData();
       }
     } catch {}
   }
 
+  async fetchSiteInfo() {
+    try {
+      const res = await fetch('/api/site-info');
+      this._siteInfo = await res.json();
+    } catch {}
+  }
+
   updateAuthButton() {
+    const isAdmin = this._currentUser?.role === 'admin';
     if (this._currentUser) {
       this.btnAuth.textContent = this._currentUser.username;
       this.btnAuth.classList.add('logged-in');
@@ -2622,6 +2633,11 @@ class StarShipApp {
       this.btnAuth.classList.remove('logged-in');
       this.btnAuth.title = '로그인';
     }
+    // Show/hide admin items
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = isAdmin ? '' : 'none';
+    });
+    if (isAdmin) this.updateAdminUI();
   }
 
   handleAuthButtonClick() {
@@ -2699,11 +2715,40 @@ class StarShipApp {
       case 'import-data':
         document.getElementById('import-file-input').click();
         break;
+      case 'toggle-registration':
+        await this.toggleRegistration();
+        break;
       case 'logout':
         if (confirm('로그아웃 하시겠습니까?')) {
           await this.logout();
         }
         break;
+    }
+  }
+
+  async toggleRegistration() {
+    const newVal = !this._siteInfo.registrationOpen;
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ registration_open: String(newVal) }),
+      });
+      this._siteInfo.registrationOpen = newVal;
+      this.updateAdminUI();
+    } catch {}
+  }
+
+  updateAdminUI() {
+    const text = document.getElementById('toggle-reg-text');
+    const icon = document.querySelector('#btn-toggle-reg svg line');
+    if (this._siteInfo.registrationOpen) {
+      text.textContent = '회원가입 닫기';
+      if (icon) icon.setAttribute('x1', '23');
+    } else {
+      text.textContent = '회원가입 열기';
+      if (icon) icon.setAttribute('x1', '20');
     }
   }
 
@@ -2714,13 +2759,46 @@ class StarShipApp {
 
   updateAuthModal() {
     const isLogin = this._authMode === 'login';
+    const regClosed = !isLogin && !this._siteInfo.registrationOpen;
     this.authModalTitle.textContent = isLogin ? '로그인' : '회원가입';
-    this.authSubtitle.textContent = isLogin ? 'StarShip에 오신 것을 환영합니다' : '새 계정을 만들어보세요';
+    this.authSubtitle.textContent = isLogin ? 'StarShip에 오신 것을 환영합니다'
+      : regClosed ? '현재 회원가입이 비활성화되어 있습니다' : '새 계정을 만들어보세요';
     this.btnAuthSubmit.textContent = isLogin ? '로그인' : '가입하기';
+    this.btnAuthSubmit.disabled = regClosed;
     this.authSwitchText.textContent = isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?';
     this.btnAuthSwitch.textContent = isLogin ? '회원가입' : '로그인';
     this.authError.style.display = 'none';
     this.authPassword.autocomplete = isLogin ? 'current-password' : 'new-password';
+    // Turnstile
+    const container = document.getElementById('turnstile-container');
+    if (!isLogin && this._siteInfo.turnstileSiteKey && !regClosed) {
+      container.style.display = 'flex';
+      this.renderTurnstile();
+    } else {
+      container.style.display = 'none';
+      this.removeTurnstile();
+    }
+  }
+
+  renderTurnstile() {
+    if (this._turnstileWidgetId != null || !window.turnstile) return;
+    const container = document.getElementById('turnstile-container');
+    container.innerHTML = '';
+    this._turnstileToken = null;
+    this._turnstileWidgetId = window.turnstile.render(container, {
+      sitekey: this._siteInfo.turnstileSiteKey,
+      theme: 'dark',
+      callback: (token) => { this._turnstileToken = token; },
+      'expired-callback': () => { this._turnstileToken = null; },
+    });
+  }
+
+  removeTurnstile() {
+    if (this._turnstileWidgetId != null && window.turnstile) {
+      window.turnstile.remove(this._turnstileWidgetId);
+      this._turnstileWidgetId = null;
+      this._turnstileToken = null;
+    }
   }
 
   async handleAuthSubmit() {
@@ -2741,17 +2819,25 @@ class StarShipApp {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username, password,
+          ...(this._authMode === 'register' && this._turnstileToken ? { turnstileToken: this._turnstileToken } : {}),
+        }),
       });
       const data = await res.json();
 
       if (!res.ok) {
         this.authError.textContent = data.error || '오류가 발생했습니다';
         this.authError.style.display = 'block';
+        if (window.turnstile && this._turnstileWidgetId != null) {
+          window.turnstile.reset(this._turnstileWidgetId);
+          this._turnstileToken = null;
+        }
         return;
       }
 
-      this._currentUser = { username: data.username };
+      this.removeTurnstile();
+      this._currentUser = { username: data.username, role: data.role || 'user' };
       this.updateAuthButton();
       this.closeModal(this.modalAuth);
       this.authUsername.value = '';

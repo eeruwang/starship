@@ -1191,6 +1191,21 @@ textarea.input {
   margin: 0.3rem 0;
 }
 
+.user-menu-label {
+  padding: 0.35rem 0.7rem 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#turnstile-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
 /* ===== Auth Modal ===== */
 .modal-auth {
   max-width: 380px;

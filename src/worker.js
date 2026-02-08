@@ -9,6 +9,7 @@
  */
 
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
+const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 export default {
   async fetch(request, env) {
@@ -44,6 +45,7 @@ async function ensureTables(db) {
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       salt TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
       created_at TEXT DEFAULT (datetime('now'))
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS sessions (
@@ -60,7 +62,18 @@ async function ensureTables(db) {
       PRIMARY KEY (user_id, key),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS site_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )`),
   ]);
+  // Migrate: add role column if missing
+  try { await db.prepare("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'").run(); } catch {}
+  // Auto-promote first user to admin
+  const first = await db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').first();
+  if (first) {
+    await db.prepare("UPDATE users SET role = 'admin' WHERE id = ? AND role != 'admin'").bind(first.id).run();
+  }
 }
 
 // ===== Auth Helpers =====
@@ -89,7 +102,7 @@ async function getSessionUser(request, db) {
   if (!match) return null;
   const token = match[1];
   const row = await db.prepare(
-    `SELECT u.id, u.username FROM sessions s JOIN users u ON s.user_id = u.id
+    `SELECT u.id, u.username, u.role FROM sessions s JOIN users u ON s.user_id = u.id
      WHERE s.token = ? AND s.expires_at > datetime('now')`
   ).bind(token).first();
   return row || null;
@@ -102,7 +115,7 @@ async function handleApi(request, url, env) {
   const path = url.pathname;
 
   if (path === '/api/auth/register' && request.method === 'POST') {
-    return handleRegister(request, db);
+    return handleRegister(request, db, env);
   }
   if (path === '/api/auth/login' && request.method === 'POST') {
     return handleLogin(request, db);
@@ -119,14 +132,33 @@ async function handleApi(request, url, env) {
   if (path === '/api/sync/load' && request.method === 'GET') {
     return handleSyncLoad(request, db);
   }
+  // Admin endpoints
+  if (path === '/api/admin/settings' && request.method === 'GET') {
+    return handleAdminGetSettings(request, db);
+  }
+  if (path === '/api/admin/settings' && request.method === 'POST') {
+    return handleAdminSaveSettings(request, db);
+  }
+  // Public: get registration status & turnstile site key
+  if (path === '/api/site-info' && request.method === 'GET') {
+    return handleSiteInfo(db, env);
+  }
 
   return jsonResponse({ error: 'Not found' }, 404);
 }
 
 // ===== Auth Endpoints =====
 
-async function handleRegister(request, db) {
-  const { username, password } = await request.json();
+async function handleRegister(request, db, env) {
+  const { username, password, turnstileToken } = await request.json();
+
+  // Check if registration is open
+  const regSetting = await db.prepare("SELECT value FROM site_settings WHERE key = 'registration_open'").first();
+  const registrationOpen = regSetting ? regSetting.value === 'true' : true; // default open
+  if (!registrationOpen) {
+    return jsonResponse({ error: '현재 회원가입이 비활성화되어 있습니다' }, 403);
+  }
+
   if (!username || !password) {
     return jsonResponse({ error: '아이디와 비밀번호를 입력해주세요' }, 400);
   }
@@ -135,6 +167,23 @@ async function handleRegister(request, db) {
   }
   if (password.length < 6) {
     return jsonResponse({ error: '비밀번호는 6자 이상이어야 합니다' }, 400);
+  }
+
+  // Verify Turnstile
+  const turnstileSecret = env.TURNSTILE_SECRET;
+  if (turnstileSecret) {
+    if (!turnstileToken) {
+      return jsonResponse({ error: '인간 확인을 완료해주세요' }, 400);
+    }
+    const verifyRes = await fetch(TURNSTILE_VERIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret: turnstileSecret, response: turnstileToken }),
+    });
+    const verifyData = await verifyRes.json();
+    if (!verifyData.success) {
+      return jsonResponse({ error: '인간 확인에 실패했습니다. 다시 시도해주세요' }, 403);
+    }
   }
 
   const existing = await db.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
@@ -200,7 +249,7 @@ async function handleMe(request, db) {
   if (!user) {
     return jsonResponse({ loggedIn: false }, 200);
   }
-  return jsonResponse({ loggedIn: true, username: user.username });
+  return jsonResponse({ loggedIn: true, username: user.username, role: user.role });
 }
 
 // ===== Sync Endpoints =====
@@ -235,6 +284,42 @@ async function handleSyncLoad(request, db) {
     try { data[row.key] = JSON.parse(row.value); } catch { data[row.key] = row.value; }
   }
   return jsonResponse(data);
+}
+
+// ===== Admin Endpoints =====
+
+async function handleAdminGetSettings(request, db) {
+  const user = await getSessionUser(request, db);
+  if (!user || user.role !== 'admin') return jsonResponse({ error: '권한이 없습니다' }, 403);
+
+  const rows = await db.prepare('SELECT key, value FROM site_settings').all();
+  const settings = {};
+  for (const row of rows.results) settings[row.key] = row.value;
+  return jsonResponse(settings);
+}
+
+async function handleAdminSaveSettings(request, db) {
+  const user = await getSessionUser(request, db);
+  if (!user || user.role !== 'admin') return jsonResponse({ error: '권한이 없습니다' }, 403);
+
+  const body = await request.json();
+  const stmts = [];
+  for (const [key, value] of Object.entries(body)) {
+    stmts.push(
+      db.prepare('INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)').bind(key, String(value))
+    );
+  }
+  if (stmts.length > 0) await db.batch(stmts);
+  return jsonResponse({ ok: true });
+}
+
+async function handleSiteInfo(db, env) {
+  const regSetting = await db.prepare("SELECT value FROM site_settings WHERE key = 'registration_open'").first();
+  const registrationOpen = regSetting ? regSetting.value === 'true' : true;
+  return jsonResponse({
+    registrationOpen,
+    turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
+  });
 }
 
 // ===== Helpers =====
