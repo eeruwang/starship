@@ -19,6 +19,11 @@ export const iconLink = svg('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2
 
 // Notification icons
 export const iconHeartFill = svgFill('<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>', 18);
+export const iconStarFill = svgFill('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>', 18);
+
+// Small inline icons for reaction badges
+export const iconHeartSmall = svgFill('<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>', 14);
+export const iconStarSmall = svgFill('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>', 14);
 export const iconReplyNotif = svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 18);
 export const iconBoostNotif = svg('<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>', 18);
 export const iconUserFollow = svg('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>', 18);
@@ -44,7 +49,12 @@ export const iconImage = svg('<rect x="3" y="3" width="18" height="18" rx="2" ry
 // Map for notification types
 export function getNotifIcon(type, reaction) {
   switch (type) {
-    case 'reaction': return reaction || iconHeartFill;
+    case 'reaction': {
+      // Replace common unicode reactions with styled SVG icons
+      if (!reaction || reaction === '❤' || reaction === '❤️') return iconHeartFill;
+      if (reaction === '⭐' || reaction === '⭐️') return iconStarFill;
+      return reaction;
+    }
     case 'reply': return iconReplyNotif;
     case 'renote': case 'reblog': return iconBoostNotif;
     case 'quote': return iconReplyNotif;

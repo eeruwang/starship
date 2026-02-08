@@ -1190,6 +1190,8 @@ class StarShipApp {
             await client.unreblog(postId);
           }
           btnElement.classList.remove('processing', 'active');
+          // Update cache
+          if (cachedPost) cachedPost.reblogged = false;
         } else {
           if (accountPlatform === 'mastodon') {
             await client.reblog(postId);
@@ -1199,6 +1201,8 @@ class StarShipApp {
           btnElement.classList.remove('processing');
           btnElement.classList.add('active', 'just-activated');
           setTimeout(() => btnElement.classList.remove('just-activated'), 600);
+          // Update cache
+          if (cachedPost) cachedPost.reblogged = true;
         }
       } else if (action === 'reply') {
         btnElement.classList.remove('processing');
@@ -1244,11 +1248,15 @@ class StarShipApp {
       // Find and update all matching cards in the DOM
       const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
       for (const card of cards) {
-        // Preserve mergedAccounts if present
+        // Preserve state from cache
         const oldCacheKey = `${platform}:${postId}`;
         const cachedPost = this.postCache.get(oldCacheKey);
         if (cachedPost?.mergedAccounts) {
           updatedPost.mergedAccounts = cachedPost.mergedAccounts;
+        }
+        // Preserve reblogged state for Misskey (API doesn't report it)
+        if (account.platform !== 'mastodon' && cachedPost?.reblogged) {
+          updatedPost.reblogged = true;
         }
 
         const newCard = renderPost(updatedPost);

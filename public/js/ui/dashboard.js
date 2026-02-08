@@ -6,6 +6,7 @@ import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
   iconQuote, iconSmile,
+  iconHeartSmall, iconStarSmall,
   getNotifIcon,
 } from './icons.js';
 
@@ -180,6 +181,7 @@ export function renderNotification(notif) {
   if (notif.themeColor) card.style.borderLeftColor = notif.themeColor;
 
   let iconHtml;
+  const notifTypeClass = `notif-type-${notif.type}`;
   if (notif.reactionEmojiUrl) {
     iconHtml = `<img class="notif-custom-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.reactionEmoji || '')}" title="${escapeHtml(notif.reactionEmoji || '')}" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
   } else {
@@ -197,11 +199,11 @@ export function renderNotification(notif) {
     html += `
       <div class="notif-actor-wrap">
         <img class="notif-avatar" src="${escapeHtml(notif.actor.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-        <span class="notif-type-badge">${iconHtml}</span>
+        <span class="notif-type-badge ${notifTypeClass}">${iconHtml}</span>
       </div>
     `;
   } else {
-    html += `<div class="notif-icon">${iconHtml}</div>`;
+    html += `<div class="notif-icon ${notifTypeClass}">${iconHtml}</div>`;
   }
 
   html += `
@@ -354,6 +356,13 @@ function formatNumber(n) {
   return String(n);
 }
 
+const REACTION_ICON_MAP = {
+  '❤': () => `<span class="reaction-icon reaction-heart">${iconHeartSmall}</span>`,
+  '❤️': () => `<span class="reaction-icon reaction-heart">${iconHeartSmall}</span>`,
+  '⭐': () => `<span class="reaction-icon reaction-star">${iconStarSmall}</span>`,
+  '⭐️': () => `<span class="reaction-icon reaction-star">${iconStarSmall}</span>`,
+};
+
 function resolveReactionHtml(reaction, reactionEmojis, emojis, instanceUrl) {
   // Check if it's a custom emoji (:name: or :name@.:)
   const match = reaction.match(/^:(.+):$/);
@@ -371,5 +380,8 @@ function resolveReactionHtml(reaction, reactionEmojis, emojis, instanceUrl) {
       return `<img class="custom-emoji" src="${escapeHtml(instanceUrl)}/emoji/${encodeURIComponent(baseName)}.webp" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
     }
   }
+  // Replace common unicode reactions with themed SVG icons
+  const iconFn = REACTION_ICON_MAP[reaction];
+  if (iconFn) return iconFn();
   return reaction;
 }

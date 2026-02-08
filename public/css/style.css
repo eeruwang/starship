@@ -798,6 +798,43 @@ body {
   display: block;
 }
 
+/* Notification icon type colors */
+.notif-type-reaction .notif-svg-icon,
+.notif-type-favourite .notif-svg-icon {
+  color: #e0245e;
+}
+
+.notif-type-renote .notif-svg-icon,
+.notif-type-reblog .notif-svg-icon {
+  color: #2ecc71;
+}
+
+.notif-type-follow .notif-svg-icon,
+.notif-type-followRequestAccepted .notif-svg-icon {
+  color: #7c7dff;
+}
+
+/* Reaction badge SVG icons */
+.reaction-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.reaction-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.reaction-heart {
+  color: #e0245e;
+}
+
+.reaction-star {
+  color: #f5a623;
+}
+
+
 .notif-emoji {
   font-size: 1.1rem;
   line-height: 1;
@@ -2177,6 +2214,18 @@ textarea.input {
 .post-action[data-action="boost"].active {
   color: #2ecc71;
   background: rgba(46, 204, 113, 0.15);
+}
+
+.post-action[data-action="boost"].just-activated {
+  animation: boostPulse 0.6s ease;
+}
+
+@keyframes boostPulse {
+  0% { transform: scale(1); color: inherit; }
+  25% { transform: scale(1.5); color: #2ecc71; }
+  50% { transform: scale(0.9) rotate(10deg); color: #2ecc71; }
+  75% { transform: scale(1.1) rotate(-5deg); }
+  100% { transform: scale(1); }
 }
 
 .post-action[data-action="boost"].active .action-icon svg {
