@@ -16,6 +16,7 @@ class StarShipApp {
     this.focusedColumnIndex = 0;
     this.postCache = new Map(); // key: `${platform}:${id}`, value: post
     this.POST_CACHE_MAX = 500;
+    this._columnPagination = new WeakMap(); // column-content element -> { oldestIds: Map<accountId, postId>, loading: bool, hasMore: bool }
     this.composeFiles = [];
     this.composeSelectedAccounts = new Set();
 
@@ -293,6 +294,16 @@ class StarShipApp {
         this.columnsContainer.scrollLeft += e.deltaY;
       }
     }, { passive: false });
+
+    // Infinite scroll: load older posts when near bottom of a column
+    this.columnsContainer.addEventListener('scroll', (e) => {
+      const columnContent = e.target;
+      if (!columnContent.classList.contains('column-content')) return;
+      const distFromBottom = columnContent.scrollHeight - columnContent.scrollTop - columnContent.clientHeight;
+      if (distFromBottom < 300) {
+        this.loadOlderPosts(columnContent);
+      }
+    }, { passive: true, capture: true });
 
     // Arrow key navigation
     document.addEventListener('keydown', (e) => {
@@ -871,6 +882,22 @@ class StarShipApp {
       // Cache posts
       this.cachePosts(allPosts);
 
+      // Track oldest post IDs per account for pagination
+      const oldestIds = new Map();
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
+          const posts = result.value;
+          const last = posts[posts.length - 1];
+          oldestIds.set(last.accountId, last.id);
+        }
+      }
+      this._columnPagination.set(container, {
+        oldestIds,
+        accounts,
+        loading: false,
+        hasMore: allPosts.length > 0,
+      });
+
       if (allPosts.length === 0) {
         if (isFirstLoad) {
           container.innerHTML = '';
@@ -939,6 +966,116 @@ class StarShipApp {
       if (isFirstLoad) {
         container.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
       }
+    }
+  }
+
+  async loadOlderPosts(container) {
+    const pagination = this._columnPagination.get(container);
+    if (!pagination || pagination.loading || !pagination.hasMore) return;
+
+    pagination.loading = true;
+
+    // Show loading indicator at bottom
+    let loadingEl = container.querySelector('.load-more-spinner');
+    if (!loadingEl) {
+      loadingEl = document.createElement('div');
+      loadingEl.className = 'load-more-spinner';
+      loadingEl.innerHTML = '<div class="spinner"></div>';
+      container.appendChild(loadingEl);
+    }
+
+    try {
+      const { accounts, oldestIds } = pagination;
+      const allPosts = [];
+
+      const results = await Promise.allSettled(
+        accounts.map(async (account) => {
+          const client = this.store.getClient(account.id);
+          if (!client) return [];
+          const untilId = oldestIds.get(account.id);
+          if (!untilId) return [];
+
+          try {
+            const items = await client.getHomeTimeline(this.settings.postsCount, untilId);
+            return items.map(item => {
+              const post = client.normalizePost(item);
+              post.accountId = account.id;
+              post.accountPlatform = account.platform;
+              post.themeColor = account.themeColor || null;
+              return post;
+            });
+          } catch (err) {
+            console.error(`Older posts error for ${account.label}:`, err);
+            return [];
+          }
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          allPosts.push(...result.value);
+        }
+      }
+
+      // Sort by time descending
+      allPosts.sort((a, b) => b.createdAt - a.createdAt);
+
+      // Deduplicate among fetched posts (multi-account)
+      if (accounts.length > 1) {
+        const seen = new Map();
+        const deduped = [];
+        for (const post of allPosts) {
+          const displayPost = post.reblog || post;
+          const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
+          const key = post.rebloggedBy ? `reblog:${post.id}:${baseKey}` : baseKey;
+          if (!seen.has(key)) {
+            post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
+            seen.set(key, deduped.length);
+            deduped.push(post);
+          } else {
+            const idx = seen.get(key);
+            const existing = deduped[idx];
+            if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
+              existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
+            }
+          }
+        }
+        allPosts.length = 0;
+        allPosts.push(...deduped);
+      }
+
+      // Filter out posts already in the DOM
+      const existingKeys = new Set();
+      for (const card of container.querySelectorAll('.post-card')) {
+        existingKeys.add(`${card.dataset.platform}:${card.dataset.postId}`);
+      }
+      const newPosts = allPosts.filter(p => !existingKeys.has(`${p.platform}:${p.id}`));
+
+      // Update oldest IDs for next pagination
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
+          const posts = result.value;
+          const last = posts[posts.length - 1];
+          oldestIds.set(last.accountId, last.id);
+        }
+      }
+
+      // Cache and append
+      this.cachePosts(newPosts);
+
+      if (newPosts.length === 0) {
+        pagination.hasMore = false;
+      } else {
+        for (const post of newPosts) {
+          container.appendChild(renderPost(post));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load older posts:', err);
+    } finally {
+      pagination.loading = false;
+      const spinner = container.querySelector('.load-more-spinner');
+      if (spinner) spinner.remove();
     }
   }
 

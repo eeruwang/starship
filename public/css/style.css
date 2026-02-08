@@ -1123,6 +1123,19 @@ textarea.input {
   to { transform: rotate(360deg); }
 }
 
+.load-more-spinner {
+  display: flex;
+  justify-content: center;
+  padding: 1.2rem;
+  flex-shrink: 0;
+}
+
+.load-more-spinner .spinner {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;
