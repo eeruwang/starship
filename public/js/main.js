@@ -150,6 +150,9 @@ class StarShipApp {
     this.btnAddAccount.addEventListener('click', () => this.openAddAccountModal());
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
 
+    // Header compose button
+    document.getElementById('btn-compose-header').addEventListener('click', () => this.openComposeModal());
+
     // Refresh (full reload: re-fetch profiles + all content)
     this.btnRefreshAll.addEventListener('click', () => this.refreshAll(true));
 
@@ -187,7 +190,7 @@ class StarShipApp {
     document.querySelectorAll('[data-close-modal]').forEach(btn => {
       btn.addEventListener('click', () => {
         const modalId = btn.dataset.closeModal;
-        document.getElementById(modalId).style.display = 'none';
+        this.closeModal(document.getElementById(modalId));
         if (modalId === 'modal-compose') this.closeComposeEmojiPicker();
       });
     });
@@ -196,7 +199,7 @@ class StarShipApp {
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
-          overlay.style.display = 'none';
+          this.closeModal(overlay);
           this.closeComposeEmojiPicker();
         }
       });
@@ -361,7 +364,7 @@ class StarShipApp {
       }
 
       if (e.key === 'Escape') {
-        document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+        document.querySelectorAll('.modal-overlay').forEach(m => this.closeModal(m));
         this.closeLightbox();
         this.closeAccountPicker();
         this.closeReactionPopup();
@@ -556,18 +559,6 @@ class StarShipApp {
       }
     }
 
-    // "새 글" button
-    const sep2 = document.createElement('div');
-    sep2.className = 'col-toggle-separator';
-    this.toggleBar.appendChild(sep2);
-
-    const composeToggle = document.createElement('button');
-    composeToggle.className = 'col-toggle';
-    composeToggle.dataset.toggleType = 'compose';
-    composeToggle.textContent = '+ 새 글';
-    composeToggle.style.background = 'var(--accent-primary)';
-    composeToggle.style.color = 'white';
-    this.toggleBar.appendChild(composeToggle);
   }
 
   handleToggleClick(toggle) {
@@ -1872,7 +1863,7 @@ class StarShipApp {
       this.composeTitle.textContent = '새 글 작성';
     }
 
-    this.modalCompose.style.display = 'flex';
+    this.openModal(this.modalCompose);
     this.composeText.focus();
   }
 
@@ -2122,7 +2113,7 @@ class StarShipApp {
 
     if (errors.length < selectedIds.length) {
       // At least one succeeded
-      this.modalCompose.style.display = 'none';
+      this.closeModal(this.modalCompose);
       this.refreshAll();
     }
 
@@ -2163,7 +2154,7 @@ class StarShipApp {
     this.detectedPlatformEl = document.getElementById('detected-platform');
     this.detectedPlatformEl.style.display = 'none';
     document.getElementById('manual-token-section').removeAttribute('open');
-    this.modalAddAccount.style.display = 'flex';
+    this.openModal(this.modalAddAccount);
     this.instanceUrl.focus();
   }
 
@@ -2324,7 +2315,7 @@ class StarShipApp {
       const result = await waitForAuthCallback();
 
       await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken);
-      this.modalAddAccount.style.display = 'none';
+      this.closeModal(this.modalAddAccount);
       this.debouncedSaveToCloud();
       this.render();
     } catch (err) {
@@ -2381,7 +2372,7 @@ class StarShipApp {
 
     try {
       await this.store.addAccount(platform, instanceUrl, accessToken, label);
-      this.modalAddAccount.style.display = 'none';
+      this.closeModal(this.modalAddAccount);
       this.debouncedSaveToCloud();
       this.render();
     } catch (err) {
@@ -2456,7 +2447,7 @@ class StarShipApp {
       }
     });
 
-    modal.style.display = 'flex';
+    this.openModal(modal);
   }
 
   // ===== Reaction Users =====
@@ -2587,6 +2578,19 @@ class StarShipApp {
 
   // ===== Helpers =====
 
+  openModal(overlay) {
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+  }
+
+  closeModal(overlay) {
+    if (!overlay || overlay.style.display === 'none') return;
+    overlay.classList.remove('visible');
+    overlay.addEventListener('transitionend', () => {
+      if (!overlay.classList.contains('visible')) overlay.style.display = 'none';
+    }, { once: true });
+  }
+
   escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -2628,29 +2632,46 @@ class StarShipApp {
     } else {
       this._authMode = 'login';
       this.updateAuthModal();
-      this.modalAuth.style.display = 'flex';
+      this.openModal(this.modalAuth);
       this.authUsername.focus();
     }
   }
 
   toggleUserMenu() {
     const menu = document.getElementById('user-menu');
-    const isOpen = menu.style.display !== 'none';
-    menu.style.display = isOpen ? 'none' : 'block';
-    if (!isOpen) {
+    const wrap = document.getElementById('user-menu-wrap');
+    const isOpen = menu.classList.contains('open');
+    if (isOpen) {
+      this.closeUserMenu();
+    } else {
+      menu.style.display = 'block';
+      requestAnimationFrame(() => menu.classList.add('open'));
+      if (this._userMenuOutsideClick) {
+        document.removeEventListener('click', this._userMenuOutsideClick, true);
+      }
       this._userMenuOutsideClick = (e) => {
-        if (!document.getElementById('user-menu-wrap').contains(e.target)) {
-          menu.style.display = 'none';
-          document.removeEventListener('click', this._userMenuOutsideClick);
-          this._userMenuOutsideClick = null;
+        if (!wrap.contains(e.target)) {
+          this.closeUserMenu();
         }
       };
-      setTimeout(() => document.addEventListener('click', this._userMenuOutsideClick), 0);
+      setTimeout(() => document.addEventListener('click', this._userMenuOutsideClick, true), 0);
+    }
+  }
+
+  closeUserMenu() {
+    const menu = document.getElementById('user-menu');
+    menu.classList.remove('open');
+    menu.addEventListener('transitionend', () => {
+      if (!menu.classList.contains('open')) menu.style.display = 'none';
+    }, { once: true });
+    if (this._userMenuOutsideClick) {
+      document.removeEventListener('click', this._userMenuOutsideClick, true);
+      this._userMenuOutsideClick = null;
     }
   }
 
   async handleUserMenuAction(action) {
-    document.getElementById('user-menu').style.display = 'none';
+    this.closeUserMenu();
     switch (action) {
       case 'sync-now':
         await this.saveToCloud();
@@ -2731,7 +2752,7 @@ class StarShipApp {
 
       this._currentUser = { username: data.username };
       this.updateAuthButton();
-      this.modalAuth.style.display = 'none';
+      this.closeModal(this.modalAuth);
       this.authUsername.value = '';
       this.authPassword.value = '';
 
