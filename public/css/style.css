@@ -1829,6 +1829,18 @@ textarea.input {
   transform: scale(1.2);
 }
 
+.reaction-picker-loading {
+  padding: 0.6rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.reaction-picker-instance-section {
+  border-top: 1px solid var(--border-color);
+}
+
 .reaction-picker-custom {
   border-top: 1px solid var(--border-color);
   padding: 0.4rem;

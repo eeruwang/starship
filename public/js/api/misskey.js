@@ -95,7 +95,22 @@ export class MisskeyClient {
   }
 
   async getEmojis() {
-    return this.request('emojis', {});
+    // emojis endpoint is public (no auth), supports GET, and may return large responses
+    // Use GET to leverage server-side caching (cacheSec: 3600)
+    const targetUrl = `${this.instanceUrl}/api/emojis`;
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error(`Emojis API error ${res.status}`);
+    const text = await res.text();
+    if (!text) return null;
+    return JSON.parse(text);
   }
 
   async getInstanceEmojis() {
@@ -108,10 +123,14 @@ export class MisskeyClient {
       } else if (res && Array.isArray(res.emojis)) {
         this._emojiCache = res.emojis;
       } else {
-        this._emojiCache = [];
+        console.warn('Unexpected emojis response:', typeof res, res ? Object.keys(res) : res);
+        // Don't cache failures — return empty but allow retry
+        return [];
       }
-    } catch {
-      this._emojiCache = [];
+    } catch (err) {
+      console.error('Failed to fetch instance emojis:', err);
+      // Don't cache failures — return empty but allow retry
+      return [];
     }
     return this._emojiCache;
   }
