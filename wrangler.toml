@@ -14,9 +14,8 @@ directory = "./public"
 # pattern = "fediboard.example.com/*"
 # zone_name = "example.com"
 
-# 환경별 설정 (선택사항)
-# [env.production]
-# name = "fediboard-prod"
-
-# [env.staging]
-# name = "fediboard-staging"
+# D1 데이터베이스 (회원/설정 저장)
+[[d1_databases]]
+binding = "FEDI_ACCOUNTS"
+database_name = "starship-db"
+database_id = "starship-db"

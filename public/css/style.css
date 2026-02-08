@@ -1102,6 +1102,52 @@ textarea.input {
   margin-top: 0.5rem;
 }
 
+/* ===== Auth Modal ===== */
+.modal-small {
+  max-width: 360px;
+}
+
+.btn-block {
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.btn-link:hover {
+  color: #a0a1ff;
+}
+
+.auth-switch {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.auth-switch .btn-link {
+  margin-left: 0.3rem;
+}
+
+#btn-auth.logged-in {
+  background: rgba(124, 125, 255, 0.15);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.btn-small {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.7rem;
+}
+
 /* ===== Loading ===== */
 .loading-spinner {
   display: flex;

@@ -3,81 +3,297 @@
  *
  * 역할:
  * 1. 정적 파일 서빙 (wrangler assets 바인딩이 자동 처리)
- * 2. /proxy/* 경로로 들어오는 요청을 Fediverse 인스턴스에 프록시
- *    → 브라우저 CORS 제한을 우회합니다.
- *
- * 프록시 사용법:
- *   GET  /proxy?url=https://mastodon.social/api/v1/timelines/home&token=xxx
- *   POST /proxy?url=https://misskey.io/api/notes/timeline  (body 그대로 전달)
+ * 2. /proxy 경로로 들어오는 요청을 Fediverse 인스턴스에 프록시
+ * 3. /api/auth/* 회원가입/로그인/세션 관리
+ * 4. /api/sync/* 계정·설정 클라우드 저장/불러오기
  */
+
+const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // API 프록시 요청 처리
+    // CORS preflight for all /api/ routes
+    if (request.method === 'OPTIONS' && (url.pathname.startsWith('/api/') || url.pathname === '/proxy')) {
+      return new Response(null, { status: 204, headers: corsHeaders() });
+    }
+
+    // Proxy
     if (url.pathname === '/proxy') {
       return handleProxy(request, url);
     }
 
-    // 그 외: 정적 파일은 assets 바인딩이 자동 처리
-    // (wrangler.toml의 [assets] 설정에 의해)
+    // Auth & sync API
+    if (url.pathname.startsWith('/api/')) {
+      await ensureTables(env.FEDI_ACCOUNTS);
+      return handleApi(request, url, env);
+    }
+
+    // Static files
     return env.ASSETS.fetch(request);
   },
 };
 
-async function handleProxy(request, url) {
-  // CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders(),
-    });
+// ===== D1 Schema =====
+
+async function ensureTables(db) {
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS user_data (
+      user_id INTEGER NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, key),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+  ]);
+}
+
+// ===== Auth Helpers =====
+
+async function hashPassword(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial, 256
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+
+function generateToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function getSessionUser(request, db) {
+  const cookie = request.headers.get('Cookie') || '';
+  const match = cookie.match(/starship_session=([a-f0-9]+)/);
+  if (!match) return null;
+  const token = match[1];
+  const row = await db.prepare(
+    `SELECT u.id, u.username FROM sessions s JOIN users u ON s.user_id = u.id
+     WHERE s.token = ? AND s.expires_at > datetime('now')`
+  ).bind(token).first();
+  return row || null;
+}
+
+// ===== API Router =====
+
+async function handleApi(request, url, env) {
+  const db = env.FEDI_ACCOUNTS;
+  const path = url.pathname;
+
+  if (path === '/api/auth/register' && request.method === 'POST') {
+    return handleRegister(request, db);
+  }
+  if (path === '/api/auth/login' && request.method === 'POST') {
+    return handleLogin(request, db);
+  }
+  if (path === '/api/auth/logout' && request.method === 'POST') {
+    return handleLogout(request, db);
+  }
+  if (path === '/api/auth/me' && request.method === 'GET') {
+    return handleMe(request, db);
+  }
+  if (path === '/api/sync/save' && request.method === 'POST') {
+    return handleSyncSave(request, db);
+  }
+  if (path === '/api/sync/load' && request.method === 'GET') {
+    return handleSyncLoad(request, db);
   }
 
+  return jsonResponse({ error: 'Not found' }, 404);
+}
+
+// ===== Auth Endpoints =====
+
+async function handleRegister(request, db) {
+  const { username, password } = await request.json();
+  if (!username || !password) {
+    return jsonResponse({ error: '아이디와 비밀번호를 입력해주세요' }, 400);
+  }
+  if (username.length < 2 || username.length > 30) {
+    return jsonResponse({ error: '아이디는 2~30자로 입력해주세요' }, 400);
+  }
+  if (password.length < 6) {
+    return jsonResponse({ error: '비밀번호는 6자 이상이어야 합니다' }, 400);
+  }
+
+  const existing = await db.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
+  if (existing) {
+    return jsonResponse({ error: '이미 사용 중인 아이디입니다' }, 409);
+  }
+
+  const salt = generateToken();
+  const passwordHash = await hashPassword(password, salt);
+  const result = await db.prepare(
+    'INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)'
+  ).bind(username, passwordHash, salt).run();
+
+  const userId = result.meta.last_row_id;
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + SESSION_TTL * 1000).toISOString();
+  await db.prepare(
+    'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)'
+  ).bind(token, userId, expiresAt).run();
+
+  return jsonResponse({ ok: true, username }, 201, sessionCookie(token));
+}
+
+async function handleLogin(request, db) {
+  const { username, password } = await request.json();
+  if (!username || !password) {
+    return jsonResponse({ error: '아이디와 비밀번호를 입력해주세요' }, 400);
+  }
+
+  const user = await db.prepare('SELECT * FROM users WHERE username = ?').bind(username).first();
+  if (!user) {
+    return jsonResponse({ error: '아이디 또는 비밀번호가 올바르지 않습니다' }, 401);
+  }
+
+  const hash = await hashPassword(password, user.salt);
+  if (hash !== user.password_hash) {
+    return jsonResponse({ error: '아이디 또는 비밀번호가 올바르지 않습니다' }, 401);
+  }
+
+  // Clean up old sessions
+  await db.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at < datetime('now')").bind(user.id).run();
+
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + SESSION_TTL * 1000).toISOString();
+  await db.prepare(
+    'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)'
+  ).bind(token, user.id, expiresAt).run();
+
+  return jsonResponse({ ok: true, username: user.username }, 200, sessionCookie(token));
+}
+
+async function handleLogout(request, db) {
+  const cookie = request.headers.get('Cookie') || '';
+  const match = cookie.match(/starship_session=([a-f0-9]+)/);
+  if (match) {
+    await db.prepare('DELETE FROM sessions WHERE token = ?').bind(match[1]).run();
+  }
+  return jsonResponse({ ok: true }, 200, 'starship_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
+}
+
+async function handleMe(request, db) {
+  const user = await getSessionUser(request, db);
+  if (!user) {
+    return jsonResponse({ loggedIn: false }, 200);
+  }
+  return jsonResponse({ loggedIn: true, username: user.username });
+}
+
+// ===== Sync Endpoints =====
+
+async function handleSyncSave(request, db) {
+  const user = await getSessionUser(request, db);
+  if (!user) return jsonResponse({ error: '로그인이 필요합니다' }, 401);
+
+  const body = await request.json();
+  // body: { accounts, settings, columnState }
+  const stmts = [];
+  for (const key of ['accounts', 'settings', 'columnState']) {
+    if (body[key] !== undefined) {
+      stmts.push(
+        db.prepare(
+          `INSERT OR REPLACE INTO user_data (user_id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))`
+        ).bind(user.id, key, JSON.stringify(body[key]))
+      );
+    }
+  }
+  if (stmts.length > 0) await db.batch(stmts);
+  return jsonResponse({ ok: true });
+}
+
+async function handleSyncLoad(request, db) {
+  const user = await getSessionUser(request, db);
+  if (!user) return jsonResponse({ error: '로그인이 필요합니다' }, 401);
+
+  const rows = await db.prepare('SELECT key, value FROM user_data WHERE user_id = ?').bind(user.id).all();
+  const data = {};
+  for (const row of rows.results) {
+    try { data[row.key] = JSON.parse(row.value); } catch { data[row.key] = row.value; }
+  }
+  return jsonResponse(data);
+}
+
+// ===== Helpers =====
+
+function sessionCookie(token) {
+  return `starship_session=${token}; Path=/; Max-Age=${SESSION_TTL}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+function jsonResponse(data, status = 200, setCookie = null) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...corsHeaders(),
+  };
+  if (setCookie) headers['Set-Cookie'] = setCookie;
+  return new Response(JSON.stringify(data), { status, headers });
+}
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// ===== Proxy =====
+
+async function handleProxy(request, url) {
   const targetUrl = url.searchParams.get('url');
   if (!targetUrl) {
     return jsonResponse({ error: 'Missing "url" query parameter' }, 400);
   }
 
-  // URL 유효성 검사
   let parsed;
-  try {
-    parsed = new URL(targetUrl);
-  } catch {
+  try { parsed = new URL(targetUrl); } catch {
     return jsonResponse({ error: 'Invalid target URL' }, 400);
   }
-
-  // HTTPS만 허용
   if (parsed.protocol !== 'https:') {
     return jsonResponse({ error: 'Only HTTPS targets are allowed' }, 400);
   }
-
-  // 허용 API 경로 패턴 검증 (보안)
   if (!isAllowedApiPath(parsed.pathname)) {
     return jsonResponse({ error: 'Blocked: path not in allowlist' }, 403);
   }
 
   try {
-    // 원본 요청의 헤더 추출 (Authorization 등)
     const proxyHeaders = new Headers();
     proxyHeaders.set('User-Agent', 'StarShip/1.0');
     proxyHeaders.set('Accept', 'application/json');
 
     const authHeader = request.headers.get('Authorization');
-    if (authHeader) {
-      proxyHeaders.set('Authorization', authHeader);
-    }
+    if (authHeader) proxyHeaders.set('Authorization', authHeader);
 
     const contentType = request.headers.get('Content-Type');
-    if (contentType) {
-      proxyHeaders.set('Content-Type', contentType);
-    }
+    if (contentType) proxyHeaders.set('Content-Type', contentType);
 
-    // 요청 본문 (POST 등)
     let body = null;
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      // For multipart form data (file uploads), pass the body as-is
       if (contentType && contentType.includes('multipart/form-data')) {
         body = await request.arrayBuffer();
       } else {
@@ -91,7 +307,6 @@ async function handleProxy(request, url) {
       body,
     });
 
-    // 응답을 클라이언트에 전달 + CORS 헤더 추가
     const responseHeaders = new Headers(proxyRes.headers);
     for (const [key, value] of Object.entries(corsHeaders())) {
       responseHeaders.set(key, value);
@@ -106,35 +321,11 @@ async function handleProxy(request, url) {
   }
 }
 
-/**
- * Fediverse API 경로만 허용 (보안을 위해)
- */
 function isAllowedApiPath(pathname) {
   const allowed = [
-    // Mastodon API
     /^\/api\/v[12]\//,
     /^\/oauth\//,
-    // Misskey / Iceshrimp / CherryPick API
     /^\/api\//,
   ];
   return allowed.some((re) => re.test(pathname));
-}
-
-function corsHeaders() {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Max-Age': '86400',
-  };
-}
-
-function jsonResponse(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      ...corsHeaders(),
-    },
-  });
 }

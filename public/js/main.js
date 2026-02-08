@@ -16,22 +16,25 @@ class StarShipApp {
     this.focusedColumnIndex = 0;
     this.postCache = new Map(); // key: `${platform}:${id}`, value: post
     this.POST_CACHE_MAX = 500;
-    this._columnPagination = new WeakMap(); // column-content element -> { oldestIds: Map<accountId, postId>, loading: bool, hasMore: bool }
+    this._columnPagination = new WeakMap();
     this.composeFiles = [];
     this.composeSelectedAccounts = new Set();
+    this._currentUser = null; // { username } or null
+    this._syncDebounce = null;
 
     // Settings
     this.settings = this.loadSettings();
     this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
     this.applySettings();
 
-    // Column state: which columns are visible
+    // Column state
     this.columnState = this.loadColumnState();
 
     this.initElements();
     this.bindEvents();
     this.render();
     this.startAutoRefresh();
+    this.checkAuth();
   }
 
   loadSettings() {
@@ -52,6 +55,7 @@ class StarShipApp {
 
   saveSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
+    this.debouncedSaveToCloud();
   }
 
   applySettings() {
@@ -84,6 +88,7 @@ class StarShipApp {
 
   saveColumnState() {
     localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(this.columnState));
+    this.debouncedSaveToCloud();
   }
 
   initElements() {
@@ -121,6 +126,18 @@ class StarShipApp {
     this.btnComposeSubmit = document.getElementById('btn-compose-submit');
     this.composeError = document.getElementById('compose-error');
 
+    // Auth modal
+    this.btnAuth = document.getElementById('btn-auth');
+    this.modalAuth = document.getElementById('modal-auth');
+    this.authModalTitle = document.getElementById('auth-modal-title');
+    this.authUsername = document.getElementById('auth-username');
+    this.authPassword = document.getElementById('auth-password');
+    this.authError = document.getElementById('auth-error');
+    this.btnAuthSubmit = document.getElementById('btn-auth-submit');
+    this.btnAuthSwitch = document.getElementById('btn-auth-switch');
+    this.authSwitchText = document.getElementById('auth-switch-text');
+    this._authMode = 'login'; // 'login' or 'register'
+
     // Lightbox
     this.lightbox = document.getElementById('lightbox');
     this.lightboxImg = document.getElementById('lightbox-img');
@@ -137,6 +154,14 @@ class StarShipApp {
 
     // Settings
     this.btnSettings.addEventListener('click', () => this.openSettingsModal());
+
+    // Auth
+    this.btnAuth.addEventListener('click', () => this.handleAuthButtonClick());
+    this.btnAuthSubmit.addEventListener('click', () => this.handleAuthSubmit());
+    this.btnAuthSwitch.addEventListener('click', () => this.toggleAuthMode());
+    this.authPassword.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.handleAuthSubmit();
+    });
 
     // Modal close
     document.querySelectorAll('[data-close-modal]').forEach(btn => {
@@ -2280,6 +2305,7 @@ class StarShipApp {
 
       await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken);
       this.modalAddAccount.style.display = 'none';
+      this.debouncedSaveToCloud();
       this.render();
     } catch (err) {
       clearPendingAuth();
@@ -2336,6 +2362,7 @@ class StarShipApp {
     try {
       await this.store.addAccount(platform, instanceUrl, accessToken, label);
       this.modalAddAccount.style.display = 'none';
+      this.debouncedSaveToCloud();
       this.render();
     } catch (err) {
       this.showAddError(`연결 실패: ${err.message}`);
@@ -2546,6 +2573,174 @@ class StarShipApp {
     div.textContent = text;
     return div.innerHTML;
   }
+
+  // ===== Auth & Cloud Sync =====
+
+  async checkAuth() {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      const data = await res.json();
+      if (data.loggedIn) {
+        this._currentUser = { username: data.username };
+        this.updateAuthButton();
+        // Load cloud data on login
+        await this.loadCloudData();
+      }
+    } catch {}
+  }
+
+  updateAuthButton() {
+    if (this._currentUser) {
+      this.btnAuth.textContent = this._currentUser.username;
+      this.btnAuth.classList.add('logged-in');
+      this.btnAuth.title = '클릭하여 로그아웃';
+    } else {
+      this.btnAuth.textContent = '로그인';
+      this.btnAuth.classList.remove('logged-in');
+      this.btnAuth.title = '로그인';
+    }
+  }
+
+  handleAuthButtonClick() {
+    if (this._currentUser) {
+      if (confirm(`${this._currentUser.username}에서 로그아웃 하시겠습니까?`)) {
+        this.logout();
+      }
+    } else {
+      this._authMode = 'login';
+      this.updateAuthModal();
+      this.modalAuth.style.display = 'flex';
+      this.authUsername.focus();
+    }
+  }
+
+  toggleAuthMode() {
+    this._authMode = this._authMode === 'login' ? 'register' : 'login';
+    this.updateAuthModal();
+  }
+
+  updateAuthModal() {
+    const isLogin = this._authMode === 'login';
+    this.authModalTitle.textContent = isLogin ? '로그인' : '회원가입';
+    this.btnAuthSubmit.textContent = isLogin ? '로그인' : '가입하기';
+    this.authSwitchText.textContent = isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?';
+    this.btnAuthSwitch.textContent = isLogin ? '회원가입' : '로그인';
+    this.authError.style.display = 'none';
+    this.authPassword.autocomplete = isLogin ? 'current-password' : 'new-password';
+  }
+
+  async handleAuthSubmit() {
+    const username = this.authUsername.value.trim();
+    const password = this.authPassword.value;
+    if (!username || !password) {
+      this.authError.textContent = '아이디와 비밀번호를 입력해주세요';
+      this.authError.style.display = 'block';
+      return;
+    }
+
+    this.btnAuthSubmit.disabled = true;
+    this.btnAuthSubmit.textContent = '처리 중...';
+
+    try {
+      const endpoint = this._authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        this.authError.textContent = data.error || '오류가 발생했습니다';
+        this.authError.style.display = 'block';
+        return;
+      }
+
+      this._currentUser = { username: data.username };
+      this.updateAuthButton();
+      this.modalAuth.style.display = 'none';
+      this.authUsername.value = '';
+      this.authPassword.value = '';
+
+      if (this._authMode === 'register') {
+        // New registration: save current local data to cloud
+        await this.saveToCloud();
+      } else {
+        // Login: load cloud data
+        await this.loadCloudData();
+      }
+    } catch (err) {
+      this.authError.textContent = '서버 연결 오류';
+      this.authError.style.display = 'block';
+    } finally {
+      this.btnAuthSubmit.disabled = false;
+      this.updateAuthModal();
+    }
+  }
+
+  async logout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch {}
+    this._currentUser = null;
+    this.updateAuthButton();
+  }
+
+  async saveToCloud() {
+    if (!this._currentUser) return;
+    try {
+      await fetch('/api/sync/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          accounts: this.store.getAll().map(a => ({
+            id: a.id, platform: a.platform, instanceUrl: a.instanceUrl,
+            accessToken: a.accessToken, themeColor: a.themeColor,
+            label: a.label, profile: a.profile,
+          })),
+          settings: this.settings,
+          columnState: this.columnState,
+        }),
+      });
+    } catch (err) {
+      console.error('Cloud save failed:', err);
+    }
+  }
+
+  debouncedSaveToCloud() {
+    if (!this._currentUser) return;
+    clearTimeout(this._syncDebounce);
+    this._syncDebounce = setTimeout(() => this.saveToCloud(), 2000);
+  }
+
+  async loadCloudData() {
+    if (!this._currentUser) return;
+    try {
+      const res = await fetch('/api/sync/load', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      if (data.accounts && data.accounts.length > 0) {
+        // Replace local accounts with cloud data
+        this.store.replaceAll(data.accounts);
+      }
+      if (data.settings) {
+        this.settings = { ...this.settings, ...data.settings };
+        this.saveSettings();
+        this.applySettings();
+      }
+      if (data.columnState) {
+        this.columnState = data.columnState;
+        this.saveColumnState();
+      }
+      // Re-render with cloud data
+      this.render();
+    } catch (err) {
+      console.error('Cloud load failed:', err);
+    }
+  }
 }
 
 // Initialize
@@ -2560,6 +2755,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const result = JSON.parse(authResult);
       await app.store.addAccount(result.platform, result.instanceUrl, result.accessToken);
+      app.debouncedSaveToCloud();
       app.render();
     } catch (err) {
       console.error('OAuth 콜백 처리 실패:', err);

@@ -174,4 +174,10 @@ export class AccountStore {
   isEmpty() {
     return this.accounts.length === 0;
   }
+
+  replaceAll(accountsData) {
+    this.accounts = accountsData;
+    this.save();
+    this.initClients();
+  }
 }
