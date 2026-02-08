@@ -40,7 +40,7 @@ export function renderPost(post) {
   // Renote / Boost indicator
   if (post.rebloggedBy) {
     const boostLabel = post.platform === 'mastodon' ? '부스트' : '리노트';
-    html += `<div class="renote-indicator"><span class="icon-inline boost-icon">${iconBoost}</span> ${escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
+    html += `<div class="renote-indicator"><span class="icon-inline boost-icon">${iconBoost}</span> ${post.rebloggedBy.displayNameHtml || escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
   }
 
   const displayPost = post.reblog || post;
@@ -54,7 +54,7 @@ export function renderPost(post) {
       <div class="reply-context">
         <div class="reply-context-header">
           <img class="reply-context-avatar" src="${displayPost.replyTo.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-          <span class="reply-context-author">${escapeHtml(displayPost.replyTo.author.displayName)}</span>
+          <span class="reply-context-author">${displayPost.replyTo.author.displayNameHtml || escapeHtml(displayPost.replyTo.author.displayName)}</span>
         </div>
         <div class="reply-context-content${isLong ? ' collapsed' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
         ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
@@ -75,7 +75,7 @@ export function renderPost(post) {
            referrerpolicy="no-referrer"
            onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'">
       <div class="post-meta">
-        <div class="post-author">${escapeHtml(displayPost.author.displayName)}</div>
+        <div class="post-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName)}</div>
         <div class="post-handle">@${escapeHtml(displayPost.author.acct)}</div>
       </div>
       <span class="post-time" title="${displayPost.createdAt.toLocaleString()}">${timeAgo(displayPost.createdAt)}</span>
@@ -190,7 +190,7 @@ export function renderNotification(notif) {
   html += `
     <div class="notif-body">
       <div class="notif-text">
-        ${notif.actor ? `<strong>${escapeHtml(notif.actor.displayName)}</strong>` : ''}
+        ${notif.actor ? `<strong>${notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)}</strong>` : ''}
         ${escapeHtml(notif.label)}
       </div>
       <div class="notif-time">${timeAgo(notif.createdAt)}</div>

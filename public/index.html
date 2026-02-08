@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>StarShip - Fediverse Dashboard</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -141,13 +141,8 @@
           </select>
         </div>
         <div class="form-group">
-          <label for="setting-column-width">컬럼 너비</label>
-          <select id="setting-column-width" class="input">
-            <option value="320">좁게 (320px)</option>
-            <option value="380" selected>보통 (380px)</option>
-            <option value="440">넓게 (440px)</option>
-            <option value="520">아주 넓게 (520px)</option>
-          </select>
+          <label for="setting-column-width">컬럼 너비 <span id="column-width-value" class="setting-range-value">380px</span></label>
+          <input type="range" id="setting-column-width" class="setting-range" min="280" max="640" step="20" value="380">
         </div>
         <div class="form-group">
           <label for="setting-font-size">글꼴 크기</label>

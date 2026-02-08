@@ -103,13 +103,44 @@ export class MisskeyClient {
   }
 
   normalizeUser(user) {
+    const displayName = user.name || user.username;
+    // Build emoji map from user's emojis
+    const userEmojis = {};
+    if (user.emojis && typeof user.emojis === 'object' && !Array.isArray(user.emojis)) {
+      Object.assign(userEmojis, user.emojis);
+    }
+    if (Array.isArray(user.emojis)) {
+      for (const e of user.emojis) {
+        if (e.name && e.url) userEmojis[e.name] = e.url;
+      }
+    }
+    // Resolve custom emoji shortcodes in display name
+    const displayNameHtml = this.resolveNameEmojis(displayName, userEmojis);
     return {
       id: user.id,
-      displayName: user.name || user.username,
+      displayName,
+      displayNameHtml,
       username: user.username,
       acct: user.host ? `${user.username}@${user.host}` : user.username,
       avatarUrl: user.avatarUrl,
     };
+  }
+
+  resolveNameEmojis(name, emojis = {}) {
+    if (!name) return '';
+    let html = this.escapeHtml(name);
+    html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, emojiName) => {
+      const url = emojis[emojiName] || emojis[emojiName + '@.'] || null;
+      if (url) {
+        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer">`;
+      }
+      // Fallback: try instance emoji URL for local emojis
+      if (!emojiName.includes('@')) {
+        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">`;
+      }
+      return match;
+    });
+    return html;
   }
 
   normalizePost(note) {
@@ -140,10 +171,7 @@ export class MisskeyClient {
         reactions: Object.values(actualNote.reactions || {}).reduce((a, b) => a + b, 0),
       },
       reblog: isRenote ? this.normalizePost(note.renote) : null,
-      rebloggedBy: isRenote ? {
-        displayName: author.displayName,
-        username: author.username,
-      } : null,
+      rebloggedBy: isRenote ? author : null,
       reactions: actualNote.reactions || {},
       reactionEmojis: actualNote.reactionEmojis || {},
       emojis: emojiMap,

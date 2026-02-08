@@ -104,6 +104,33 @@ export class MastodonClient {
     return res.json();
   }
 
+  normalizeUser(acct) {
+    const displayName = acct.display_name || acct.username;
+    let displayNameHtml = this.escapeHtml(displayName);
+    // Resolve custom emojis in display name
+    if (acct.emojis && acct.emojis.length > 0) {
+      for (const emoji of acct.emojis) {
+        displayNameHtml = displayNameHtml.replaceAll(`:${emoji.shortcode}:`,
+          `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+      }
+    }
+    return {
+      id: acct.id,
+      displayName,
+      displayNameHtml,
+      username: acct.username,
+      acct: acct.acct,
+      avatarUrl: acct.avatar,
+    };
+  }
+
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   normalizePost(status) {
     const acct = status.account;
     // Process custom emojis in content
@@ -122,13 +149,7 @@ export class MastodonClient {
       createdAt: new Date(status.created_at),
       content: content,
       contentWarning: status.spoiler_text || null,
-      author: {
-        id: acct.id,
-        displayName: acct.display_name || acct.username,
-        username: acct.username,
-        acct: acct.acct,
-        avatarUrl: acct.avatar,
-      },
+      author: this.normalizeUser(acct),
       media: (status.media_attachments || []).map(m => ({
         type: m.type,
         url: m.url,
@@ -141,10 +162,7 @@ export class MastodonClient {
         favourites: status.favourites_count || 0,
       },
       reblog: status.reblog ? this.normalizePost(status.reblog) : null,
-      rebloggedBy: status.reblog ? {
-        displayName: acct.display_name || acct.username,
-        username: acct.username,
-      } : null,
+      rebloggedBy: status.reblog ? this.normalizeUser(acct) : null,
       emojis: emojiMap,
       canonicalUri: status.uri || status.url,
       instanceUrl: this.instanceUrl,
@@ -182,11 +200,7 @@ export class MastodonClient {
       reactionEmojiUrl: null,
       label: info.label,
       createdAt: new Date(notif.created_at),
-      actor: {
-        displayName: acct.display_name || acct.username,
-        username: acct.username,
-        avatarUrl: acct.avatar,
-      },
+      actor: this.normalizeUser(acct),
       post: notif.status ? this.normalizePost(notif.status) : null,
     };
   }

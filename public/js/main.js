@@ -1529,10 +1529,13 @@ class StarShipApp {
       this.startAutoRefresh();
     });
 
+    const columnWidthValueLabel = document.getElementById('column-width-value');
     const newColWidth = columnWidthSelect.cloneNode(true);
     columnWidthSelect.replaceWith(newColWidth);
     newColWidth.value = String(this.settings.columnWidth);
-    newColWidth.addEventListener('change', () => {
+    if (columnWidthValueLabel) columnWidthValueLabel.textContent = `${this.settings.columnWidth}px`;
+    newColWidth.addEventListener('input', () => {
+      if (columnWidthValueLabel) columnWidthValueLabel.textContent = `${newColWidth.value}px`;
       this.settings.columnWidth = parseInt(newColWidth.value);
       this.saveSettings();
       this.applySettings();
