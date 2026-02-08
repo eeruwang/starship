@@ -240,7 +240,7 @@ body {
   color: white;
 }
 
-.col-toggle .platform-dot {
+.platform-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;

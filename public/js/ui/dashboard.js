@@ -25,9 +25,14 @@ export function renderPost(post) {
   const displayPostForUri = post.reblog || post;
   if (displayPostForUri.canonicalUri) card.dataset.canonicalUri = displayPostForUri.canonicalUri;
 
+  // Per-account theme color for single-account posts
+  if (post.themeColor && (!post.mergedAccounts || post.mergedAccounts.length <= 1)) {
+    card.style.borderLeftColor = post.themeColor;
+  }
+
   // Merged account border (uses background trick to follow border-radius)
   if (post.mergedAccounts && post.mergedAccounts.length > 1) {
-    const colors = post.mergedAccounts.map(a => PLATFORM_COLORS[a.platform] || '#7c7dff');
+    const colors = post.mergedAccounts.map(a => a.themeColor || PLATFORM_COLORS[a.platform] || '#7c7dff');
     const segmentSize = 100 / colors.length;
     const stops = colors.map((c, i) =>
       `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
@@ -170,6 +175,7 @@ export function renderNotification(notif) {
   card.className = `notif-card platform-${notif.platform}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
+  if (notif.themeColor) card.style.borderLeftColor = notif.themeColor;
 
   let iconHtml;
   if (notif.reactionEmojiUrl) {
@@ -233,6 +239,7 @@ export function renderNotification(notif) {
 export function renderAccountCard(account, onRemove) {
   const card = document.createElement('div');
   card.className = `account-card platform-${account.platform}`;
+  if (account.themeColor) card.style.borderLeftColor = account.themeColor;
 
   const p = account.profile;
   const platformLabels = {

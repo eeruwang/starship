@@ -409,7 +409,8 @@ class StarShipApp {
         toggle.className = `col-toggle ${isActive ? 'active' : ''}`;
         toggle.dataset.toggleType = 'account';
         toggle.dataset.accountId = account.id;
-        toggle.innerHTML = `<span class="platform-dot ${account.platform}"></span>${this.escapeHtml(account.label || account.profile.displayName)}`;
+        const dotStyle = account.themeColor ? `style="background:${account.themeColor}"` : '';
+        toggle.innerHTML = `<span class="platform-dot ${account.platform}" ${dotStyle}></span>${this.escapeHtml(account.label || account.profile.displayName)}`;
         this.toggleBar.appendChild(toggle);
       }
     }
@@ -724,6 +725,7 @@ class StarShipApp {
               const post = client.normalizePost(item);
               post.accountId = account.id;
               post.accountPlatform = account.platform;
+              post.themeColor = account.themeColor || null;
               return post;
             });
           } catch (err) {
@@ -759,15 +761,15 @@ class StarShipApp {
           const displayPost = post.reblog || post;
           const key = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
           if (!seen.has(key)) {
-            post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform }];
+            post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
             seen.set(key, deduped.length);
             deduped.push(post);
           } else {
             // Merge: add this account's info to the existing post
             const idx = seen.get(key);
             const existing = deduped[idx];
-            if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.platform === (post.accountPlatform || post.platform))) {
-              existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform });
+            if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
+              existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
             }
           }
         }
@@ -874,7 +876,11 @@ class StarShipApp {
 
           try {
             const notifs = await client.getNotifications(this.settings.postsCount);
-            return notifs.map(n => client.normalizeNotification(n));
+            return notifs.map(n => {
+              const notif = client.normalizeNotification(n);
+              notif.themeColor = account.themeColor || null;
+              return notif;
+            });
           } catch (err) {
             console.error(`Notifications error for ${account.label}:`, err);
             return [];
@@ -1096,6 +1102,7 @@ class StarShipApp {
       const updatedPost = client.normalizePost(rawPost);
       updatedPost.accountId = accountId;
       updatedPost.accountPlatform = account.platform;
+      updatedPost.themeColor = account.themeColor || null;
 
       // Find and update all matching cards in the DOM
       const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
@@ -1269,11 +1276,13 @@ class StarShipApp {
     for (const account of sortedAccounts) {
       const p = account.profile;
       const isPreferred = account.id === preferredAccountId;
+      const dotColor = account.themeColor || '';
+      const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       html += `
-        <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}">
+        <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}"${isPreferred && account.themeColor ? ` style="border-left-color:${account.themeColor}"` : ''}>
           <img src="${p.avatarUrl || ''}" alt="" onerror="this.style.display='none'">
           <span class="picker-name">${this.escapeHtml(p.displayName)}</span>
-          <span class="picker-platform">${account.platform}</span>
+          <span class="platform-dot ${account.platform}" ${dotStyle}></span>
         </button>
       `;
     }
@@ -1335,10 +1344,11 @@ class StarShipApp {
       const btn = document.createElement('button');
       btn.className = 'compose-account-toggle';
       btn.dataset.accountId = account.id;
+      const dotStyle = account.themeColor ? `style="background:${account.themeColor}"` : '';
       btn.innerHTML = `
         <img class="compose-account-avatar" src="${p.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
         <span class="compose-account-name">${this.escapeHtml(p.displayName)}</span>
-        <span class="compose-account-platform ${account.platform}">${account.platform}</span>
+        <span class="platform-dot ${account.platform}" ${dotStyle}></span>
       `;
 
       // Pre-select preferred account, or first account by default

@@ -74,6 +74,21 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
   }
 
+  async fetchThemeColor() {
+    try {
+      const targetUrl = this.instanceUrl;
+      const fetchUrl = this.useProxy
+        ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+        : targetUrl;
+      const res = await fetch(fetchUrl, { headers: { 'Accept': 'text/html' } });
+      if (!res.ok) return null;
+      const html = await res.text();
+      const match = html.match(/<meta[^>]*name=["']theme-color["'][^>]*content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']theme-color["']/i);
+      return match ? match[1] : null;
+    } catch { return null; }
+  }
+
   async createStatus(text, options = {}) {
     const body = { status: text };
     if (options.spoilerText) body.spoiler_text = options.spoilerText;

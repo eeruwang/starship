@@ -85,6 +85,13 @@ export class MisskeyClient {
     return this.request('emojis', {});
   }
 
+  async fetchThemeColor() {
+    try {
+      const meta = await this.request('meta', {});
+      return meta.themeColor || null;
+    } catch { return null; }
+  }
+
   async uploadFile(file) {
     const formData = new FormData();
     formData.append('file', file);

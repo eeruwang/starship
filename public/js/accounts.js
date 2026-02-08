@@ -50,7 +50,10 @@ export class AccountStore {
       ? new MastodonClient(instanceUrl, accessToken)
       : new MisskeyClient(instanceUrl, accessToken, platform);
 
-    const profile = await client.verifyCredentials();
+    const [profile, themeColor] = await Promise.all([
+      client.verifyCredentials(),
+      client.fetchThemeColor().catch(() => null),
+    ]);
 
     let account;
     if (platform === 'mastodon') {
@@ -59,6 +62,7 @@ export class AccountStore {
         platform,
         instanceUrl: instanceUrl.replace(/\/+$/, ''),
         accessToken,
+        themeColor,
         label: label || profile.display_name || profile.username,
         profile: {
           id: profile.id,
@@ -77,6 +81,7 @@ export class AccountStore {
         platform,
         instanceUrl: instanceUrl.replace(/\/+$/, ''),
         accessToken,
+        themeColor,
         label: label || profile.name || profile.username,
         profile: {
           id: profile.id,
@@ -102,6 +107,12 @@ export class AccountStore {
     for (const account of this.accounts) {
       const client = this.clients.get(account.id);
       if (!client) continue;
+      // Fetch theme color if not yet stored
+      if (!account.themeColor) {
+        client.fetchThemeColor().then(color => {
+          if (color) account.themeColor = color;
+        }).catch(() => {});
+      }
       updates.push(
         client.verifyCredentials().then(profile => {
           const oldDisplayName = account.profile?.displayName;
