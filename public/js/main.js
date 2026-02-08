@@ -1317,6 +1317,14 @@ class StarShipApp {
     return post?.url || null;
   }
 
+  findCachedPost(postId) {
+    for (const [, post] of this.postCache) {
+      const dp = post.reblog || post;
+      if (post.id === postId || dp.id === postId) return post;
+    }
+    return null;
+  }
+
   // ===== Post Actions =====
 
   async handlePostAction(action, postId, platform, accountId, btnElement) {
@@ -1867,6 +1875,7 @@ class StarShipApp {
     this.btnComposeSubmit.disabled = false;
     this.btnComposeSubmit.textContent = '게시';
 
+    const replyCtx = document.getElementById('compose-reply-context');
     if (replyToId) {
       this.composeText.dataset.replyTo = replyToId;
       this.composeText.placeholder = '답글을 작성하세요...';
@@ -1877,11 +1886,34 @@ class StarShipApp {
       if (replyMention) {
         this.composeText.value = replyMention + ' ';
       }
+
+      // Show original post in reply context
+      const origPost = this.findCachedPost(replyToId);
+      if (origPost) {
+        const dp = origPost.reblog || origPost;
+        const authorName = dp.author?.displayNameHtml || this.escapeHtml(dp.author?.displayName || '');
+        const avatarHtml = dp.author?.avatarUrl
+          ? `<img class="compose-reply-context-avatar" src="${this.escapeHtml(dp.author.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+          : '';
+        replyCtx.innerHTML = `
+          <div class="compose-reply-context-header">
+            ${avatarHtml}
+            <span class="compose-reply-context-name">${authorName}</span>
+            <span class="compose-reply-context-label">의 글에 답글</span>
+          </div>
+          <div class="compose-reply-context-body">${dp.content || ''}</div>
+        `;
+        replyCtx.style.display = '';
+      } else {
+        replyCtx.style.display = 'none';
+      }
     } else {
       delete this.composeText.dataset.replyTo;
       delete this.composeText.dataset.quoteId;
       this.composeText.placeholder = '무슨 일이 일어나고 있나요?';
       this.composeTitle.textContent = '새 글 작성';
+      replyCtx.style.display = 'none';
+      replyCtx.innerHTML = '';
     }
 
     this.openModal(this.modalCompose);

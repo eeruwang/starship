@@ -1775,6 +1775,51 @@ textarea.input {
 .compose-account-platform.cherrypick { background: rgba(255,107,157,0.2); color: var(--accent-cherrypick); }
 .compose-account-platform.mastodon { background: rgba(99,100,255,0.2); color: var(--accent-mastodon); }
 
+/* Compose reply context */
+.compose-reply-context {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 0.5rem;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+.compose-reply-context-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+.compose-reply-context-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.compose-reply-context-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.compose-reply-context-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.compose-reply-context-body {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+.compose-reply-context-body > *:first-child { margin-top: 0; }
+.compose-reply-context-body > *:last-child { margin-bottom: 0; }
+.compose-reply-context-body .inline-emoji {
+  height: 1.2em;
+  width: auto;
+  vertical-align: -2px;
+}
+
 /* Compose editor area */
 .compose-editor {
   background: var(--bg-primary);
