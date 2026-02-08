@@ -116,6 +116,7 @@ class StarShipApp {
     this.composeEditor = document.querySelector('.compose-editor');
     this.composeImagePreview = document.getElementById('compose-image-preview');
     this.btnComposeAttach = document.getElementById('btn-compose-attach');
+    this.btnComposeEmoji = document.getElementById('btn-compose-emoji');
     this.btnComposeSubmit = document.getElementById('btn-compose-submit');
     this.composeError = document.getElementById('compose-error');
 
@@ -141,13 +142,17 @@ class StarShipApp {
       btn.addEventListener('click', () => {
         const modalId = btn.dataset.closeModal;
         document.getElementById(modalId).style.display = 'none';
+        if (modalId === 'modal-compose') this.closeComposeEmojiPicker();
       });
     });
 
     // Close modal on overlay click
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.style.display = 'none';
+        if (e.target === overlay) {
+          overlay.style.display = 'none';
+          this.closeComposeEmojiPicker();
+        }
       });
     });
 
@@ -313,6 +318,7 @@ class StarShipApp {
 
     // Compose modal
     this.btnComposeAttach.addEventListener('click', () => this.composeFilesInput.click());
+    this.btnComposeEmoji.addEventListener('click', () => this.showComposeEmojiPicker());
     this.composeFilesInput.addEventListener('change', () => this.handleComposeFileSelect());
     this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());
 
@@ -1645,6 +1651,146 @@ class StarShipApp {
 
     this.modalCompose.style.display = 'flex';
     this.composeText.focus();
+  }
+
+  showComposeEmojiPicker() {
+    this.closeComposeEmojiPicker();
+
+    const picker = document.createElement('div');
+    picker.className = 'compose-emoji-picker';
+    picker.id = 'compose-emoji-picker-popup';
+
+    // Common unicode emojis
+    const commonReactions = [
+      '👍', '❤️', '😆', '🎉', '😮', '🤔', '😢', '👀',
+      '🔥', '⭐', '💯', '✨', '😂', '🙏', '💕', '😊',
+    ];
+
+    // Determine first selected Misskey account for instance emojis
+    let misskeyAccountId = null;
+    for (const id of this.composeSelectedAccounts) {
+      const acct = this.store.getById(id);
+      if (acct && acct.platform !== 'mastodon') {
+        misskeyAccountId = id;
+        break;
+      }
+    }
+
+    picker.innerHTML = `
+      <div class="reaction-picker-section-label">이모지</div>
+      <div class="reaction-picker-grid reaction-picker-unicode">
+        ${commonReactions.map(r => `<button class="reaction-picker-item" data-emoji="${r}">${r}</button>`).join('')}
+      </div>
+      ${misskeyAccountId ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
+    `;
+
+    // Position above the emoji button
+    const btnRect = this.btnComposeEmoji.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.bottom = `${window.innerHeight - btnRect.top + 4}px`;
+    picker.style.left = `${Math.max(8, Math.min(btnRect.left, window.innerWidth - 330))}px`;
+
+    document.body.appendChild(picker);
+
+    // Insert emoji into textarea
+    const insertEmoji = (text) => {
+      const ta = this.composeText;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      ta.value = ta.value.substring(0, start) + text + ta.value.substring(end);
+      ta.selectionStart = ta.selectionEnd = start + text.length;
+      ta.focus();
+    };
+
+    picker.addEventListener('click', (e) => {
+      const item = e.target.closest('.reaction-picker-item, .compose-emoji-item');
+      if (!item) return;
+      const emoji = item.dataset.emoji;
+      if (emoji) {
+        insertEmoji(emoji);
+        this.closeComposeEmojiPicker();
+      }
+    });
+
+    // Outside click to close
+    setTimeout(() => {
+      const handler = (e) => {
+        if (!picker.contains(e.target) && !this.btnComposeEmoji.contains(e.target)) {
+          this.closeComposeEmojiPicker();
+        }
+      };
+      document.addEventListener('click', handler);
+      this._composeEmojiClose = handler;
+    }, 0);
+
+    // Fetch instance emojis async
+    if (misskeyAccountId) {
+      const client = this.store.getClient(misskeyAccountId);
+      client?.getInstanceEmojis?.().then(emojis => {
+        if (!document.getElementById('compose-emoji-picker-popup')) return;
+        const loadingEl = picker.querySelector('.reaction-picker-loading');
+        if (!emojis || emojis.length === 0) {
+          if (loadingEl) loadingEl.remove();
+          return;
+        }
+
+        const categories = new Map();
+        for (const emoji of emojis) {
+          const cat = emoji.category || '기타';
+          if (!categories.has(cat)) categories.set(cat, []);
+          categories.get(cat).push(emoji);
+        }
+
+        const section = document.createElement('div');
+        section.className = 'reaction-picker-instance-section';
+        section.innerHTML = `
+          <div class="reaction-picker-search">
+            <input type="text" class="reaction-picker-search-input" placeholder="커스텀 이모지 검색..." />
+          </div>
+          <div class="reaction-picker-emojis">
+            ${Array.from(categories.entries()).map(([cat, catEmojis]) => `
+              <div class="reaction-picker-category" data-category="${cat}">
+                <div class="reaction-picker-category-name">${this.escapeHtml(cat)}</div>
+                <div class="reaction-picker-grid">
+                  ${catEmojis.map(e => `<button class="compose-emoji-item" data-emoji=":${e.name}:" title=":${e.name}:"><img src="${this.escapeHtml(e.url)}" alt=":${e.name}:" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+
+        if (loadingEl) loadingEl.replaceWith(section);
+
+        const searchInput = section.querySelector('.reaction-picker-search-input');
+        if (searchInput) {
+          searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim().toLowerCase();
+            const items = section.querySelectorAll('.compose-emoji-item');
+            const cats = section.querySelectorAll('.reaction-picker-category');
+            for (const item of items) {
+              const name = (item.dataset.emoji || '').toLowerCase();
+              item.style.display = (!query || name.includes(query)) ? '' : 'none';
+            }
+            for (const cat of cats) {
+              const visible = cat.querySelectorAll('.compose-emoji-item:not([style*="display: none"])');
+              cat.style.display = visible.length > 0 ? '' : 'none';
+            }
+          });
+        }
+      }).catch(() => {
+        const loadingEl = picker.querySelector('.reaction-picker-loading');
+        if (loadingEl) loadingEl.remove();
+      });
+    }
+  }
+
+  closeComposeEmojiPicker() {
+    const existing = document.getElementById('compose-emoji-picker-popup');
+    if (existing) existing.remove();
+    if (this._composeEmojiClose) {
+      document.removeEventListener('click', this._composeEmojiClose);
+      this._composeEmojiClose = null;
+    }
   }
 
   handleComposeFileSelect() {

@@ -1497,6 +1497,42 @@ textarea.input {
   background: rgba(124, 125, 255, 0.1);
 }
 
+/* Compose Emoji Picker */
+.compose-emoji-picker {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  z-index: 350;
+  width: 320px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.compose-emoji-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+  line-height: 1;
+  text-align: center;
+}
+
+.compose-emoji-item:hover {
+  background: var(--bg-hover);
+  transform: scale(1.2);
+}
+
+.compose-emoji-item img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
 .compose-char-hint {
   flex: 1;
   font-size: 0.75rem;
