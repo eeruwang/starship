@@ -1203,20 +1203,45 @@ class StarShipApp {
   }
 
   getReplyMention(postId, accountId) {
-    // Find the original post from postCache to get the author's acct
-    for (const [key, post] of this.postCache) {
-      const dp = post.reblog || post;
-      if (post.id === postId || dp.id === postId) {
-        const author = dp.author;
-        if (!author) return null;
-        // Don't mention yourself
-        const account = this.store.getById(accountId);
-        if (account && author.username === account.profile?.username) return null;
-        const acct = author.acct || author.username;
-        return `@${acct}`;
+    const account = this.store.getById(accountId);
+    const myUsername = account?.profile?.username;
+
+    // Walk up the reply chain to collect non-self mentions
+    const findPost = (id) => {
+      for (const [, post] of this.postCache) {
+        const dp = post.reblog || post;
+        if (post.id === id || dp.id === id) return dp;
       }
+      return null;
+    };
+
+    const mentions = [];
+    const seen = new Set();
+    let currentId = postId;
+    let depth = 0;
+
+    while (currentId && depth < 10) {
+      const dp = findPost(currentId);
+      if (!dp) break;
+
+      const author = dp.author;
+      if (author) {
+        const acct = author.acct || author.username;
+        // Add non-self, non-duplicate mentions
+        if ((!myUsername || author.username !== myUsername) && !seen.has(acct)) {
+          seen.add(acct);
+          mentions.push(`@${acct}`);
+        }
+      }
+
+      // Walk up to parent
+      currentId = dp.replyTo?.id || dp.replyToId || null;
+      depth++;
+      // Stop after finding the first non-self mention
+      if (mentions.length > 0) break;
     }
-    return null;
+
+    return mentions.length > 0 ? mentions.join(' ') : null;
   }
 
   showReactionPicker(anchorElement, postId, platform, accountId) {
