@@ -47,15 +47,17 @@ export function renderPost(post) {
 
   // Reply context
   if (displayPost.replyTo) {
-    const parentContent = stripHtml(displayPost.replyTo.content);
-    const excerpt = parentContent.slice(0, 80) + (parentContent.length > 80 ? '...' : '');
+    const parentText = stripHtml(displayPost.replyTo.content);
+    const isLong = parentText.length > 200;
+    const replyCtxId = `reply-ctx-${post.id}`;
     html += `
       <div class="reply-context">
         <div class="reply-context-header">
           <img class="reply-context-avatar" src="${displayPost.replyTo.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
           <span class="reply-context-author">${escapeHtml(displayPost.replyTo.author.displayName)}</span>
         </div>
-        <div class="reply-context-content">${escapeHtml(excerpt)}</div>
+        <div class="reply-context-content${isLong ? ' collapsed' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
+        ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
       </div>
     `;
   } else if (displayPost.replyToAcct) {
@@ -195,7 +197,13 @@ export function renderNotification(notif) {
   `;
 
   if (notif.post && notif.post.content) {
-    html += `<div class="notif-post-content">${notif.post.content}</div>`;
+    const notifText = stripHtml(notif.post.content);
+    const isLongNotif = notifText.length > 200;
+    const notifCtxId = `notif-ctx-${notif.id}`;
+    html += `<div class="notif-post-content${isLongNotif ? ' collapsed' : ''}" id="${notifCtxId}">${notif.post.content}</div>`;
+    if (isLongNotif) {
+      html += `<button class="expand-toggle" data-expand-target="${notifCtxId}">더보기</button>`;
+    }
     // Media thumbnails
     if (notif.post.media && notif.post.media.length > 0) {
       html += `<div class="notif-media">`;

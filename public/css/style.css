@@ -598,8 +598,8 @@ body {
 
 /* Custom emoji in notification icons */
 .notif-custom-emoji {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
 }
 
@@ -636,10 +636,52 @@ body {
 .reply-context-content {
   color: var(--text-muted);
   font-size: 0.78rem;
-  line-height: 1.4;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.reply-context-content.collapsed {
+  max-height: 4.5em;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  position: relative;
+}
+
+.reply-context-content.collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1.5em;
+  background: linear-gradient(transparent, var(--bg-primary));
+  pointer-events: none;
+}
+
+.reply-context-content a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.reply-context-content .inline-emoji {
+  width: 16px;
+  height: 16px;
+}
+
+.expand-toggle {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0.15rem 0;
+  font-family: inherit;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.expand-toggle:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .reply-indicator {
@@ -668,29 +710,30 @@ body {
 .notif-actor-wrap {
   position: relative;
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
 }
 
 .notif-avatar {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   object-fit: cover;
 }
 
 .notif-type-badge {
   position: absolute;
-  bottom: -3px;
-  right: -5px;
-  width: 20px;
-  height: 20px;
+  bottom: -4px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
   background: var(--bg-secondary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--bg-card);
+  border: 2.5px solid var(--bg-card);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
 .notif-type-badge .notif-svg-icon {
@@ -698,24 +741,24 @@ body {
 }
 
 .notif-type-badge .notif-svg-icon svg {
-  width: 10px;
-  height: 10px;
-}
-
-.notif-type-badge .notif-emoji {
-  font-size: 0.55rem;
-  line-height: 1;
-}
-
-.notif-type-badge .notif-custom-emoji {
   width: 12px;
   height: 12px;
 }
 
+.notif-type-badge .notif-emoji {
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.notif-type-badge .notif-custom-emoji {
+  width: 16px;
+  height: 16px;
+}
+
 .notif-icon {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1156,8 +1199,24 @@ textarea.input {
   background: var(--bg-primary);
   border-radius: 6px;
   word-break: break-word;
-  max-height: 150px;
-  overflow-y: auto;
+}
+
+.notif-post-content.collapsed {
+  max-height: 6em;
+  overflow: hidden;
+  position: relative;
+}
+
+.notif-post-content.collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2em;
+  background: linear-gradient(transparent, var(--bg-primary));
+  pointer-events: none;
+  border-radius: 0 0 6px 6px;
 }
 
 .notif-post-content a {
@@ -1194,12 +1253,24 @@ textarea.input {
   max-width: 520px;
 }
 
-.compose-modal .modal-body {
-  padding: 1rem 1.25rem;
-}
-
 .compose-modal .modal-header {
   padding: 0.75rem 1.25rem;
+  border-bottom-color: rgba(124, 125, 255, 0.15);
+}
+
+.compose-body {
+  padding: 1rem 1.25rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.compose-accounts-section label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
 }
 
 .compose-accounts {
@@ -1265,26 +1336,95 @@ textarea.input {
 .compose-account-platform.cherrypick { background: rgba(255,107,157,0.2); color: var(--accent-cherrypick); }
 .compose-account-platform.mastodon { background: rgba(99,100,255,0.2); color: var(--accent-mastodon); }
 
-.compose-textarea {
-  min-height: 100px;
-  resize: vertical;
+/* Compose editor area */
+.compose-editor {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color 0.2s;
 }
 
-.compose-bottom-bar {
+.compose-editor:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(124, 125, 255, 0.1);
+}
+
+.compose-cw-wrap {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding-top: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(245, 166, 35, 0.04);
 }
 
-.compose-bottom-bar .btn-icon {
+.compose-cw-icon {
+  color: #f5a623;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.compose-cw-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  padding: 0;
+}
+
+.compose-cw-input::placeholder {
   color: var(--text-muted);
-  padding: 0.35rem;
-  min-width: 32px;
+  opacity: 0.7;
 }
 
-.compose-bottom-bar .btn-icon:hover {
+.compose-text-input {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+}
+
+.compose-text-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.compose-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--border-color);
+  background: rgba(124, 125, 255, 0.02);
+}
+
+.compose-tool-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.compose-tool-btn:hover {
   color: var(--accent-primary);
+  background: rgba(124, 125, 255, 0.1);
 }
 
 .compose-char-hint {
@@ -1294,11 +1434,26 @@ textarea.input {
   text-align: right;
 }
 
-.compose-bottom-bar .btn-primary {
-  padding: 0.45rem 1.2rem;
+.compose-submit-btn {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 0.4rem 1.2rem;
   font-size: 0.85rem;
   font-weight: 600;
+  font-family: inherit;
   border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.compose-submit-btn:hover {
+  background: #6b6cee;
+}
+
+.compose-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ===== Compose Area ===== */
@@ -1395,7 +1550,11 @@ textarea.input {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 0.35rem;
+  padding: 0 0.5rem 0.35rem;
+}
+
+.compose-image-preview:empty {
+  display: none;
 }
 
 .compose-image-preview .preview-item {

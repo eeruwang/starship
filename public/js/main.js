@@ -167,6 +167,17 @@ class StarShipApp {
       }
     });
 
+    // Expand toggle for long content (reply context, notification content)
+    document.addEventListener('click', (e) => {
+      if (e.target.matches('.expand-toggle')) {
+        const target = document.getElementById(e.target.dataset.expandTarget);
+        if (target) {
+          target.classList.toggle('collapsed');
+          e.target.textContent = target.classList.contains('collapsed') ? '더보기' : '접기';
+        }
+      }
+    });
+
     // Post actions (delegated)
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.post-action');
@@ -1507,14 +1518,10 @@ class StarShipApp {
     const postsCountSelect = document.getElementById('setting-posts-count');
     const resetBtn = document.getElementById('btn-settings-reset');
 
-    refreshSelect.value = String(this.settings.refreshInterval);
-    columnWidthSelect.value = String(this.settings.columnWidth);
-    fontSizeSelect.value = String(this.settings.fontSize);
-    postsCountSelect.value = String(this.settings.postsCount);
-
-    // Remove old listeners by cloning
+    // Remove old listeners by cloning first, then set values on the new elements
     const newRefresh = refreshSelect.cloneNode(true);
     refreshSelect.replaceWith(newRefresh);
+    newRefresh.value = String(this.settings.refreshInterval);
     newRefresh.addEventListener('change', () => {
       this.settings.refreshInterval = parseInt(newRefresh.value);
       this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
@@ -1524,6 +1531,7 @@ class StarShipApp {
 
     const newColWidth = columnWidthSelect.cloneNode(true);
     columnWidthSelect.replaceWith(newColWidth);
+    newColWidth.value = String(this.settings.columnWidth);
     newColWidth.addEventListener('change', () => {
       this.settings.columnWidth = parseInt(newColWidth.value);
       this.saveSettings();
@@ -1532,6 +1540,7 @@ class StarShipApp {
 
     const newFontSize = fontSizeSelect.cloneNode(true);
     fontSizeSelect.replaceWith(newFontSize);
+    newFontSize.value = String(this.settings.fontSize);
     newFontSize.addEventListener('change', () => {
       this.settings.fontSize = parseInt(newFontSize.value);
       this.saveSettings();
@@ -1540,6 +1549,7 @@ class StarShipApp {
 
     const newPostsCount = postsCountSelect.cloneNode(true);
     postsCountSelect.replaceWith(newPostsCount);
+    newPostsCount.value = String(this.settings.postsCount);
     newPostsCount.addEventListener('change', () => {
       this.settings.postsCount = parseInt(newPostsCount.value);
       this.saveSettings();
