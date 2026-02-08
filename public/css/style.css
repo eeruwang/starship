@@ -1336,6 +1336,7 @@ textarea.input {
   font-size: 0.95rem;
   font-weight: 600;
   margin-top: 0.25rem;
+  justify-content: center;
   border-radius: var(--radius);
   background: linear-gradient(135deg, #7c7dff 0%, #6364ff 100%);
   box-shadow: 0 2px 12px rgba(124, 125, 255, 0.25);
