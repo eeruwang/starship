@@ -1118,28 +1118,50 @@ class StarShipApp {
     const client = this.store.getClient(accountId);
     if (!client) return;
 
+    // Look up cached post to check current fav/boost state
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+
     try {
       // Immediate visual feedback: add processing state
       btnElement.classList.add('processing');
 
       if (action === 'fav') {
-        if (platform === 'mastodon') {
-          await client.favourite(postId);
+        const alreadyFaved = cachedPost?.favourited || cachedPost?.myReaction;
+        if (alreadyFaved) {
+          // Unlike / unreact
+          if (platform === 'mastodon') {
+            await client.unfavourite(postId);
+          } else {
+            await client.deleteReaction(postId);
+          }
+          btnElement.classList.remove('processing', 'active');
         } else {
-          await client.createReaction(postId, '❤');
+          if (platform === 'mastodon') {
+            await client.favourite(postId);
+          } else {
+            await client.createReaction(postId, '❤');
+          }
+          btnElement.classList.remove('processing');
+          btnElement.classList.add('active', 'just-activated');
+          setTimeout(() => btnElement.classList.remove('just-activated'), 600);
         }
-        btnElement.classList.remove('processing');
-        btnElement.classList.add('active', 'just-activated');
-        setTimeout(() => btnElement.classList.remove('just-activated'), 600);
       } else if (action === 'boost') {
-        if (platform === 'mastodon') {
-          await client.reblog(postId);
+        const alreadyBoosted = cachedPost?.reblogged;
+        if (alreadyBoosted) {
+          if (platform === 'mastodon') {
+            await client.unreblog(postId);
+          }
+          btnElement.classList.remove('processing', 'active');
         } else {
-          await client.renote(postId);
+          if (platform === 'mastodon') {
+            await client.reblog(postId);
+          } else {
+            await client.renote(postId);
+          }
+          btnElement.classList.remove('processing');
+          btnElement.classList.add('active', 'just-activated');
+          setTimeout(() => btnElement.classList.remove('just-activated'), 600);
         }
-        btnElement.classList.remove('processing');
-        btnElement.classList.add('active', 'just-activated');
-        setTimeout(() => btnElement.classList.remove('just-activated'), 600);
       } else if (action === 'reply') {
         btnElement.classList.remove('processing');
         this.openComposeModal(postId, accountId);
@@ -1327,6 +1349,11 @@ class StarShipApp {
     if (!client) return;
     try {
       btnElement.classList.add('processing');
+      // If already reacted on Misskey, delete old reaction first
+      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      if (cachedPost?.myReaction) {
+        await client.deleteReaction(postId);
+      }
       await client.createReaction(postId, reaction);
       btnElement.classList.remove('processing');
       btnElement.classList.add('active', 'just-activated');

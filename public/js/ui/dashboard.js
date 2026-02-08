@@ -146,14 +146,14 @@ export function renderPost(post) {
         <span class="action-icon">${iconReply}</span>
         ${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}
       </button>
-      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">
+      <button class="post-action${post.reblogged ? ' active' : ''}" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">
         <span class="action-icon">${iconBoost}</span>
         ${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}
       </button>
       <button class="post-action" data-action="quote" title="인용">
         <span class="action-icon">${iconQuote}</span>
       </button>
-      <button class="post-action" data-action="fav" title="${isMisskey ? '좋아요' : '즐겨찾기'}">
+      <button class="post-action${(post.favourited || post.myReaction) ? ' active' : ''}" data-action="fav" title="${isMisskey ? '좋아요' : '즐겨찾기'}">
         <span class="action-icon">${favIcon}</span>
         ${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}
       </button>

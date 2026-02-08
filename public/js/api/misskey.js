@@ -62,6 +62,10 @@ export class MisskeyClient {
     return this.request('notes/reactions/create', { noteId, reaction });
   }
 
+  async deleteReaction(noteId) {
+    return this.request('notes/reactions/delete', { noteId });
+  }
+
   async getReactions(noteId, type = null) {
     const body = { noteId, limit: 20 };
     if (type) body.type = type;
@@ -184,6 +188,9 @@ export class MisskeyClient {
       },
       reblog: isRenote ? this.normalizePost(note.renote) : null,
       rebloggedBy: isRenote ? author : null,
+      favourited: !!actualNote.myReaction,
+      reblogged: false,
+      myReaction: actualNote.myReaction || null,
       reactions: actualNote.reactions || {},
       reactionEmojis: actualNote.reactionEmojis || {},
       emojis: emojiMap,
