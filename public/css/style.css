@@ -404,6 +404,7 @@ body {
   padding: 0.85rem 1rem;
   transition: background 0.2s;
   border-left: 3px solid transparent;
+  flex-shrink: 0;
 }
 
 .post-card:hover {
@@ -713,6 +714,7 @@ body {
   gap: 0.6rem;
   align-items: flex-start;
   border-left: 3px solid transparent;
+  flex-shrink: 0;
 }
 
 .notif-card.platform-misskey { border-left-color: var(--accent-misskey); }
@@ -851,8 +853,8 @@ body {
   background: var(--bg-card);
   border-radius: var(--radius);
   padding: 0.75rem;
-  margin-bottom: 0.5rem;
   border-left: 3px solid transparent;
+  flex-shrink: 0;
 }
 
 .account-card.platform-misskey { border-left-color: var(--accent-misskey); }
@@ -1049,6 +1051,7 @@ textarea.input {
   display: flex;
   justify-content: center;
   padding: 2rem;
+  flex-shrink: 0;
 }
 
 .spinner {
@@ -1085,6 +1088,7 @@ textarea.input {
   text-align: center;
   padding: 1rem;
   font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 /* ===== Inline Icons ===== */
