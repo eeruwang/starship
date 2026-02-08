@@ -2780,15 +2780,23 @@ class StarShipApp {
   async toggleRegistration() {
     const newVal = !this._siteInfo.registrationOpen;
     try {
-      await fetch('/api/admin/settings', {
+      const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({ registration_open: String(newVal) }),
       });
-      this._siteInfo.registrationOpen = newVal;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || '설정 저장에 실패했습니다');
+        return;
+      }
+      // Re-fetch to confirm server state
+      await this.fetchSiteInfo();
       this.updateAdminUI();
-    } catch {}
+    } catch (err) {
+      alert('서버 연결 오류');
+    }
   }
 
   updateAdminUI() {
@@ -2814,12 +2822,10 @@ class StarShipApp {
     this.authModalTitle.textContent = isLogin ? '로그인' : '회원가입';
     this.authSubtitle.textContent = isLogin ? 'StarShip에 오신 것을 환영합니다'
       : regClosed ? '현재 회원가입이 비활성화되어 있습니다' : '새 계정을 만들어보세요';
-    this.btnAuthSubmit.textContent = isLogin ? '로그인' : '가입하기';
-    this.btnAuthSubmit.disabled = regClosed;
-    this.authSwitchText.textContent = isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?';
-    this.btnAuthSwitch.textContent = isLogin ? '회원가입' : '로그인';
     this.authError.style.display = 'none';
     this.authPassword.autocomplete = isLogin ? 'current-password' : 'new-password';
+    this.authSwitchText.textContent = isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?';
+    this.btnAuthSwitch.textContent = isLogin ? '회원가입' : '로그인';
     // Turnstile
     const container = document.getElementById('turnstile-container');
     if (!isLogin && this._siteInfo.turnstileSiteKey && !regClosed) {
@@ -2829,6 +2835,16 @@ class StarShipApp {
       container.style.display = 'none';
       this.removeTurnstile();
     }
+    // Button state
+    if (isLogin) {
+      this.btnAuthSubmit.disabled = false;
+      this.btnAuthSubmit.textContent = '로그인';
+    } else if (regClosed) {
+      this.btnAuthSubmit.disabled = true;
+      this.btnAuthSubmit.textContent = '회원가입 비활성화됨';
+    } else {
+      this._updateRegisterButtonState();
+    }
   }
 
   renderTurnstile() {
@@ -2836,11 +2852,22 @@ class StarShipApp {
     const container = document.getElementById('turnstile-container');
     container.innerHTML = '';
     this._turnstileToken = null;
+    this._updateRegisterButtonState();
     this._turnstileWidgetId = window.turnstile.render(container, {
       sitekey: this._siteInfo.turnstileSiteKey,
       theme: 'dark',
-      callback: (token) => { this._turnstileToken = token; },
-      'expired-callback': () => { this._turnstileToken = null; },
+      callback: (token) => {
+        this._turnstileToken = token;
+        this._updateRegisterButtonState();
+      },
+      'expired-callback': () => {
+        this._turnstileToken = null;
+        this._updateRegisterButtonState();
+      },
+      'error-callback': () => {
+        this._turnstileToken = null;
+        this._updateRegisterButtonState();
+      },
     });
   }
 
@@ -2849,6 +2876,18 @@ class StarShipApp {
       window.turnstile.remove(this._turnstileWidgetId);
       this._turnstileWidgetId = null;
       this._turnstileToken = null;
+    }
+  }
+
+  _updateRegisterButtonState() {
+    if (this._authMode !== 'register') return;
+    const needsTurnstile = !!this._siteInfo.turnstileSiteKey;
+    if (needsTurnstile && !this._turnstileToken) {
+      this.btnAuthSubmit.disabled = true;
+      this.btnAuthSubmit.textContent = '인간 확인을 완료해주세요';
+    } else {
+      this.btnAuthSubmit.disabled = false;
+      this.btnAuthSubmit.textContent = '가입하기';
     }
   }
 
@@ -2883,6 +2922,7 @@ class StarShipApp {
         if (window.turnstile && this._turnstileWidgetId != null) {
           window.turnstile.reset(this._turnstileWidgetId);
           this._turnstileToken = null;
+          this._updateRegisterButtonState();
         }
         return;
       }
@@ -2905,7 +2945,6 @@ class StarShipApp {
       this.authError.textContent = '서버 연결 오류';
       this.authError.style.display = 'block';
     } finally {
-      this.btnAuthSubmit.disabled = false;
       this.updateAuthModal();
     }
   }

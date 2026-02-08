@@ -1350,6 +1350,19 @@ textarea.input {
 .auth-submit:active {
   transform: translateY(0);
 }
+.auth-submit:disabled {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+  font-size: 0.85rem;
+}
+.auth-submit:disabled:hover {
+  background: var(--bg-hover);
+  box-shadow: none;
+  transform: none;
+}
 
 .auth-divider {
   display: flex;
