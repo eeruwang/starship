@@ -445,8 +445,8 @@ body {
 }
 
 .post-author .inline-emoji {
-  width: 18px;
-  height: 18px;
+  height: 1.2em;
+  width: auto;
   vertical-align: -3px;
 }
 
@@ -689,8 +689,8 @@ body {
 }
 
 .reply-context-content .inline-emoji {
-  width: 16px;
-  height: 16px;
+  height: 1.2em;
+  width: auto;
 }
 
 .expand-toggle {
@@ -868,15 +868,15 @@ body {
 }
 
 .notif-text strong .inline-emoji {
-  width: 16px;
-  height: 16px;
+  height: 1.1em;
+  width: auto;
   vertical-align: -2px;
 }
 
 .renote-indicator .inline-emoji,
 .boost-indicator .inline-emoji {
-  width: 16px;
-  height: 16px;
+  height: 1.1em;
+  width: auto;
   vertical-align: -2px;
 }
 
@@ -1257,11 +1257,15 @@ textarea.input {
 
 /* ===== Inline Custom Emoji ===== */
 .inline-emoji {
-  width: 20px;
-  height: 20px;
+  height: 1.5em;
+  width: auto;
   object-fit: contain;
   vertical-align: middle;
   margin: 0 1px;
+}
+
+.post-content .inline-emoji {
+  height: 2em;
 }
 
 /* ===== Merged Border (dedup) ===== */
