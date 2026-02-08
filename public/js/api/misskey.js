@@ -11,6 +11,7 @@ export class MisskeyClient {
     this.platformType = platformType; // 'misskey' | 'iceshrimp' | 'cherrypick'
     // localhost가 아니면 Worker 프록시 사용 (Cloudflare 배포 환경)
     this.useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    this._emojiCache = null; // cached instance emojis
   }
 
   async request(endpoint, body = {}) {
@@ -87,6 +88,17 @@ export class MisskeyClient {
 
   async getEmojis() {
     return this.request('emojis', {});
+  }
+
+  async getInstanceEmojis() {
+    if (this._emojiCache) return this._emojiCache;
+    try {
+      const res = await this.getEmojis();
+      this._emojiCache = res.emojis || [];
+    } catch {
+      this._emojiCache = [];
+    }
+    return this._emojiCache;
   }
 
   async fetchThemeColor() {

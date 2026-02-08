@@ -1705,15 +1705,86 @@ textarea.input {
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
   z-index: 250;
-  width: 250px;
+  width: 320px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+.reaction-picker-section-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 0.4rem 0.5rem 0;
+  font-weight: 600;
+}
+
+.reaction-picker-unicode {
+  flex-shrink: 0;
+}
+
+.reaction-picker-search {
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.reaction-picker-search-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
+  padding: 0.3rem 0.5rem;
+  outline: none;
+}
+
+.reaction-picker-search-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.reaction-picker-emojis {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: 260px;
+  scrollbar-width: thin;
+}
+
+.reaction-picker-category-name {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  padding: 0.3rem 0.5rem 0.1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 1;
+}
+
+.reaction-picker-item.instance-emoji {
+  padding: 0.2rem;
+}
+
+.reaction-picker-item.instance-emoji img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 
 .reaction-picker-grid {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 2px;
-  padding: 0.5rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.reaction-picker-category .reaction-picker-grid {
+  grid-template-columns: repeat(8, 1fr);
 }
 
 .reaction-picker-item {

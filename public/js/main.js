@@ -1266,7 +1266,7 @@ class StarShipApp {
     return mentions.length > 0 ? mentions.join(' ') : null;
   }
 
-  showReactionPicker(anchorElement, postId, platform, accountId) {
+  async showReactionPicker(anchorElement, postId, platform, accountId) {
     // Close any existing picker
     this.closeReactionPicker();
 
@@ -1274,16 +1274,53 @@ class StarShipApp {
     picker.className = 'reaction-picker';
     picker.id = 'reaction-picker-popup';
 
-    // Common emoji reactions
+    // Common unicode emoji reactions
     const commonReactions = [
       '👍', '❤️', '😆', '🎉', '😮', '🤔', '😢', '👀',
       '🔥', '⭐', '💯', '✨', '😂', '🙏', '💕', '😊',
     ];
 
+    // Fetch instance custom emojis for Misskey accounts
+    const client = this.store.getClient(accountId);
+    const account = this.store.getById(accountId);
+    let instanceEmojis = [];
+    if (account && account.platform !== 'mastodon' && client?.getInstanceEmojis) {
+      instanceEmojis = await client.getInstanceEmojis();
+    }
+
+    // Build categories from instance emojis
+    const categories = new Map();
+    for (const emoji of instanceEmojis) {
+      const cat = emoji.category || '기타';
+      if (!categories.has(cat)) categories.set(cat, []);
+      categories.get(cat).push(emoji);
+    }
+
+    let instanceEmojiHtml = '';
+    if (instanceEmojis.length > 0) {
+      instanceEmojiHtml = `
+        <div class="reaction-picker-search">
+          <input type="text" class="reaction-picker-search-input" placeholder="이모지 검색..." />
+        </div>
+        <div class="reaction-picker-emojis">
+          ${Array.from(categories.entries()).map(([cat, emojis]) => `
+            <div class="reaction-picker-category" data-category="${cat}">
+              <div class="reaction-picker-category-name">${this.escapeHtml(cat)}</div>
+              <div class="reaction-picker-grid">
+                ${emojis.map(e => `<button class="reaction-picker-item instance-emoji" data-reaction=":${e.name}:" title=":${e.name}:"><img src="${this.escapeHtml(e.url)}" alt=":${e.name}:" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
     picker.innerHTML = `
-      <div class="reaction-picker-grid">
+      <div class="reaction-picker-section-label">이모지</div>
+      <div class="reaction-picker-grid reaction-picker-unicode">
         ${commonReactions.map(r => `<button class="reaction-picker-item" data-reaction="${r}">${r}</button>`).join('')}
       </div>
+      ${instanceEmojiHtml}
       <div class="reaction-picker-custom">
         <input type="text" class="reaction-picker-input" placeholder=":emoji: 또는 이모지 입력" />
       </div>
@@ -1292,7 +1329,7 @@ class StarShipApp {
     // Position near button
     const positionReactionPicker = (r) => {
       picker.style.bottom = `${window.innerHeight - r.top + 4}px`;
-      picker.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 260))}px`;
+      picker.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 330))}px`;
     };
     const rect = anchorElement.getBoundingClientRect();
     picker.style.position = 'fixed';
@@ -1309,6 +1346,26 @@ class StarShipApp {
       this.closeReactionPicker();
       await this.sendReaction(postId, platform, accountId, reaction, anchorElement);
     });
+
+    // Handle search/filter for instance emojis
+    const searchInput = picker.querySelector('.reaction-picker-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim().toLowerCase();
+        const items = picker.querySelectorAll('.instance-emoji');
+        const cats = picker.querySelectorAll('.reaction-picker-category');
+        for (const item of items) {
+          const name = (item.dataset.reaction || '').toLowerCase();
+          const title = (item.getAttribute('title') || '').toLowerCase();
+          item.style.display = (!query || name.includes(query) || title.includes(query)) ? '' : 'none';
+        }
+        // Hide empty categories
+        for (const cat of cats) {
+          const visibleItems = cat.querySelectorAll('.instance-emoji:not([style*="display: none"])');
+          cat.style.display = visibleItems.length > 0 ? '' : 'none';
+        }
+      });
+    }
 
     // Handle custom emoji input
     const input = picker.querySelector('.reaction-picker-input');
