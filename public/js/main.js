@@ -307,6 +307,14 @@ class StarShipApp {
 
     // Arrow key navigation
     document.addEventListener('keydown', (e) => {
+      // Cmd/Ctrl+N: open compose modal (override browser new-window)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.openComposeModal();
+        return;
+      }
+
       if (e.key === 'Escape') {
         document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
         this.closeLightbox();
