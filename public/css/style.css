@@ -110,6 +110,10 @@ body {
   gap: 0.5rem;
   flex-shrink: 0;
 }
+.header-right .btn {
+  height: 2.25rem;
+  box-sizing: border-box;
+}
 
 /* ===== Buttons ===== */
 .btn {
