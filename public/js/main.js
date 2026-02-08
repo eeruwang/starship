@@ -1190,12 +1190,16 @@ class StarShipApp {
     `;
 
     // Position near button
+    const positionReactionPicker = (r) => {
+      picker.style.bottom = `${window.innerHeight - r.top + 4}px`;
+      picker.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 260))}px`;
+    };
     const rect = anchorElement.getBoundingClientRect();
     picker.style.position = 'fixed';
-    picker.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-    picker.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 260))}px`;
+    positionReactionPicker(rect);
 
     document.body.appendChild(picker);
+    this._trackPopupScroll('reactionPicker', picker, anchorElement, positionReactionPicker);
 
     // Handle emoji click
     picker.addEventListener('click', async (e) => {
@@ -1237,6 +1241,7 @@ class StarShipApp {
       document.removeEventListener('click', this._reactionPickerClose);
       this._reactionPickerClose = null;
     }
+    this._removeScrollTracker('reactionPicker');
   }
 
   async sendReaction(postId, platform, accountId, reaction, btnElement) {
@@ -1313,16 +1318,22 @@ class StarShipApp {
     picker.innerHTML = html;
 
     // Position near the anchor
+    const positionAccountPicker = (r) => {
+      picker.style.left = `${r.left}px`;
+      picker.style.top = `${r.bottom + 4}px`;
+      // Adjust if goes off right
+      const pw = picker.offsetWidth || 200;
+      if (r.left + pw > window.innerWidth) {
+        picker.style.left = `${window.innerWidth - pw - 8}px`;
+      }
+    };
     const rect = anchorElement.getBoundingClientRect();
-    picker.style.left = `${rect.left}px`;
-    picker.style.top = `${rect.bottom + 4}px`;
+    positionAccountPicker(rect);
 
-    // If would go off right side
     document.body.appendChild(picker);
-    const pickerRect = picker.getBoundingClientRect();
-    if (pickerRect.right > window.innerWidth) {
-      picker.style.left = `${window.innerWidth - pickerRect.width - 8}px`;
-    }
+    // Re-adjust after DOM append (now offsetWidth is real)
+    positionAccountPicker(anchorElement.getBoundingClientRect());
+    this._trackPopupScroll('accountPicker', picker, anchorElement, positionAccountPicker);
 
     picker.addEventListener('click', (e) => {
       const item = e.target.closest('.account-picker-item');
@@ -1351,6 +1362,7 @@ class StarShipApp {
       document.removeEventListener('click', this._pickerOutsideClick);
       this._pickerOutsideClick = null;
     }
+    this._removeScrollTracker('accountPicker');
   }
 
   // ===== Compose =====
@@ -1889,16 +1901,19 @@ class StarShipApp {
     popup.id = 'reaction-users-popup';
     popup.innerHTML = '<div class="reaction-users-loading">불러오는 중...</div>';
 
+    const positionReactionPopup = (r) => {
+      popup.style.left = `${r.left}px`;
+      popup.style.top = `${r.bottom + 4}px`;
+      const pw = popup.offsetWidth || 180;
+      if (r.left + pw > window.innerWidth) {
+        popup.style.left = `${window.innerWidth - pw - 8}px`;
+      }
+    };
     const rect = badge.getBoundingClientRect();
-    popup.style.left = `${rect.left}px`;
-    popup.style.top = `${rect.bottom + 4}px`;
+    positionReactionPopup(rect);
     document.body.appendChild(popup);
-
-    // Adjust if goes off right side
-    const popupRect = popup.getBoundingClientRect();
-    if (popupRect.right > window.innerWidth) {
-      popup.style.left = `${window.innerWidth - popupRect.width - 8}px`;
-    }
+    positionReactionPopup(badge.getBoundingClientRect());
+    this._trackPopupScroll('reactionPopup', popup, badge, positionReactionPopup);
 
     try {
       let users = [];
@@ -1959,6 +1974,34 @@ class StarShipApp {
       document.removeEventListener('click', this._reactionPopupClose);
       this._reactionPopupClose = null;
     }
+    this._removeScrollTracker('reactionPopup');
+  }
+
+  // Track scroll on the column-content and reposition a fixed popup to follow the anchor
+  _trackPopupScroll(key, popup, anchorElement, positionFn) {
+    const scrollContainer = anchorElement.closest('.column-content');
+    if (!scrollContainer) return;
+    const handler = () => {
+      const rect = anchorElement.getBoundingClientRect();
+      const containerRect = scrollContainer.getBoundingClientRect();
+      // Hide popup if anchor scrolled out of view
+      if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) {
+        popup.style.visibility = 'hidden';
+      } else {
+        popup.style.visibility = '';
+        positionFn(rect);
+      }
+    };
+    scrollContainer.addEventListener('scroll', handler, { passive: true });
+    if (!this._scrollTrackers) this._scrollTrackers = {};
+    this._scrollTrackers[key] = { container: scrollContainer, handler };
+  }
+
+  _removeScrollTracker(key) {
+    if (!this._scrollTrackers || !this._scrollTrackers[key]) return;
+    const { container, handler } = this._scrollTrackers[key];
+    container.removeEventListener('scroll', handler);
+    delete this._scrollTrackers[key];
   }
 
   // ===== Helpers =====
