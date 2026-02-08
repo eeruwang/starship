@@ -1137,6 +1137,9 @@ class StarShipApp {
   async executePostAction(action, postId, platform, accountId, btnElement) {
     const client = this.store.getClient(accountId);
     if (!client) return;
+    const account = this.store.getById(accountId);
+    if (!account) return;
+    const accountPlatform = account.platform;
 
     // Look up cached post to check current fav/boost state
     const cachedPost = this.postCache.get(`${platform}:${postId}`);
@@ -1149,14 +1152,14 @@ class StarShipApp {
         const alreadyFaved = cachedPost?.favourited || cachedPost?.myReaction;
         if (alreadyFaved) {
           // Unlike / unreact
-          if (platform === 'mastodon') {
+          if (accountPlatform === 'mastodon') {
             await client.unfavourite(postId);
           } else {
             await client.deleteReaction(postId);
           }
           btnElement.classList.remove('processing', 'active');
         } else {
-          if (platform === 'mastodon') {
+          if (accountPlatform === 'mastodon') {
             await client.favourite(postId);
           } else {
             await client.createReaction(postId, '❤');
@@ -1168,12 +1171,12 @@ class StarShipApp {
       } else if (action === 'boost') {
         const alreadyBoosted = cachedPost?.reblogged;
         if (alreadyBoosted) {
-          if (platform === 'mastodon') {
+          if (accountPlatform === 'mastodon') {
             await client.unreblog(postId);
           }
           btnElement.classList.remove('processing', 'active');
         } else {
-          if (platform === 'mastodon') {
+          if (accountPlatform === 'mastodon') {
             await client.reblog(postId);
           } else {
             await client.renote(postId);

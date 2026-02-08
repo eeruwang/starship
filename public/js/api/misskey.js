@@ -32,7 +32,11 @@ export class MisskeyClient {
       throw new Error(`Misskey API error ${res.status}: ${errText}`);
     }
 
-    return res.json();
+    // Some endpoints (e.g. reactions/create, reactions/delete) return 204 No Content
+    if (res.status === 204) return null;
+    const text = await res.text();
+    if (!text) return null;
+    return JSON.parse(text);
   }
 
   async verifyCredentials() {
