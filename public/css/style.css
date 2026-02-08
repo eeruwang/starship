@@ -1396,9 +1396,12 @@ textarea.input {
   gap: 0.35rem;
 }
 #btn-auth.logged-in {
-  background: rgba(124, 125, 255, 0.15);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+#btn-auth.logged-in:hover {
+  background: var(--bg-hover);
 }
 
 .btn-small {
