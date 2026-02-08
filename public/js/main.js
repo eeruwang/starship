@@ -1049,13 +1049,24 @@ class StarShipApp {
 
     if (accounts.length === 0) return;
 
+    // Reply/Quote: skip account picker, go directly to compose modal
+    // The card's accountId tells us which account received this post
+    if (action === 'reply') {
+      this.openComposeModal(postId, accountId);
+      return;
+    }
+    if (action === 'quote') {
+      this.openQuoteModal(postId, platform, accountId);
+      return;
+    }
+
     // Single account: use it directly
     if (accounts.length === 1) {
       await this.executePostAction(action, postId, platform, accounts[0].id, btnElement);
       return;
     }
 
-    // Multi-account: always show picker so user can choose
+    // Multi-account: show picker so user can choose
     this.showAccountPicker(btnElement, accounts, async (selectedAccountId) => {
       await this.executePostAction(action, postId, platform, selectedAccountId, btnElement);
     }, accountId);
