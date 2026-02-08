@@ -121,6 +121,57 @@
     </div>
   </div>
 
+  <!-- 설정 모달 -->
+  <div class="modal-overlay" id="modal-settings" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>설정</h2>
+        <button class="btn btn-icon modal-close" data-close-modal="modal-settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="setting-refresh-interval">자동 새로고침 간격</label>
+          <select id="setting-refresh-interval" class="input">
+            <option value="0">끄기</option>
+            <option value="30000">30초</option>
+            <option value="60000" selected>1분</option>
+            <option value="120000">2분</option>
+            <option value="300000">5분</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="setting-column-width">컬럼 너비</label>
+          <select id="setting-column-width" class="input">
+            <option value="320">좁게 (320px)</option>
+            <option value="380" selected>보통 (380px)</option>
+            <option value="440">넓게 (440px)</option>
+            <option value="520">아주 넓게 (520px)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="setting-font-size">글꼴 크기</label>
+          <select id="setting-font-size" class="input">
+            <option value="13">작게 (13px)</option>
+            <option value="14" selected>보통 (14px)</option>
+            <option value="15">크게 (15px)</option>
+            <option value="16">아주 크게 (16px)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="setting-posts-count">타임라인 로드 개수</label>
+          <select id="setting-posts-count" class="input">
+            <option value="20">20개</option>
+            <option value="30" selected>30개</option>
+            <option value="50">50개</option>
+          </select>
+        </div>
+        <hr style="border:none; border-top:1px solid var(--border-color); margin:1rem 0;">
+        <button class="btn btn-danger btn-small" id="btn-settings-reset" style="width:100%;">모든 데이터 초기화</button>
+        <small class="form-hint" style="text-align:center; display:block; margin-top:0.3rem;">계정 정보와 설정이 모두 삭제됩니다.</small>
+      </div>
+    </div>
+  </div>
+
   <!-- 이미지 라이트박스 -->
   <div class="lightbox-overlay" id="lightbox" style="display:none;">
     <button class="lightbox-close" id="lightbox-close">

@@ -7,17 +7,22 @@ import { renderPost, renderNotification, renderAccountCard, renderLoading, rende
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from './auth.js';
 
 const COLUMN_STATE_KEY = 'starship_column_state';
+const SETTINGS_KEY = 'starship_settings';
 
 class StarShipApp {
   constructor() {
     this.store = new AccountStore();
     this.autoRefreshTimer = null;
-    this.AUTO_REFRESH_INTERVAL = 60000;
     this.focusedColumnIndex = 0;
     this.postCache = new Map(); // key: `${platform}:${id}`, value: post
     this.POST_CACHE_MAX = 500;
     this.composeFiles = [];
     this.composeSelectedAccounts = new Set();
+
+    // Settings
+    this.settings = this.loadSettings();
+    this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
+    this.applySettings();
 
     // Column state: which columns are visible
     this.columnState = this.loadColumnState();
@@ -26,6 +31,32 @@ class StarShipApp {
     this.bindEvents();
     this.render();
     this.startAutoRefresh();
+  }
+
+  loadSettings() {
+    try {
+      const data = localStorage.getItem(SETTINGS_KEY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        return {
+          refreshInterval: parsed.refreshInterval ?? 60000,
+          columnWidth: parsed.columnWidth ?? 380,
+          fontSize: parsed.fontSize ?? 14,
+          postsCount: parsed.postsCount ?? 30,
+        };
+      }
+    } catch {}
+    return { refreshInterval: 60000, columnWidth: 380, fontSize: 14, postsCount: 30 };
+  }
+
+  saveSettings() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
+  }
+
+  applySettings() {
+    document.documentElement.style.setProperty('--column-width', `${this.settings.columnWidth}px`);
+    document.documentElement.style.fontSize = `${this.settings.fontSize}px`;
+    this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
   }
 
   loadColumnState() {
@@ -86,6 +117,9 @@ class StarShipApp {
 
     // Refresh
     this.btnRefreshAll.addEventListener('click', () => this.refreshAll());
+
+    // Settings
+    this.btnSettings.addEventListener('click', () => this.openSettingsModal());
 
     // Modal close
     document.querySelectorAll('[data-close-modal]').forEach(btn => {
@@ -520,7 +554,7 @@ class StarShipApp {
           if (!client) return [];
 
           try {
-            const items = await client.getHomeTimeline(30);
+            const items = await client.getHomeTimeline(this.settings.postsCount);
             return items.map(item => {
               const post = client.normalizePost(item);
               post.accountId = account.id;
@@ -540,7 +574,17 @@ class StarShipApp {
         }
       }
 
-      allPosts.sort((a, b) => b.createdAt - a.createdAt);
+      // Sort by time descending, with stable tiebreaker by accountId then post id
+      allPosts.sort((a, b) => {
+        const timeDiff = b.createdAt - a.createdAt;
+        if (timeDiff !== 0) return timeDiff;
+        // Stable tiebreaker: sort by accountId so dedup always picks the same winner
+        if (a.accountId < b.accountId) return -1;
+        if (a.accountId > b.accountId) return 1;
+        if (a.id < b.id) return -1;
+        if (a.id > b.id) return 1;
+        return 0;
+      });
 
       // Deduplicate posts by canonical URI (same post seen from different accounts)
       if (accounts.length > 1) {
@@ -588,12 +632,23 @@ class StarShipApp {
         }
       } else {
         // Smooth incremental update: prepend new posts with animation
-        const existingIds = new Set();
+        // Build a set of both platform:id keys AND canonical URIs for robust matching
+        const existingKeys = new Set();
         for (const card of existingCards) {
-          existingIds.add(`${card.dataset.platform}:${card.dataset.postId}`);
+          existingKeys.add(`${card.dataset.platform}:${card.dataset.postId}`);
+          if (card.dataset.canonicalUri) {
+            existingKeys.add(`uri:${card.dataset.canonicalUri}`);
+          }
         }
 
-        const newPosts = allPosts.filter(p => !existingIds.has(`${p.platform}:${p.id}`));
+        const newPosts = allPosts.filter(p => {
+          // Check platform:id
+          if (existingKeys.has(`${p.platform}:${p.id}`)) return false;
+          // Check canonicalUri
+          const displayPost = p.reblog || p;
+          if (displayPost.canonicalUri && existingKeys.has(`uri:${displayPost.canonicalUri}`)) return false;
+          return true;
+        });
 
         if (newPosts.length > 0) {
           const scrollTop = container.scrollTop;
@@ -653,7 +708,7 @@ class StarShipApp {
           if (!client) return [];
 
           try {
-            const notifs = await client.getNotifications(30);
+            const notifs = await client.getNotifications(this.settings.postsCount);
             return notifs.map(n => client.normalizeNotification(n));
           } catch (err) {
             console.error(`Notifications error for ${account.label}:`, err);
@@ -1137,6 +1192,7 @@ class StarShipApp {
 
   startAutoRefresh() {
     this.stopAutoRefresh();
+    if (!this.AUTO_REFRESH_INTERVAL || this.AUTO_REFRESH_INTERVAL <= 0) return;
     this.autoRefreshTimer = setInterval(() => {
       if (!this.store.isEmpty()) {
         this.refreshAll();
@@ -1395,6 +1451,66 @@ class StarShipApp {
   showAddError(message) {
     this.addAccountError.textContent = message;
     this.addAccountError.style.display = 'block';
+  }
+
+  // ===== Settings =====
+
+  openSettingsModal() {
+    const modal = document.getElementById('modal-settings');
+    const refreshSelect = document.getElementById('setting-refresh-interval');
+    const columnWidthSelect = document.getElementById('setting-column-width');
+    const fontSizeSelect = document.getElementById('setting-font-size');
+    const postsCountSelect = document.getElementById('setting-posts-count');
+    const resetBtn = document.getElementById('btn-settings-reset');
+
+    refreshSelect.value = String(this.settings.refreshInterval);
+    columnWidthSelect.value = String(this.settings.columnWidth);
+    fontSizeSelect.value = String(this.settings.fontSize);
+    postsCountSelect.value = String(this.settings.postsCount);
+
+    // Remove old listeners by cloning
+    const newRefresh = refreshSelect.cloneNode(true);
+    refreshSelect.replaceWith(newRefresh);
+    newRefresh.addEventListener('change', () => {
+      this.settings.refreshInterval = parseInt(newRefresh.value);
+      this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
+      this.saveSettings();
+      this.startAutoRefresh();
+    });
+
+    const newColWidth = columnWidthSelect.cloneNode(true);
+    columnWidthSelect.replaceWith(newColWidth);
+    newColWidth.addEventListener('change', () => {
+      this.settings.columnWidth = parseInt(newColWidth.value);
+      this.saveSettings();
+      this.applySettings();
+    });
+
+    const newFontSize = fontSizeSelect.cloneNode(true);
+    fontSizeSelect.replaceWith(newFontSize);
+    newFontSize.addEventListener('change', () => {
+      this.settings.fontSize = parseInt(newFontSize.value);
+      this.saveSettings();
+      this.applySettings();
+    });
+
+    const newPostsCount = postsCountSelect.cloneNode(true);
+    postsCountSelect.replaceWith(newPostsCount);
+    newPostsCount.addEventListener('change', () => {
+      this.settings.postsCount = parseInt(newPostsCount.value);
+      this.saveSettings();
+    });
+
+    const newResetBtn = resetBtn.cloneNode(true);
+    resetBtn.replaceWith(newResetBtn);
+    newResetBtn.addEventListener('click', () => {
+      if (confirm('정말로 모든 데이터를 초기화하시겠습니까?\n계정 정보, 설정이 모두 삭제됩니다.')) {
+        localStorage.clear();
+        location.reload();
+      }
+    });
+
+    modal.style.display = 'flex';
   }
 
   // ===== Reaction Users =====

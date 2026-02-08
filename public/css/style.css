@@ -105,6 +105,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 /* ===== Buttons ===== */
@@ -1502,7 +1503,68 @@ textarea.input {
 }
 
 /* ===== Responsive ===== */
-@media (max-width: 768px) {
+
+/* Header: always stay on one line, shrink items as needed */
+.app-header {
+  flex-wrap: nowrap;
+  min-height: 0;
+}
+
+.header-left {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.header-right {
+  flex-shrink: 0;
+}
+
+/* Tablet (iPad Mini portrait ~744px, iPad ~820px, landscape ~1024px) */
+@media (min-width: 601px) and (max-width: 1024px) {
+  html {
+    font-size: 15px;
+  }
+  .app-header {
+    padding: 0.6rem 1rem;
+  }
+  .logo {
+    font-size: 1.2rem;
+  }
+  .tagline {
+    display: none;
+  }
+  .header-right .btn {
+    font-size: 0.82rem;
+    padding: 0.45rem 0.75rem;
+  }
+  .column-toggle-bar {
+    padding: 0.45rem 0.75rem;
+  }
+  .col-toggle {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.7rem;
+  }
+  .columns-container {
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+  .column {
+    min-width: min(var(--column-width), 70vw);
+    max-width: min(var(--column-width), 70vw);
+  }
+}
+
+/* Tablet portrait (narrower, ~600-768px) */
+@media (min-width: 601px) and (max-width: 768px) {
+  .column {
+    min-width: min(var(--column-width), 80vw);
+    max-width: min(var(--column-width), 80vw);
+  }
+}
+
+/* Phone */
+@media (max-width: 600px) {
   .columns-container {
     gap: 0.5rem;
     padding: 0.5rem;
@@ -1683,4 +1745,14 @@ textarea.input {
 
 .post-action[data-action="boost"].active .action-icon svg {
   stroke: #2ecc71;
+}
+
+/* ===== Settings Modal ===== */
+#modal-settings .form-group label {
+  margin-bottom: 0.3rem;
+}
+
+#modal-settings select.input {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
 }

@@ -21,6 +21,8 @@ export function renderPost(post) {
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
   if (post.accountId) card.dataset.accountId = post.accountId;
+  const displayPostForUri = post.reblog || post;
+  if (displayPostForUri.canonicalUri) card.dataset.canonicalUri = displayPostForUri.canonicalUri;
 
   // Merged account border gradient (pseudo-element via CSS custom property)
   if (post.mergedAccounts && post.mergedAccounts.length > 1) {
