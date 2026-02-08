@@ -2752,6 +2752,7 @@ class StarShipApp {
   }
 
   async logout() {
+    await this.saveToCloud();
     try {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
     } catch {}
