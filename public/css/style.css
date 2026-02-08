@@ -621,11 +621,17 @@ body {
 /* ===== Reply Context ===== */
 .reply-context {
   background: var(--bg-primary);
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
-  margin-bottom: 0.5rem;
-  border-left: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.75rem;
+  border-left: 2px solid var(--text-muted);
   font-size: 0.8rem;
+  opacity: 0.75;
+  transition: opacity 0.2s;
+}
+
+.reply-context:hover {
+  opacity: 1;
 }
 
 .reply-context-header {
@@ -1687,6 +1693,79 @@ textarea.input {
 .account-picker-item.preferred {
   background: rgba(124, 125, 255, 0.1);
   border-left: 2px solid var(--accent-primary);
+}
+
+/* ===== Reaction Picker ===== */
+.reaction-picker {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  z-index: 250;
+  width: 250px;
+  overflow: hidden;
+}
+
+.reaction-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 0.5rem;
+}
+
+.reaction-picker-item {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+  line-height: 1;
+  text-align: center;
+}
+
+.reaction-picker-item:hover {
+  background: var(--bg-hover);
+  transform: scale(1.2);
+}
+
+.reaction-picker-custom {
+  border-top: 1px solid var(--border-color);
+  padding: 0.4rem;
+}
+
+.reaction-picker-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
+  padding: 0.35rem 0.5rem;
+  outline: none;
+}
+
+.reaction-picker-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.reaction-picker-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Quote action */
+.post-action[data-action="quote"]:hover {
+  color: #9b59b6;
+  background: rgba(155, 89, 182, 0.12);
+}
+
+/* Reaction action */
+.post-action[data-action="reaction"]:hover,
+.post-action[data-action="reaction"].active {
+  color: #e67e22;
+  background: rgba(230, 126, 34, 0.12);
 }
 
 /* ===== App Layout ===== */

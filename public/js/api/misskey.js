@@ -77,7 +77,12 @@ export class MisskeyClient {
     if (options.cw) body.cw = options.cw;
     if (options.fileIds && options.fileIds.length > 0) body.fileIds = options.fileIds;
     if (options.replyId) body.replyId = options.replyId;
+    if (options.renoteId) body.renoteId = options.renoteId;
     return this.request('notes/create', body);
+  }
+
+  async getEmojis() {
+    return this.request('emojis', {});
   }
 
   async uploadFile(file) {

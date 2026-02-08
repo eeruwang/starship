@@ -199,6 +199,10 @@ class StarShipApp {
         this.handlePostAction('boost', postId, platform, accountId, btn);
       } else if (action === 'reply') {
         this.handlePostAction('reply', postId, platform, accountId, btn);
+      } else if (action === 'quote') {
+        this.handlePostAction('quote', postId, platform, accountId, btn);
+      } else if (action === 'reaction') {
+        this.handlePostAction('reaction', postId, platform, accountId, btn);
       }
     });
 
@@ -951,6 +955,14 @@ class StarShipApp {
         btnElement.classList.remove('processing');
         this.openComposeModal(postId, accountId);
         return; // Don't refresh for reply
+      } else if (action === 'quote') {
+        btnElement.classList.remove('processing');
+        this.openQuoteModal(postId, platform, accountId);
+        return; // Don't refresh for quote
+      } else if (action === 'reaction') {
+        btnElement.classList.remove('processing');
+        this.showReactionPicker(btnElement, postId, platform, accountId);
+        return;
       }
 
       // Re-fetch the note and update the card in-place
@@ -998,6 +1010,128 @@ class StarShipApp {
     } catch (err) {
       // Silently fail - the action already succeeded
     }
+  }
+
+  getReplyMention(postId, accountId) {
+    // Find the original post from postCache to get the author's acct
+    for (const [key, post] of this.postCache) {
+      const dp = post.reblog || post;
+      if (post.id === postId || dp.id === postId) {
+        const author = dp.author;
+        if (!author) return null;
+        // Don't mention yourself
+        const account = this.store.getById(accountId);
+        if (account && author.username === account.profile?.username) return null;
+        const acct = author.acct || author.username;
+        return `@${acct}`;
+      }
+    }
+    return null;
+  }
+
+  showReactionPicker(anchorElement, postId, platform, accountId) {
+    // Close any existing picker
+    this.closeReactionPicker();
+
+    const picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+    picker.id = 'reaction-picker-popup';
+
+    // Common emoji reactions
+    const commonReactions = [
+      '👍', '❤️', '😆', '🎉', '😮', '🤔', '😢', '👀',
+      '🔥', '⭐', '💯', '✨', '😂', '🙏', '💕', '😊',
+    ];
+
+    picker.innerHTML = `
+      <div class="reaction-picker-grid">
+        ${commonReactions.map(r => `<button class="reaction-picker-item" data-reaction="${r}">${r}</button>`).join('')}
+      </div>
+      <div class="reaction-picker-custom">
+        <input type="text" class="reaction-picker-input" placeholder=":emoji: 또는 이모지 입력" />
+      </div>
+    `;
+
+    // Position near button
+    const rect = anchorElement.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+    picker.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 260))}px`;
+
+    document.body.appendChild(picker);
+
+    // Handle emoji click
+    picker.addEventListener('click', async (e) => {
+      const item = e.target.closest('.reaction-picker-item');
+      if (!item) return;
+      const reaction = item.dataset.reaction;
+      this.closeReactionPicker();
+      await this.sendReaction(postId, platform, accountId, reaction, anchorElement);
+    });
+
+    // Handle custom emoji input
+    const input = picker.querySelector('.reaction-picker-input');
+    input.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        const value = input.value.trim();
+        if (value) {
+          this.closeReactionPicker();
+          await this.sendReaction(postId, platform, accountId, value, anchorElement);
+        }
+      }
+    });
+
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', this._reactionPickerClose = (e) => {
+        if (!picker.contains(e.target) && e.target !== anchorElement) {
+          this.closeReactionPicker();
+        }
+      }, { once: true });
+    }, 0);
+  }
+
+  closeReactionPicker() {
+    const existing = document.getElementById('reaction-picker-popup');
+    if (existing) existing.remove();
+  }
+
+  async sendReaction(postId, platform, accountId, reaction, btnElement) {
+    const client = this.store.getClient(accountId);
+    if (!client) return;
+    try {
+      btnElement.classList.add('processing');
+      await client.createReaction(postId, reaction);
+      btnElement.classList.remove('processing');
+      btnElement.classList.add('active', 'just-activated');
+      setTimeout(() => btnElement.classList.remove('just-activated'), 600);
+      await this.refreshSinglePost(postId, platform, accountId);
+    } catch (err) {
+      console.error('Reaction failed:', err);
+      btnElement.classList.remove('processing');
+    }
+  }
+
+  openQuoteModal(postId, platform, accountId) {
+    // Find the original post URL for the quote
+    let quoteUrl = '';
+    for (const [key, post] of this.postCache) {
+      const dp = post.reblog || post;
+      if (post.id === postId || dp.id === postId) {
+        quoteUrl = dp.url || dp.canonicalUri || '';
+        break;
+      }
+    }
+
+    this.openComposeModal(null, accountId);
+    this.composeTitle.textContent = '인용';
+    this.composeText.dataset.quoteId = postId;
+    this.composeText.dataset.quotePlatform = platform;
+    if (quoteUrl) {
+      this.composeText.value = '\n\n' + quoteUrl;
+      this.composeText.setSelectionRange(0, 0);
+    }
+    this.composeText.placeholder = '인용 내용을 작성하세요...';
   }
 
   // ===== Account Picker =====
@@ -1122,8 +1256,15 @@ class StarShipApp {
       this.composeText.dataset.replyTo = replyToId;
       this.composeText.placeholder = '답글을 작성하세요...';
       this.composeTitle.textContent = '답글 작성';
+
+      // Auto-fill mention of the original post author
+      const replyMention = this.getReplyMention(replyToId, preferredAccountId);
+      if (replyMention) {
+        this.composeText.value = replyMention + ' ';
+      }
     } else {
       delete this.composeText.dataset.replyTo;
+      delete this.composeText.dataset.quoteId;
       this.composeText.placeholder = '무슨 일이 일어나고 있나요?';
       this.composeTitle.textContent = '새 글 작성';
     }
@@ -1170,6 +1311,8 @@ class StarShipApp {
     const text = this.composeText.value.trim();
     const cw = this.composeCw.value.trim();
     const replyToId = this.composeText.dataset.replyTo;
+    const quoteId = this.composeText.dataset.quoteId;
+    const quotePlatform = this.composeText.dataset.quotePlatform;
 
     if (selectedIds.length === 0) {
       this.composeError.textContent = '게시할 계정을 하나 이상 선택하세요.';
@@ -1221,6 +1364,7 @@ class StarShipApp {
             cw: cw || undefined,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
             replyId: replyToId || undefined,
+            renoteId: quoteId || undefined,
           });
         }
       } catch (err) {

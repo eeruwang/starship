@@ -5,6 +5,7 @@
 import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
+  iconQuote, iconSmile,
   getNotifIcon,
 } from './icons.js';
 
@@ -132,6 +133,8 @@ export function renderPost(post) {
 
   const favIcon = post.platform === 'mastodon' ? iconStar : iconHeart;
 
+  const isMisskey = post.platform !== 'mastodon';
+
   html += `
     <div class="post-actions">
       <button class="post-action" data-action="reply" title="답글">
@@ -142,10 +145,16 @@ export function renderPost(post) {
         <span class="action-icon">${iconBoost}</span>
         ${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}
       </button>
-      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">
+      <button class="post-action" data-action="quote" title="인용">
+        <span class="action-icon">${iconQuote}</span>
+      </button>
+      <button class="post-action" data-action="fav" title="${isMisskey ? '좋아요' : '즐겨찾기'}">
         <span class="action-icon">${favIcon}</span>
         ${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}
       </button>
+      ${isMisskey ? `<button class="post-action" data-action="reaction" title="리액션">
+        <span class="action-icon">${iconSmile}</span>
+      </button>` : ''}
       <button class="post-action action-end" data-action="open" title="원본 열기">
         <span class="action-icon">${iconLink}</span>
       </button>
