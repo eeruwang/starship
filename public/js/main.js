@@ -136,6 +136,7 @@ class StarShipApp {
     this.btnAuthSubmit = document.getElementById('btn-auth-submit');
     this.btnAuthSwitch = document.getElementById('btn-auth-switch');
     this.authSwitchText = document.getElementById('auth-switch-text');
+    this.authSubtitle = document.querySelector('.auth-subtitle');
     this._authMode = 'login'; // 'login' or 'register'
 
     // Lightbox
@@ -2622,6 +2623,7 @@ class StarShipApp {
   updateAuthModal() {
     const isLogin = this._authMode === 'login';
     this.authModalTitle.textContent = isLogin ? '로그인' : '회원가입';
+    this.authSubtitle.textContent = isLogin ? 'StarShip에 오신 것을 환영합니다' : '새 계정을 만들어보세요';
     this.btnAuthSubmit.textContent = isLogin ? '로그인' : '가입하기';
     this.authSwitchText.textContent = isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?';
     this.btnAuthSwitch.textContent = isLogin ? '회원가입' : '로그인';
