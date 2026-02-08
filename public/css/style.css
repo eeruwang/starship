@@ -1389,6 +1389,12 @@ textarea.input {
   box-shadow: 0 0 0 2px rgba(124, 125, 255, 0.1);
 }
 
+.compose-editor.drag-over {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(124, 125, 255, 0.2);
+  background: rgba(124, 125, 255, 0.06);
+}
+
 .compose-cw-wrap {
   display: flex;
   align-items: center;

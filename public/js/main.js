@@ -113,6 +113,7 @@ class StarShipApp {
     this.composeCw = document.getElementById('compose-cw');
     this.composeText = document.getElementById('compose-text');
     this.composeFilesInput = document.getElementById('compose-files');
+    this.composeEditor = document.querySelector('.compose-editor');
     this.composeImagePreview = document.getElementById('compose-image-preview');
     this.btnComposeAttach = document.getElementById('btn-compose-attach');
     this.btnComposeSubmit = document.getElementById('btn-compose-submit');
@@ -302,11 +303,52 @@ class StarShipApp {
     this.composeFilesInput.addEventListener('change', () => this.handleComposeFileSelect());
     this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());
 
+    // Drag-and-drop image upload on compose editor
+    this.composeEditor.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.composeEditor.classList.add('drag-over');
+    });
+    this.composeEditor.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!this.composeEditor.contains(e.relatedTarget)) {
+        this.composeEditor.classList.remove('drag-over');
+      }
+    });
+    this.composeEditor.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.composeEditor.classList.remove('drag-over');
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      for (const file of files) {
+        if (this.composeFiles.length >= 4) break;
+        this.composeFiles.push(file);
+      }
+      if (files.length > 0) this.renderComposeImagePreview();
+    });
+
     // Cmd/Ctrl+Enter to submit compose
     this.composeText.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
         this.handleComposeSubmit();
+      }
+    });
+
+    // Paste image from clipboard
+    this.composeText.addEventListener('paste', (e) => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageFiles = items
+        .filter(item => item.type.startsWith('image/'))
+        .map(item => item.getAsFile())
+        .filter(Boolean);
+      if (imageFiles.length > 0) {
+        for (const file of imageFiles) {
+          if (this.composeFiles.length >= 4) break;
+          this.composeFiles.push(file);
+        }
+        this.renderComposeImagePreview();
       }
     });
 
