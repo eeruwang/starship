@@ -624,6 +624,15 @@ body {
   background: rgba(154, 154, 184, 0.1);
 }
 
+.post-action[data-action="delete"]:hover {
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.12);
+}
+
+.post-action[data-action="delete"].processing {
+  color: #e74c3c;
+}
+
 /* ===== Reactions ===== */
 .post-reactions {
   display: flex;

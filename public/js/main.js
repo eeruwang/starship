@@ -277,6 +277,8 @@ class StarShipApp {
         this.handlePostAction('quote', postId, platform, accountId, btn);
       } else if (action === 'reaction') {
         this.handlePostAction('reaction', postId, platform, accountId, btn);
+      } else if (action === 'delete') {
+        this.handleDeletePost(postId, platform, accountId, btn);
       }
     });
 
@@ -887,6 +889,8 @@ class StarShipApp {
               post.accountId = account.id;
               post.accountPlatform = account.platform;
               post.themeColor = account.themeColor || null;
+              const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
+              post.isOwn = String(ownerId) === String(account.profile.id);
               return post;
             });
           } catch (err) {
@@ -1067,6 +1071,8 @@ class StarShipApp {
               post.accountId = account.id;
               post.accountPlatform = account.platform;
               post.themeColor = account.themeColor || null;
+              const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
+              post.isOwn = String(ownerId) === String(account.profile.id);
               return post;
             });
           } catch (err) {
@@ -1333,13 +1339,14 @@ class StarShipApp {
     if (allAccounts.length === 0) return;
 
     // Reply/Quote: skip account picker, go directly to compose modal
-    // The card's accountId tells us which account received this post
+    // For renotes/reblogs, reply/quote targets the original post
+    const originalPostId = this.getOriginalPostId(postId, platform);
     if (action === 'reply') {
-      this.openComposeModal(postId, accountId);
+      this.openComposeModal(originalPostId, accountId);
       return;
     }
     if (action === 'quote') {
-      this.openQuoteModal(postId, platform, accountId);
+      this.openQuoteModal(originalPostId, platform, accountId);
       return;
     }
 
@@ -1389,8 +1396,8 @@ class StarShipApp {
 
     // Look up cached post to check current fav/boost state
     const cachedPost = this.postCache.get(`${platform}:${postId}`);
-    // For renotes/reblogs, actions target the original post
-    const actionPostId = cachedPost?.reblog?.id || postId;
+    // For renotes/reblogs, actions target the deepest original post
+    const actionPostId = this.getOriginalPostId(postId, platform);
 
     try {
       // Immediate visual feedback: add processing state
@@ -1479,6 +1486,8 @@ class StarShipApp {
       updatedPost.accountId = accountId;
       updatedPost.accountPlatform = account.platform;
       updatedPost.themeColor = account.themeColor || null;
+      const ownerId = updatedPost.rebloggedBy ? updatedPost.rebloggedBy.id : updatedPost.author.id;
+      updatedPost.isOwn = String(ownerId) === String(account.profile.id);
 
       // Find and update all matching cards in the DOM
       const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
@@ -1503,6 +1512,50 @@ class StarShipApp {
     } catch (err) {
       // Silently fail - the action already succeeded
     }
+  }
+
+  async handleDeletePost(postId, platform, accountId, btnElement) {
+    if (!confirm('이 글을 삭제하시겠습니까?')) return;
+
+    const client = this.store.getClient(accountId);
+    const account = this.store.getById(accountId);
+    if (!client || !account) return;
+
+    try {
+      btnElement.classList.add('processing');
+      if (account.platform === 'mastodon') {
+        await client.deleteStatus(postId);
+      } else {
+        await client.deleteNote(postId);
+      }
+
+      // Remove the card from the DOM
+      const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
+      for (const card of cards) {
+        card.style.transition = 'opacity 0.3s, transform 0.3s';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.95)';
+        setTimeout(() => card.remove(), 300);
+      }
+
+      // Remove from cache
+      this.postCache.delete(`${platform}:${postId}`);
+    } catch (err) {
+      console.error('Delete failed:', err);
+      btnElement.classList.remove('processing');
+      alert('삭제에 실패했습니다: ' + err.message);
+    }
+  }
+
+  // Get the original (deepest) post from a renote/reblog chain
+  getOriginalPostId(postId, platform) {
+    const cached = this.postCache.get(`${platform}:${postId}`);
+    if (!cached) return postId;
+    let current = cached;
+    while (current.reblog) {
+      current = current.reblog;
+    }
+    return current.id;
   }
 
   getReplyMention(postId, accountId) {

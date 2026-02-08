@@ -78,6 +78,10 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/unreblog`);
   }
 
+  async deleteStatus(id) {
+    return this.request('DELETE', `/api/v1/statuses/${encodeURIComponent(id)}`);
+  }
+
   async bookmark(id) {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
   }

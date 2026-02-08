@@ -5,7 +5,7 @@
 import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
-  iconQuote, iconSmile,
+  iconQuote, iconSmile, iconTrash,
   iconHeartSmall, iconStarSmall,
   getNotifIcon,
 } from './icons.js';
@@ -160,6 +160,9 @@ export function renderPost(post) {
       </button>
       ${isMisskey ? `<button class="post-action" data-action="reaction" title="리액션">
         <span class="action-icon">${iconSmile}</span>
+      </button>` : ''}
+      ${post.isOwn ? `<button class="post-action action-delete" data-action="delete" title="삭제">
+        <span class="action-icon">${iconTrash}</span>
       </button>` : ''}
       <button class="post-action action-end" data-action="open" title="원본 열기">
         <span class="action-icon">${iconLink}</span>

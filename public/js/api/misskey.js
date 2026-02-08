@@ -81,6 +81,10 @@ export class MisskeyClient {
     return this.request('notes/reactions', body);
   }
 
+  async deleteNote(noteId) {
+    return this.request('notes/delete', { noteId });
+  }
+
   async renote(noteId) {
     return this.request('notes/create', { renoteId: noteId });
   }
