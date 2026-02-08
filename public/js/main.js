@@ -164,6 +164,25 @@ class StarShipApp {
       if (e.key === 'Enter') this.handleAuthSubmit();
     });
 
+    // User menu actions
+    document.querySelectorAll('.user-menu-item[data-action]').forEach(item => {
+      item.addEventListener('click', () => this.handleUserMenuAction(item.dataset.action));
+    });
+    document.getElementById('import-file-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (data.accounts?.length) { this.store.replaceAll(data.accounts); }
+        if (data.settings) { this.settings = { ...this.settings, ...data.settings }; this.saveSettings(); this.applySettings(); }
+        if (data.columnState) { this.columnState = data.columnState; this.saveColumnState(); }
+        this.render();
+        this.debouncedSaveToCloud();
+      } catch (err) { console.error('Import failed:', err); alert('파일을 읽을 수 없습니다.'); }
+      e.target.value = '';
+    });
+
     // Modal close
     document.querySelectorAll('[data-close-modal]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2594,7 +2613,8 @@ class StarShipApp {
     if (this._currentUser) {
       this.btnAuth.textContent = this._currentUser.username;
       this.btnAuth.classList.add('logged-in');
-      this.btnAuth.title = '클릭하여 로그아웃';
+      this.btnAuth.title = '사용자 메뉴';
+      document.getElementById('user-menu-header').textContent = `${this._currentUser.username} 님`;
     } else {
       this.btnAuth.textContent = '로그인';
       this.btnAuth.classList.remove('logged-in');
@@ -2604,14 +2624,64 @@ class StarShipApp {
 
   handleAuthButtonClick() {
     if (this._currentUser) {
-      if (confirm(`${this._currentUser.username}에서 로그아웃 하시겠습니까?`)) {
-        this.logout();
-      }
+      this.toggleUserMenu();
     } else {
       this._authMode = 'login';
       this.updateAuthModal();
       this.modalAuth.style.display = 'flex';
       this.authUsername.focus();
+    }
+  }
+
+  toggleUserMenu() {
+    const menu = document.getElementById('user-menu');
+    const isOpen = menu.style.display !== 'none';
+    menu.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+      this._userMenuOutsideClick = (e) => {
+        if (!document.getElementById('user-menu-wrap').contains(e.target)) {
+          menu.style.display = 'none';
+          document.removeEventListener('click', this._userMenuOutsideClick);
+          this._userMenuOutsideClick = null;
+        }
+      };
+      setTimeout(() => document.addEventListener('click', this._userMenuOutsideClick), 0);
+    }
+  }
+
+  async handleUserMenuAction(action) {
+    document.getElementById('user-menu').style.display = 'none';
+    switch (action) {
+      case 'sync-now':
+        await this.saveToCloud();
+        break;
+      case 'export-data': {
+        const data = {
+          accounts: this.store.getAll().map(a => ({
+            id: a.id, platform: a.platform, instanceUrl: a.instanceUrl,
+            accessToken: a.accessToken, themeColor: a.themeColor,
+            label: a.label, profile: a.profile,
+          })),
+          settings: this.settings,
+          columnState: this.columnState,
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `starship-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        break;
+      }
+      case 'import-data':
+        document.getElementById('import-file-input').click();
+        break;
+      case 'logout':
+        if (confirm('로그아웃 하시겠습니까?')) {
+          await this.logout();
+        }
+        break;
     }
   }
 
