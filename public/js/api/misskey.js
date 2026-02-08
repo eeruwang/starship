@@ -62,6 +62,12 @@ export class MisskeyClient {
     return this.request('notes/reactions/create', { noteId, reaction });
   }
 
+  async getReactions(noteId, type = null) {
+    const body = { noteId, limit: 20 };
+    if (type) body.type = type;
+    return this.request('notes/reactions', body);
+  }
+
   async renote(noteId) {
     return this.request('notes/create', { renoteId: noteId });
   }

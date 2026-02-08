@@ -112,7 +112,7 @@ export function renderPost(post) {
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
       const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-      html += `<span class="reaction-badge">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+      html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
     html += '</div>';
   }

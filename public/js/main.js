@@ -102,14 +102,13 @@ class StarShipApp {
       });
     });
 
-    // Platform select
-    this.platformSelect.addEventListener('change', () => {
-      this.updateTokenHint();
+    // Instance URL input: auto-detect platform on blur/change
+    this.instanceUrl.addEventListener('input', () => {
       this.updateOAuthButton();
     });
 
-    this.instanceUrl.addEventListener('input', () => {
-      this.updateOAuthButton();
+    this.instanceUrl.addEventListener('blur', () => {
+      this.autoDetectPlatform();
     });
 
     // OAuth login
@@ -156,6 +155,20 @@ class StarShipApp {
       } else if (action === 'reply') {
         this.handlePostAction('reply', postId, platform, accountId, btn);
       }
+    });
+
+    // Reaction badge hover/click: show who reacted
+    document.addEventListener('click', (e) => {
+      const badge = e.target.closest('.reaction-badge');
+      if (!badge) return;
+      e.stopPropagation();
+      const card = badge.closest('.post-card');
+      if (!card) return;
+      const postId = card.dataset.postId;
+      const platform = card.dataset.platform;
+      const accountId = card.dataset.accountId;
+      const reaction = badge.dataset.reaction;
+      this.showReactionUsers(badge, postId, platform, accountId, reaction);
     });
 
     // Image lightbox (delegated)
@@ -205,6 +218,7 @@ class StarShipApp {
         document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
         this.closeLightbox();
         this.closeAccountPicker();
+        this.closeReactionPopup();
         return;
       }
 
@@ -224,6 +238,14 @@ class StarShipApp {
     this.btnComposeAttach.addEventListener('click', () => this.composeFilesInput.click());
     this.composeFilesInput.addEventListener('change', () => this.handleComposeFileSelect());
     this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());
+
+    // Cmd/Ctrl+Enter to submit compose
+    this.composeText.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        this.handleComposeSubmit();
+      }
+    });
 
     // Column close buttons (delegated)
     this.columnsContainer.addEventListener('click', (e) => {
@@ -794,7 +816,8 @@ class StarShipApp {
     if (!client) return;
 
     try {
-      btnElement.style.opacity = '0.5';
+      // Immediate visual feedback: add processing state
+      btnElement.classList.add('processing');
 
       if (action === 'fav') {
         if (platform === 'mastodon') {
@@ -802,15 +825,20 @@ class StarShipApp {
         } else {
           await client.createReaction(postId, '❤');
         }
-        btnElement.classList.add('active');
+        btnElement.classList.remove('processing');
+        btnElement.classList.add('active', 'just-activated');
+        setTimeout(() => btnElement.classList.remove('just-activated'), 600);
       } else if (action === 'boost') {
         if (platform === 'mastodon') {
           await client.reblog(postId);
         } else {
           await client.renote(postId);
         }
-        btnElement.classList.add('active');
+        btnElement.classList.remove('processing');
+        btnElement.classList.add('active', 'just-activated');
+        setTimeout(() => btnElement.classList.remove('just-activated'), 600);
       } else if (action === 'reply') {
+        btnElement.classList.remove('processing');
         this.openComposeModal(postId, accountId);
         return; // Don't refresh for reply
       }
@@ -819,8 +847,7 @@ class StarShipApp {
       await this.refreshSinglePost(postId, platform, accountId);
     } catch (err) {
       console.error(`Action ${action} failed:`, err);
-    } finally {
-      btnElement.style.opacity = '1';
+      btnElement.classList.remove('processing');
     }
   }
 
@@ -952,8 +979,9 @@ class StarShipApp {
         <span class="compose-account-platform ${account.platform}">${account.platform}</span>
       `;
 
-      // Pre-select preferred account or first if single
-      if (preferredAccountId === account.id || (!preferredAccountId && accounts.length === 1)) {
+      // Pre-select preferred account, or first account by default
+      const isFirst = accounts.indexOf(account) === 0;
+      if (preferredAccountId === account.id || (!preferredAccountId && isFirst)) {
         btn.classList.add('active');
         this.composeSelectedAccounts.add(account.id);
       }
@@ -969,14 +997,6 @@ class StarShipApp {
       });
 
       this.composeAccountsContainer.appendChild(btn);
-    }
-
-    // If no preferred and multiple accounts, select all
-    if (!preferredAccountId && accounts.length > 1) {
-      for (const account of accounts) {
-        this.composeSelectedAccounts.add(account.id);
-        this.composeAccountsContainer.querySelector(`[data-account-id="${account.id}"]`)?.classList.add('active');
-      }
     }
 
     // Reset
@@ -1142,9 +1162,23 @@ class StarShipApp {
     this.btnConfirmAdd.disabled = false;
     this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
     this.btnOAuthLogin.textContent = '로그인으로 연결';
+    this.detectedPlatformEl = document.getElementById('detected-platform');
+    this.detectedPlatformEl.style.display = 'none';
     document.getElementById('manual-token-section').removeAttribute('open');
     this.modalAddAccount.style.display = 'flex';
-    this.platformSelect.focus();
+    this.instanceUrl.focus();
+  }
+
+  normalizeInstanceUrl(input) {
+    let url = input.trim();
+    if (!url) return '';
+    // Remove trailing slashes
+    url = url.replace(/\/+$/, '');
+    // Add https:// if no protocol
+    if (!/^https?:\/\//i.test(url)) {
+      url = 'https://' + url;
+    }
+    return url;
   }
 
   updateOAuthButton() {
@@ -1158,38 +1192,91 @@ class StarShipApp {
     this.btnOAuthLogin.textContent = labels[platform] || '로그인으로 연결';
   }
 
-  updateTokenHint() {
-    const platform = this.platformSelect.value;
-    const hints = {
-      misskey: 'Misskey 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      iceshrimp: 'Iceshrimp 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      cherrypick: 'CherryPick 인스턴스 → 설정 → API → 액세스 토큰 생성',
-      mastodon: 'Mastodon 인스턴스 → 설정 → 개발 → 새 애플리케이션 생성 후 액세스 토큰 복사',
-    };
-    this.tokenHint.textContent = hints[platform] || '인스턴스 설정에서 API 토큰을 생성하세요.';
+  async autoDetectPlatform() {
+    const instanceUrl = this.normalizeInstanceUrl(this.instanceUrl.value);
+    if (!instanceUrl) return;
 
-    const placeholders = {
-      misskey: 'https://misskey.io',
-      iceshrimp: 'https://iceshrimp.example.com',
-      cherrypick: 'https://cherrypick.example.com',
-      mastodon: 'https://mastodon.social',
-    };
-    this.instanceUrl.placeholder = placeholders[platform] || 'https://example.com';
+    try {
+      new URL(instanceUrl);
+    } catch {
+      return;
+    }
+
+    const detectedEl = document.getElementById('detected-platform');
+    detectedEl.style.display = 'block';
+    detectedEl.textContent = '플랫폼 감지 중...';
+    detectedEl.className = 'detected-platform detecting';
+
+    try {
+      const useProxy = window.location.hostname !== 'localhost';
+      const buildUrl = (target) => useProxy ? `/proxy?url=${encodeURIComponent(target)}` : target;
+
+      // Try Misskey API first (POST /api/meta)
+      const misskeyRes = await fetch(buildUrl(`${instanceUrl}/api/meta`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      }).catch(() => null);
+
+      if (misskeyRes && misskeyRes.ok) {
+        const meta = await misskeyRes.json();
+        let platform = 'misskey';
+        let platformName = 'Misskey';
+
+        const name = (meta.name || '').toLowerCase();
+        const version = (meta.version || '').toLowerCase();
+        const softwareName = (meta.softwareName || '').toLowerCase();
+
+        if (softwareName.includes('iceshrimp') || name.includes('iceshrimp') || version.includes('iceshrimp')) {
+          platform = 'iceshrimp';
+          platformName = 'Iceshrimp';
+        } else if (softwareName.includes('cherrypick') || name.includes('cherrypick') || version.includes('cherrypick')) {
+          platform = 'cherrypick';
+          platformName = 'CherryPick';
+        } else if (softwareName.includes('sharkey') || version.includes('sharkey')) {
+          platform = 'misskey';
+          platformName = 'Sharkey (Misskey 호환)';
+        } else if (softwareName.includes('firefish') || version.includes('firefish')) {
+          platform = 'iceshrimp';
+          platformName = 'Firefish (Misskey 호환)';
+        }
+
+        this.platformSelect.value = platform;
+        detectedEl.textContent = `${platformName} 감지됨`;
+        detectedEl.className = `detected-platform detected platform-${platform}`;
+        this.updateOAuthButton();
+        return;
+      }
+
+      // Try Mastodon API (GET /api/v1/instance)
+      const mastodonRes = await fetch(buildUrl(`${instanceUrl}/api/v1/instance`), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      }).catch(() => null);
+
+      if (mastodonRes && mastodonRes.ok) {
+        this.platformSelect.value = 'mastodon';
+        detectedEl.textContent = 'Mastodon 감지됨';
+        detectedEl.className = 'detected-platform detected platform-mastodon';
+        this.updateOAuthButton();
+        return;
+      }
+
+      detectedEl.textContent = '플랫폼을 감지할 수 없습니다. 인스턴스 주소를 확인하세요.';
+      detectedEl.className = 'detected-platform detect-failed';
+    } catch {
+      detectedEl.textContent = '플랫폼을 감지할 수 없습니다.';
+      detectedEl.className = 'detected-platform detect-failed';
+    }
   }
 
   // ===== OAuth / MiAuth =====
 
   async handleOAuthLogin() {
-    const platform = this.platformSelect.value;
-    const instanceUrl = this.instanceUrl.value.trim();
+    const instanceUrl = this.normalizeInstanceUrl(this.instanceUrl.value);
 
-    if (!platform) {
-      this.showAddError('먼저 플랫폼을 선택하세요.');
-      this.platformSelect.focus();
-      return;
-    }
     if (!instanceUrl) {
-      this.showAddError('인스턴스 URL을 입력하세요. (예: https://misskey.io)');
+      this.showAddError('인스턴스 주소를 입력하세요. (예: misskey.io)');
       this.instanceUrl.focus();
       return;
     }
@@ -1197,14 +1284,30 @@ class StarShipApp {
     try {
       new URL(instanceUrl);
     } catch {
-      this.showAddError('올바른 URL 형식이 아닙니다. (예: https://misskey.io)');
+      this.showAddError('올바른 주소 형식이 아닙니다. (예: misskey.io)');
       this.instanceUrl.focus();
       return;
     }
 
     this.btnOAuthLogin.disabled = true;
-    this.btnOAuthLogin.textContent = '인증 페이지 여는 중...';
+    this.btnOAuthLogin.textContent = '플랫폼 감지 중...';
     this.addAccountError.style.display = 'none';
+
+    // Auto-detect platform if not already detected
+    let platform = this.platformSelect.value;
+    if (!platform) {
+      await this.autoDetectPlatform();
+      platform = this.platformSelect.value;
+    }
+
+    if (!platform) {
+      this.showAddError('플랫폼을 감지할 수 없습니다. 인스턴스 주소를 확인하세요.');
+      this.btnOAuthLogin.disabled = false;
+      this.btnOAuthLogin.textContent = '로그인으로 연결';
+      return;
+    }
+
+    this.btnOAuthLogin.textContent = '인증 페이지 여는 중...';
 
     try {
       let popup;
@@ -1237,17 +1340,12 @@ class StarShipApp {
   // ===== Manual Token =====
 
   async handleAddAccount() {
-    const platform = this.platformSelect.value;
-    const instanceUrl = this.instanceUrl.value.trim();
+    const instanceUrl = this.normalizeInstanceUrl(this.instanceUrl.value);
     const accessToken = this.accessToken.value.trim();
     const label = this.accountLabel.value.trim();
 
-    if (!platform) {
-      this.showAddError('플랫폼을 선택하세요.');
-      return;
-    }
     if (!instanceUrl) {
-      this.showAddError('인스턴스 URL을 입력하세요.');
+      this.showAddError('인스턴스 주소를 입력하세요.');
       return;
     }
     if (!accessToken) {
@@ -1258,13 +1356,29 @@ class StarShipApp {
     try {
       new URL(instanceUrl);
     } catch {
-      this.showAddError('올바른 URL 형식이 아닙니다. (예: https://misskey.io)');
+      this.showAddError('올바른 주소 형식이 아닙니다. (예: misskey.io)');
       return;
     }
 
     this.btnConfirmAdd.disabled = true;
-    this.btnConfirmAdd.textContent = '연결 확인 중...';
+    this.btnConfirmAdd.textContent = '플랫폼 감지 중...';
     this.addAccountError.style.display = 'none';
+
+    // Auto-detect platform if not already detected
+    let platform = this.platformSelect.value;
+    if (!platform) {
+      await this.autoDetectPlatform();
+      platform = this.platformSelect.value;
+    }
+
+    if (!platform) {
+      this.showAddError('플랫폼을 감지할 수 없습니다. 인스턴스 주소를 확인하세요.');
+      this.btnConfirmAdd.disabled = false;
+      this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
+      return;
+    }
+
+    this.btnConfirmAdd.textContent = '연결 확인 중...';
 
     try {
       await this.store.addAccount(platform, instanceUrl, accessToken, label);
@@ -1281,6 +1395,92 @@ class StarShipApp {
   showAddError(message) {
     this.addAccountError.textContent = message;
     this.addAccountError.style.display = 'block';
+  }
+
+  // ===== Reaction Users =====
+
+  async showReactionUsers(badge, postId, platform, accountId, reaction) {
+    // Close any existing popup
+    this.closeReactionPopup();
+
+    // Find a usable account for this platform
+    const accounts = this.store.getAll();
+    let useAccountId = accountId;
+    if (!useAccountId) {
+      const match = accounts.find(a => a.platform === platform);
+      if (match) useAccountId = match.id;
+    }
+    if (!useAccountId) return;
+
+    const client = this.store.getClient(useAccountId);
+    if (!client) return;
+
+    const popup = document.createElement('div');
+    popup.className = 'reaction-users-popup';
+    popup.id = 'reaction-users-popup';
+    popup.innerHTML = '<div class="reaction-users-loading">불러오는 중...</div>';
+
+    const rect = badge.getBoundingClientRect();
+    popup.style.left = `${rect.left}px`;
+    popup.style.top = `${rect.bottom + 4}px`;
+    document.body.appendChild(popup);
+
+    // Adjust if goes off right side
+    const popupRect = popup.getBoundingClientRect();
+    if (popupRect.right > window.innerWidth) {
+      popup.style.left = `${window.innerWidth - popupRect.width - 8}px`;
+    }
+
+    try {
+      let users = [];
+
+      if (platform === 'mastodon') {
+        // Mastodon doesn't have per-reaction users, skip
+        popup.innerHTML = '<div class="reaction-users-loading">Mastodon은 리액션 사용자 조회를 지원하지 않습니다.</div>';
+      } else {
+        // Misskey: notes/reactions
+        const reactions = await client.getReactions(postId, reaction || undefined);
+        users = reactions.map(r => ({
+          name: r.user?.name || r.user?.username || '?',
+          username: r.user?.username || '?',
+          avatarUrl: r.user?.avatarUrl || '',
+          reaction: r.type || '',
+        }));
+
+        if (users.length === 0) {
+          popup.innerHTML = '<div class="reaction-users-loading">리액션한 사용자가 없습니다.</div>';
+        } else {
+          let html = '<div class="reaction-users-list">';
+          for (const user of users) {
+            html += `
+              <div class="reaction-user-item">
+                <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+                <span class="reaction-user-name">${this.escapeHtml(user.name)}</span>
+                <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
+              </div>
+            `;
+          }
+          html += '</div>';
+          popup.innerHTML = html;
+        }
+      }
+    } catch {
+      popup.innerHTML = '<div class="reaction-users-loading">불러오기 실패</div>';
+    }
+
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', this._reactionPopupClose = (e) => {
+        if (!popup.contains(e.target) && e.target !== badge) {
+          this.closeReactionPopup();
+        }
+      }, { once: true });
+    }, 0);
+  }
+
+  closeReactionPopup() {
+    const existing = document.getElementById('reaction-users-popup');
+    if (existing) existing.remove();
   }
 
   // ===== Helpers =====
