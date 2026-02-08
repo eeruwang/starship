@@ -280,12 +280,12 @@ class StarShipApp {
       }
     });
 
-    // Notification reply button
+    // Notification reply: click whole card
     document.addEventListener('click', (e) => {
-      const btn = e.target.closest('.notif-reply-btn');
-      if (!btn) return;
-      const card = btn.closest('.notif-card');
+      const card = e.target.closest('.notif-clickable');
       if (!card) return;
+      // Don't trigger on lightbox images or expand toggles
+      if (e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle')) return;
       const postId = card.dataset.postId;
       const accountId = card.dataset.accountId;
       if (postId && accountId) {

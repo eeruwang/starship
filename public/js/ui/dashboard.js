@@ -173,7 +173,9 @@ export function renderPost(post) {
 
 export function renderNotification(notif) {
   const card = document.createElement('div');
-  card.className = `notif-card platform-${notif.platform}`;
+  const replyTypes = ['reply', 'mention', 'quote'];
+  const isReplyable = replyTypes.includes(notif.type) && notif.post?.id;
+  card.className = `notif-card platform-${notif.platform}${isReplyable ? ' notif-clickable' : ''}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
   if (notif.accountId) card.dataset.accountId = notif.accountId;
@@ -213,6 +215,7 @@ export function renderNotification(notif) {
         ${escapeHtml(notif.label)}
       </div>
       <div class="notif-time">${timeAgo(notif.createdAt)}</div>
+    </div>
   `;
 
   if (notif.post && notif.post.content) {
@@ -223,7 +226,6 @@ export function renderNotification(notif) {
     if (isLongNotif) {
       html += `<button class="expand-toggle" data-expand-target="${notifCtxId}">더보기</button>`;
     }
-    // Media thumbnails
     if (notif.post.media && notif.post.media.length > 0) {
       html += `<div class="notif-media">`;
       for (const m of notif.post.media.slice(0, 4)) {
@@ -233,14 +235,10 @@ export function renderNotification(notif) {
       }
       html += `</div>`;
     }
-    // Reply button for reply/mention notifications
-    const replyTypes = ['reply', 'mention', 'quote'];
-    if (replyTypes.includes(notif.type) && notif.post.id) {
-      html += `<button class="notif-reply-btn" title="답글">${iconReply} 답글</button>`;
+    if (isReplyable) {
+      html += `<div class="notif-reply-hint">${iconReply} 클릭하여 답글</div>`;
     }
   }
-
-  html += '</div>';
   card.innerHTML = html;
   return card;
 }
