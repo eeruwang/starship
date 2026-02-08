@@ -95,44 +95,75 @@ export class MisskeyClient {
   }
 
   async getEmojis() {
-    // emojis endpoint is public (no auth), supports GET, and may return large responses
-    // Use GET to leverage server-side caching (cacheSec: 3600)
-    const targetUrl = `${this.instanceUrl}/api/emojis`;
-    const fetchUrl = this.useProxy
-      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
-      : targetUrl;
+    const proxyFetch = async (url, options = {}) => {
+      const fetchUrl = this.useProxy
+        ? `/proxy?url=${encodeURIComponent(url)}`
+        : url;
+      return fetch(fetchUrl, options);
+    };
 
-    const res = await fetch(fetchUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) throw new Error(`Emojis API error ${res.status}`);
-    const text = await res.text();
-    if (!text) return null;
-    return JSON.parse(text);
+    // 1) Try Misskey standard: POST /api/emojis
+    try {
+      const res = await proxyFetch(`${this.instanceUrl}/api/emojis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Misskey returns { emojis: [...] }
+        if (data && Array.isArray(data.emojis)) return data.emojis;
+        if (Array.isArray(data)) return data;
+      }
+    } catch { /* try next */ }
+
+    // 2) Fallback: Mastodon-compatible GET /api/v1/custom_emojis (Iceshrimp, etc.)
+    try {
+      const res = await proxyFetch(`${this.instanceUrl}/api/v1/custom_emojis`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Mastodon format: [{ shortcode, url, category, ... }] → normalize to { name, url, category }
+        if (Array.isArray(data)) {
+          return data
+            .filter(e => e.visible_in_picker !== false)
+            .map(e => ({
+              name: e.shortcode,
+              url: e.url || e.static_url,
+              category: e.category || null,
+              aliases: [],
+            }));
+        }
+      }
+    } catch { /* try next */ }
+
+    // 3) Last fallback: emojis from /api/meta (older Misskey/Calckey)
+    try {
+      const meta = await this.request('meta', {});
+      if (meta && Array.isArray(meta.emojis)) {
+        return meta.emojis;
+      }
+    } catch { /* give up */ }
+
+    return [];
   }
 
   async getInstanceEmojis() {
     if (this._emojiCache) return this._emojiCache;
     try {
-      const res = await this.getEmojis();
-      // Handle different response formats: { emojis: [...] } or just [...]
-      if (Array.isArray(res)) {
-        this._emojiCache = res;
-      } else if (res && Array.isArray(res.emojis)) {
-        this._emojiCache = res.emojis;
-      } else {
-        console.warn('Unexpected emojis response:', typeof res, res ? Object.keys(res) : res);
-        // Don't cache failures — return empty but allow retry
-        return [];
+      const emojis = await this.getEmojis();
+      if (emojis.length > 0) {
+        this._emojiCache = emojis;
+        return this._emojiCache;
       }
+      // Don't cache empty — allow retry
+      return [];
     } catch (err) {
       console.error('Failed to fetch instance emojis:', err);
-      // Don't cache failures — return empty but allow retry
       return [];
     }
-    return this._emojiCache;
   }
 
   async fetchThemeColor() {
