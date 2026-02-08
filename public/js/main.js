@@ -2520,12 +2520,14 @@ class StarShipApp {
     columnWidthSelect.replaceWith(newColWidth);
     newColWidth.value = String(this.settings.columnWidth);
     if (columnWidthValueLabel) columnWidthValueLabel.textContent = `${this.settings.columnWidth}px`;
-    newColWidth.addEventListener('input', () => {
+    const handleColWidthChange = () => {
       if (columnWidthValueLabel) columnWidthValueLabel.textContent = `${newColWidth.value}px`;
       this.settings.columnWidth = parseInt(newColWidth.value);
       this.saveSettings();
       this.applySettings();
-    });
+    };
+    newColWidth.addEventListener('input', handleColWidthChange);
+    newColWidth.addEventListener('change', handleColWidthChange);
 
     const newFontSize = fontSizeSelect.cloneNode(true);
     fontSizeSelect.replaceWith(newFontSize);
