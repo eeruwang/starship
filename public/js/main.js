@@ -147,7 +147,7 @@ class StarShipApp {
 
   bindEvents() {
     // Open add account modal
-    this.btnAddAccount.addEventListener('click', () => this.openAddAccountModal());
+    this.btnAddAccount?.addEventListener('click', () => this.openAddAccountModal());
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
 
     // Header compose button
@@ -2671,6 +2671,9 @@ class StarShipApp {
   async handleUserMenuAction(action) {
     this.closeUserMenu();
     switch (action) {
+      case 'add-account':
+        this.openAddAccountModal();
+        break;
       case 'sync-now':
         await this.saveToCloud();
         break;

@@ -16,12 +16,16 @@
       </div>
       <div class="header-right">
         <button id="btn-compose-header" class="btn btn-primary">+ 새 글</button>
-        <button id="btn-add-account" class="btn btn-secondary">+ 계정 추가</button>
         <button id="btn-refresh-all" class="btn btn-secondary">새로고침</button>
         <div class="user-menu-wrap" id="user-menu-wrap">
           <button id="btn-auth" class="btn btn-secondary btn-small" title="로그인">로그인</button>
           <div class="user-menu" id="user-menu" style="display:none;">
             <div class="user-menu-header" id="user-menu-header"></div>
+            <button class="user-menu-item" data-action="add-account">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+              계정 추가
+            </button>
+            <div class="user-menu-divider"></div>
             <button class="user-menu-item" data-action="sync-now">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               지금 동기화
