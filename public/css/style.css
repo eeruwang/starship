@@ -113,7 +113,7 @@ body {
 
 /* ===== Buttons ===== */
 .btn {
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   font-size: 0.875rem;
   font-family: inherit;
@@ -125,6 +125,7 @@ body {
   gap: 0.4rem;
   white-space: nowrap;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .btn-primary {
@@ -1408,15 +1409,6 @@ textarea.input {
 #btn-auth {
   gap: 0.35rem;
 }
-#btn-auth.logged-in {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-}
-#btn-auth.logged-in:hover {
-  background: var(--bg-hover);
-}
-
 .btn-small {
   font-size: 0.78rem;
   padding: 0.3rem 0.7rem;
