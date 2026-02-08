@@ -1747,6 +1747,40 @@ textarea.input {
   stroke: #2ecc71;
 }
 
+/* ===== Column Refresh Animation ===== */
+.column.refreshing .column-header {
+  background: linear-gradient(90deg, var(--bg-secondary) 0%, rgba(124,125,255,0.08) 50%, var(--bg-secondary) 100%);
+  background-size: 200% 100%;
+  animation: refreshShimmer 1.2s ease infinite;
+}
+
+@keyframes refreshShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.column.refresh-done .column-header {
+  animation: refreshFlash 0.6s ease;
+}
+
+@keyframes refreshFlash {
+  0% { background: var(--bg-secondary); }
+  30% { background: rgba(124,125,255,0.15); }
+  100% { background: var(--bg-secondary); }
+}
+
+/* Spinning refresh icon */
+.column-header-actions .btn-icon.spinning svg,
+.btn.refreshing svg {
+  animation: spin 0.8s linear infinite;
+}
+
+/* Top refresh button refreshing state */
+.btn.refreshing {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
 /* ===== Settings Modal ===== */
 #modal-settings .form-group label {
   margin-bottom: 0.3rem;

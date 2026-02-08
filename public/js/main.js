@@ -115,8 +115,8 @@ class StarShipApp {
     this.btnAddAccount.addEventListener('click', () => this.openAddAccountModal());
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
 
-    // Refresh
-    this.btnRefreshAll.addEventListener('click', () => this.refreshAll());
+    // Refresh (full reload: re-fetch profiles + all content)
+    this.btnRefreshAll.addEventListener('click', () => this.refreshAll(true));
 
     // Settings
     this.btnSettings.addEventListener('click', () => this.openSettingsModal());
@@ -492,16 +492,29 @@ class StarShipApp {
     for (const col of columns) {
       if (col.dataset.columnType === colType &&
           (!accountId || col.dataset.accountId === accountId)) {
+        // Visual feedback: start refresh animation
+        col.classList.add('refreshing');
+        const refreshBtn = col.querySelector('[data-action="refresh-column"]');
+        if (refreshBtn) refreshBtn.classList.add('spinning');
+
         const content = col.querySelector('.column-content');
-        if (colType === 'all') {
-          await this.loadTimelineForColumn(content, this.store.getAll());
-        } else if (colType === 'notifications') {
-          await this.loadNotificationsForColumn(content, this.store.getAll());
-        } else if (colType === 'account' && accountId) {
-          const account = this.store.getById(accountId);
-          if (account) {
-            await this.loadTimelineForColumn(content, [account]);
+        try {
+          if (colType === 'all') {
+            await this.loadTimelineForColumn(content, this.store.getAll());
+          } else if (colType === 'notifications') {
+            await this.loadNotificationsForColumn(content, this.store.getAll());
+          } else if (colType === 'account' && accountId) {
+            const account = this.store.getById(accountId);
+            if (account) {
+              await this.loadTimelineForColumn(content, [account]);
+            }
           }
+        } finally {
+          // End refresh animation with a brief flash
+          if (refreshBtn) refreshBtn.classList.remove('spinning');
+          col.classList.remove('refreshing');
+          col.classList.add('refresh-done');
+          setTimeout(() => col.classList.remove('refresh-done'), 600);
         }
       }
     }
@@ -509,26 +522,57 @@ class StarShipApp {
 
   // ===== Data Loading =====
 
-  async refreshAll() {
-    const columns = this.columnsContainer.querySelectorAll('.column');
-    const promises = [];
-    for (const col of columns) {
-      const content = col.querySelector('.column-content');
-      const type = col.dataset.columnType;
-      const accountId = col.dataset.accountId;
+  async refreshAll(fullReload = false) {
+    // Visual feedback on the top refresh button
+    this.btnRefreshAll.classList.add('refreshing');
+    this.btnRefreshAll.disabled = true;
 
-      if (type === 'all') {
-        promises.push(this.loadTimelineForColumn(content, this.store.getAll()));
-      } else if (type === 'notifications') {
-        promises.push(this.loadNotificationsForColumn(content, this.store.getAll()));
-      } else if (type === 'account' && accountId) {
-        const account = this.store.getById(accountId);
-        if (account) {
-          promises.push(this.loadTimelineForColumn(content, [account]));
+    try {
+      // Full reload: re-fetch all account profiles first
+      if (fullReload) {
+        await this.store.refreshAllProfiles();
+        // Re-render toggle bar with updated names/avatars
+        this.renderToggleBar();
+      }
+
+      // Refresh all visible columns with individual animations
+      const columns = this.columnsContainer.querySelectorAll('.column');
+      const promises = [];
+      for (const col of columns) {
+        col.classList.add('refreshing');
+        const refreshBtn = col.querySelector('[data-action="refresh-column"]');
+        if (refreshBtn) refreshBtn.classList.add('spinning');
+
+        const content = col.querySelector('.column-content');
+        const type = col.dataset.columnType;
+        const accountId = col.dataset.accountId;
+
+        let loadPromise;
+        if (type === 'all') {
+          loadPromise = this.loadTimelineForColumn(content, this.store.getAll());
+        } else if (type === 'notifications') {
+          loadPromise = this.loadNotificationsForColumn(content, this.store.getAll());
+        } else if (type === 'account' && accountId) {
+          const account = this.store.getById(accountId);
+          if (account) {
+            loadPromise = this.loadTimelineForColumn(content, [account]);
+          }
+        }
+
+        if (loadPromise) {
+          promises.push(loadPromise.finally(() => {
+            if (refreshBtn) refreshBtn.classList.remove('spinning');
+            col.classList.remove('refreshing');
+            col.classList.add('refresh-done');
+            setTimeout(() => col.classList.remove('refresh-done'), 600);
+          }));
         }
       }
+      await Promise.all(promises);
+    } finally {
+      this.btnRefreshAll.classList.remove('refreshing');
+      this.btnRefreshAll.disabled = false;
     }
-    await Promise.all(promises);
   }
 
   async loadTimelineForColumn(container, accounts) {

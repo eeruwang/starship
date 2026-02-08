@@ -97,6 +97,55 @@ export class AccountStore {
     return account;
   }
 
+  async refreshAllProfiles() {
+    const updates = [];
+    for (const account of this.accounts) {
+      const client = this.clients.get(account.id);
+      if (!client) continue;
+      updates.push(
+        client.verifyCredentials().then(profile => {
+          const oldDisplayName = account.profile?.displayName;
+          if (account.platform === 'mastodon') {
+            const newDisplayName = profile.display_name || profile.username;
+            // Update label if it was auto-set from the old display name
+            if (!account.label || account.label === oldDisplayName) {
+              account.label = newDisplayName;
+            }
+            account.profile = {
+              id: profile.id,
+              username: profile.username,
+              displayName: newDisplayName,
+              acct: profile.acct,
+              avatarUrl: profile.avatar,
+              followersCount: profile.followers_count,
+              followingCount: profile.following_count,
+              statusesCount: profile.statuses_count,
+            };
+          } else {
+            const newDisplayName = profile.name || profile.username;
+            if (!account.label || account.label === oldDisplayName) {
+              account.label = newDisplayName;
+            }
+            account.profile = {
+              id: profile.id,
+              username: profile.username,
+              displayName: newDisplayName,
+              acct: profile.username,
+              avatarUrl: profile.avatarUrl,
+              followersCount: profile.followersCount,
+              followingCount: profile.followingCount,
+              notesCount: profile.notesCount,
+            };
+          }
+        }).catch(err => {
+          console.error(`Profile refresh failed for ${account.label}:`, err);
+        })
+      );
+    }
+    await Promise.allSettled(updates);
+    this.save();
+  }
+
   removeAccount(accountId) {
     this.accounts = this.accounts.filter(a => a.id !== accountId);
     this.clients.delete(accountId);
