@@ -66,12 +66,24 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/favourite`);
   }
 
+  async unfavourite(id) {
+    return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/unfavourite`);
+  }
+
   async reblog(id) {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/reblog`);
   }
 
+  async unreblog(id) {
+    return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/unreblog`);
+  }
+
   async bookmark(id) {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
+  }
+
+  async favouritedBy(id) {
+    return this.request('GET', `/api/v1/statuses/${encodeURIComponent(id)}/favourited_by`);
   }
 
   async createStatus(text, options = {}) {
@@ -145,6 +157,8 @@ export class MastodonClient {
         displayName: acct.display_name || acct.username,
         username: acct.username,
       } : null,
+      favourited: status.favourited || false,
+      reblogged: status.reblogged || false,
       emojis: emojiMap,
       canonicalUri: status.uri || status.url,
       instanceUrl: this.instanceUrl,

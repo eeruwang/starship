@@ -45,19 +45,10 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label for="platform-select">플랫폼</label>
-          <select id="platform-select" class="input">
-            <option value="">선택하세요</option>
-            <option value="misskey">Misskey (오리지널)</option>
-            <option value="iceshrimp">Iceshrimp</option>
-            <option value="cherrypick">CherryPick</option>
-            <option value="mastodon">Mastodon</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="instance-url">인스턴스 URL</label>
-          <input type="url" id="instance-url" class="input" placeholder="https://misskey.io">
-          <small class="form-hint">예: https://misskey.io, https://mastodon.social</small>
+          <label for="instance-url">인스턴스 주소</label>
+          <input type="text" id="instance-url" class="input" placeholder="misskey.io">
+          <small class="form-hint">예: misskey.io, mastodon.social (플랫폼은 자동으로 감지됩니다)</small>
+          <div id="detected-platform" class="detected-platform" style="display:none;"></div>
         </div>
 
         <!-- OAuth 로그인 (기본) -->
@@ -127,6 +118,12 @@
         <div id="compose-error" class="form-error" style="display:none;"></div>
       </div>
     </div>
+  </div>
+
+  <!-- 리액션 툴팁 -->
+  <div class="reaction-tooltip" id="reaction-tooltip" style="display:none;">
+    <div class="reaction-tooltip-header" id="reaction-tooltip-header"></div>
+    <div class="reaction-tooltip-list" id="reaction-tooltip-list"></div>
   </div>
 
   <!-- 이미지 라이트박스 -->

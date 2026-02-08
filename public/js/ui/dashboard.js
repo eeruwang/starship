@@ -112,7 +112,8 @@ export function renderPost(post) {
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
       const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-      html += `<span class="reaction-badge">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+      const isMyReaction = displayPost.myReaction === reaction;
+      html += `<span class="reaction-badge${isMyReaction ? ' my-reaction' : ''}" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
     html += '</div>';
   }
@@ -127,6 +128,8 @@ export function renderPost(post) {
   const favCount = displayPost.stats?.favourites || displayPost.stats?.reactions || 0;
 
   const favIcon = post.platform === 'mastodon' ? iconStar : iconHeart;
+  const isFaved = post.platform === 'mastodon' ? displayPost.favourited : !!displayPost.myReaction;
+  const isBoosted = displayPost.reblogged || false;
 
   html += `
     <div class="post-actions">
@@ -134,11 +137,11 @@ export function renderPost(post) {
         <span class="action-icon">${iconReply}</span>
         ${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}
       </button>
-      <button class="post-action" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">
+      <button class="post-action${isBoosted ? ' active' : ''}" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">
         <span class="action-icon">${iconBoost}</span>
         ${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}
       </button>
-      <button class="post-action" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">
+      <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="${post.platform === 'mastodon' ? '즐겨찾기' : '리액션'}">
         <span class="action-icon">${favIcon}</span>
         ${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}
       </button>
