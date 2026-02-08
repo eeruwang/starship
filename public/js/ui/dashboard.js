@@ -28,11 +28,10 @@ export function renderPost(post) {
   // Merged account border gradient (pseudo-element via CSS custom property)
   if (post.mergedAccounts && post.mergedAccounts.length > 1) {
     const colors = post.mergedAccounts.map(a => PLATFORM_COLORS[a.platform] || '#7c7dff');
-    const segmentSize = 100 / colors.length;
-    const stops = colors.map((c, i) =>
-      `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
-    ).join(', ');
+    // Smooth gradient with blended transitions between platform colors
+    const stops = colors.map((c, i) => `${c} ${i / (colors.length - 1) * 100}%`).join(', ');
     card.style.setProperty('--merged-gradient', `linear-gradient(to bottom, ${stops})`);
+    card.style.setProperty('--merged-glow', colors[0]);
     card.classList.add('merged-border');
   }
 

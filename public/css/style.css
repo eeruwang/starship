@@ -1229,6 +1229,8 @@ textarea.input {
   bottom: 0;
   width: 3px;
   background: var(--merged-gradient);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--merged-glow, #7c7dff) 40%, transparent);
 }
 
 /* ===== Notification Post Content ===== */
