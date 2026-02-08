@@ -584,31 +584,36 @@ body {
 .post-reactions {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 0.4rem;
+  gap: 6px;
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
 }
 
 .reaction-badge {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 0.15rem 0.45rem;
-  font-size: 0.75rem;
+  background: rgba(124, 125, 255, 0.08);
+  border: 1px solid rgba(124, 125, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.85rem;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
   line-height: 1;
+  transition: all 0.2s;
 }
 
 .reaction-badge .custom-emoji {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
   vertical-align: middle;
 }
 
 .reaction-badge .reaction-count {
   font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 /* Custom emoji in notification icons */
@@ -822,15 +827,23 @@ body {
 }
 
 .reaction-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .reaction-heart {
   color: #e0245e;
 }
 
+.reaction-heart + .reaction-count {
+  color: #e0245e;
+}
+
 .reaction-star {
+  color: #f5a623;
+}
+
+.reaction-star + .reaction-count {
   color: #f5a623;
 }
 
@@ -2175,13 +2188,13 @@ textarea.input {
 /* ===== Reaction Badge Clickable ===== */
 .reaction-badge {
   cursor: pointer;
-  transition: all 0.2s;
 }
 
 .reaction-badge:hover {
-  background: var(--bg-hover);
+  background: rgba(124, 125, 255, 0.18);
   border-color: var(--accent-primary);
-  transform: scale(1.05);
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(124, 125, 255, 0.15);
 }
 
 /* ===== Post Action Visual Feedback ===== */

@@ -1113,9 +1113,9 @@ class StarShipApp {
   // ===== Post Actions =====
 
   async handlePostAction(action, postId, platform, accountId, btnElement) {
-    const accounts = this.store.getAll();
+    const allAccounts = this.store.getAll();
 
-    if (accounts.length === 0) return;
+    if (allAccounts.length === 0) return;
 
     // Reply/Quote: skip account picker, go directly to compose modal
     // The card's accountId tells us which account received this post
@@ -1136,16 +1136,32 @@ class StarShipApp {
       return;
     }
 
-    // Single account: use it directly
-    if (accounts.length === 1) {
-      await this.executePostAction(action, postId, platform, accounts[0].id, btnElement);
+    // For the All column, only show accounts that actually loaded this post
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    let relevantAccounts;
+    if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 0) {
+      const mergedIds = new Set(cachedPost.mergedAccounts.map(a => a.id));
+      relevantAccounts = allAccounts.filter(a => mergedIds.has(a.id));
+    } else if (accountId) {
+      relevantAccounts = allAccounts.filter(a => a.id === accountId);
+    } else {
+      relevantAccounts = allAccounts;
+    }
+    if (relevantAccounts.length === 0) relevantAccounts = allAccounts;
+
+    // Single relevant account: use it directly
+    if (relevantAccounts.length === 1) {
+      await this.executePostAction(action, postId, platform, relevantAccounts[0].id, btnElement);
       return;
     }
 
     // Multi-account: show picker so user can choose
-    this.showAccountPicker(btnElement, accounts, (selectedAccountId) => {
-      this.executePostAction(action, postId, platform, selectedAccountId, btnElement)
-        .catch(err => console.error('Post action failed:', err));
+    this.showAccountPicker(btnElement, relevantAccounts, async (selectedAccountId) => {
+      try {
+        await this.executePostAction(action, postId, platform, selectedAccountId, btnElement);
+      } catch (err) {
+        console.error('Post action failed:', err);
+      }
     }, accountId);
   }
 
@@ -1214,7 +1230,9 @@ class StarShipApp {
         return; // Don't refresh for quote
       } else if (action === 'reaction') {
         btnElement.classList.remove('processing');
-        this.showReactionPicker(btnElement, postId, platform, accountId);
+        // Small delay to ensure any previous picker (account picker) is fully cleaned up
+        await new Promise(r => setTimeout(r, 50));
+        await this.showReactionPicker(btnElement, postId, platform, accountId);
         return;
       }
 
