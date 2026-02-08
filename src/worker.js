@@ -204,7 +204,9 @@ async function handleRegister(request, db, env) {
     'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)'
   ).bind(token, userId, expiresAt).run();
 
-  return jsonResponse({ ok: true, username }, 201, sessionCookie(token));
+  // Fetch actual role (first user is auto-promoted to admin by ensureTables)
+  const newUser = await db.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first();
+  return jsonResponse({ ok: true, username, role: newUser?.role || 'user' }, 201, sessionCookie(token));
 }
 
 async function handleLogin(request, db) {
@@ -232,7 +234,7 @@ async function handleLogin(request, db) {
     'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)'
   ).bind(token, user.id, expiresAt).run();
 
-  return jsonResponse({ ok: true, username: user.username }, 200, sessionCookie(token));
+  return jsonResponse({ ok: true, username: user.username, role: user.role }, 200, sessionCookie(token));
 }
 
 async function handleLogout(request, db) {
