@@ -1081,19 +1081,25 @@ class StarShipApp {
       }
     });
 
-    // Close on outside click
+    // Close on outside click (persistent listener)
     setTimeout(() => {
-      document.addEventListener('click', this._reactionPickerClose = (e) => {
-        if (!picker.contains(e.target) && e.target !== anchorElement) {
+      const handler = (e) => {
+        if (!picker.contains(e.target) && !anchorElement.contains(e.target)) {
           this.closeReactionPicker();
         }
-      }, { once: true });
+      };
+      document.addEventListener('click', handler);
+      this._reactionPickerClose = handler;
     }, 0);
   }
 
   closeReactionPicker() {
     const existing = document.getElementById('reaction-picker-popup');
     if (existing) existing.remove();
+    if (this._reactionPickerClose) {
+      document.removeEventListener('click', this._reactionPickerClose);
+      this._reactionPickerClose = null;
+    }
   }
 
   async sendReaction(postId, platform, accountId, reaction, btnElement) {
@@ -1187,19 +1193,25 @@ class StarShipApp {
       onSelect(selectedId);
     });
 
-    // Close on outside click
+    // Close on outside click (persistent listener)
     setTimeout(() => {
-      document.addEventListener('click', this._pickerOutsideClick = (e) => {
-        if (!picker.contains(e.target) && e.target !== anchorElement) {
+      const handler = (e) => {
+        if (!picker.contains(e.target) && !anchorElement.contains(e.target)) {
           this.closeAccountPicker();
         }
-      }, { once: true });
+      };
+      document.addEventListener('click', handler);
+      this._pickerOutsideClick = handler;
     }, 0);
   }
 
   closeAccountPicker() {
     const existing = document.getElementById('account-picker-popup');
     if (existing) existing.remove();
+    if (this._pickerOutsideClick) {
+      document.removeEventListener('click', this._pickerOutsideClick);
+      this._pickerOutsideClick = null;
+    }
   }
 
   // ===== Compose =====
@@ -1757,12 +1769,15 @@ class StarShipApp {
       } else {
         // Misskey: notes/reactions
         const reactions = await client.getReactions(postId, reaction || undefined);
-        users = reactions.map(r => ({
-          name: r.user?.name || r.user?.username || '?',
-          username: r.user?.username || '?',
-          avatarUrl: r.user?.avatarUrl || '',
-          reaction: r.type || '',
-        }));
+        users = reactions.map(r => {
+          const normalized = r.user ? client.normalizeUser(r.user) : null;
+          return {
+            displayNameHtml: normalized?.displayNameHtml || this.escapeHtml(r.user?.name || r.user?.username || '?'),
+            username: normalized?.username || r.user?.username || '?',
+            avatarUrl: normalized?.avatarUrl || r.user?.avatarUrl || '',
+            reaction: r.type || '',
+          };
+        });
 
         if (users.length === 0) {
           popup.innerHTML = '<div class="reaction-users-loading">리액션한 사용자가 없습니다.</div>';
@@ -1772,7 +1787,7 @@ class StarShipApp {
             html += `
               <div class="reaction-user-item">
                 <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-                <span class="reaction-user-name">${this.escapeHtml(user.name)}</span>
+                <span class="reaction-user-name">${user.displayNameHtml}</span>
                 <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
               </div>
             `;
@@ -1785,19 +1800,25 @@ class StarShipApp {
       popup.innerHTML = '<div class="reaction-users-loading">불러오기 실패</div>';
     }
 
-    // Close on outside click
+    // Close on outside click (persistent listener)
     setTimeout(() => {
-      document.addEventListener('click', this._reactionPopupClose = (e) => {
-        if (!popup.contains(e.target) && e.target !== badge) {
+      const handler = (e) => {
+        if (!popup.contains(e.target) && !badge.contains(e.target)) {
           this.closeReactionPopup();
         }
-      }, { once: true });
+      };
+      document.addEventListener('click', handler);
+      this._reactionPopupClose = handler;
     }, 0);
   }
 
   closeReactionPopup() {
     const existing = document.getElementById('reaction-users-popup');
     if (existing) existing.remove();
+    if (this._reactionPopupClose) {
+      document.removeEventListener('click', this._reactionPopupClose);
+      this._reactionPopupClose = null;
+    }
   }
 
   // ===== Helpers =====
