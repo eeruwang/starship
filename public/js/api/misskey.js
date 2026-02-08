@@ -36,7 +36,11 @@ export class MisskeyClient {
     if (res.status === 204) return null;
     const text = await res.text();
     if (!text) return null;
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   }
 
   async verifyCredentials() {
@@ -98,7 +102,14 @@ export class MisskeyClient {
     if (this._emojiCache) return this._emojiCache;
     try {
       const res = await this.getEmojis();
-      this._emojiCache = res.emojis || [];
+      // Handle different response formats: { emojis: [...] } or just [...]
+      if (Array.isArray(res)) {
+        this._emojiCache = res;
+      } else if (res && Array.isArray(res.emojis)) {
+        this._emojiCache = res.emojis;
+      } else {
+        this._emojiCache = [];
+      }
     } catch {
       this._emojiCache = [];
     }

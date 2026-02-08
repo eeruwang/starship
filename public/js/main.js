@@ -1122,6 +1122,14 @@ class StarShipApp {
       return;
     }
 
+    // If the card is inside an account-specific column, use that account directly
+    const column = btnElement.closest('.column');
+    const columnAccountId = column?.dataset.columnType === 'account' ? column.dataset.accountId : null;
+    if (columnAccountId) {
+      await this.executePostAction(action, postId, platform, columnAccountId, btnElement);
+      return;
+    }
+
     // Single account: use it directly
     if (accounts.length === 1) {
       await this.executePostAction(action, postId, platform, accounts[0].id, btnElement);
@@ -1129,8 +1137,9 @@ class StarShipApp {
     }
 
     // Multi-account: show picker so user can choose
-    this.showAccountPicker(btnElement, accounts, async (selectedAccountId) => {
-      await this.executePostAction(action, postId, platform, selectedAccountId, btnElement);
+    this.showAccountPicker(btnElement, accounts, (selectedAccountId) => {
+      this.executePostAction(action, postId, platform, selectedAccountId, btnElement)
+        .catch(err => console.error('Post action failed:', err));
     }, accountId);
   }
 
