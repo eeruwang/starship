@@ -17,5 +17,5 @@ directory = "./public"
 # D1 데이터베이스 (회원/설정 저장)
 [[d1_databases]]
 binding = "FEDI_ACCOUNTS"
-database_name = "starship-db"
-database_id = "starship-db"
+database_name = "fedi-accounts"
+database_id = "01f5e825-6777-4b3e-8716-2c02fe91555a"
