@@ -1331,8 +1331,8 @@ textarea.input {
 }
 
 .notif-post-content .inline-emoji {
-  width: 16px;
-  height: 16px;
+  height: 1.6em;
+  width: auto;
 }
 
 .notif-post-content .mention,
