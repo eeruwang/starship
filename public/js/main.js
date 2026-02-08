@@ -221,6 +221,19 @@ class StarShipApp {
       }
     });
 
+    // Notification reply button
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.notif-reply-btn');
+      if (!btn) return;
+      const card = btn.closest('.notif-card');
+      if (!card) return;
+      const postId = card.dataset.postId;
+      const accountId = card.dataset.accountId;
+      if (postId && accountId) {
+        this.openComposeModal(postId, accountId);
+      }
+    });
+
     // Reaction badge hover/click: show who reacted
     document.addEventListener('click', (e) => {
       const badge = e.target.closest('.reaction-badge');
@@ -945,6 +958,7 @@ class StarShipApp {
             return notifs.map(n => {
               const notif = client.normalizeNotification(n);
               notif.themeColor = account.themeColor || null;
+              notif.accountId = account.id;
               return notif;
             });
           } catch (err) {
@@ -961,6 +975,12 @@ class StarShipApp {
       }
 
       allNotifs.sort((a, b) => b.createdAt - a.createdAt);
+
+      // Cache notification posts for reply functionality
+      const notifPosts = allNotifs
+        .filter(n => n.post?.id)
+        .map(n => ({ ...n.post, accountId: n.accountId, accountPlatform: n.platform }));
+      if (notifPosts.length > 0) this.cachePosts(notifPosts);
 
       if (allNotifs.length === 0) {
         if (isFirstLoad) {

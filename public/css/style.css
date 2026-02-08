@@ -1287,6 +1287,31 @@ textarea.input {
   cursor: pointer;
 }
 
+.notif-reply-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  background: rgba(124, 125, 255, 0.1);
+  border: 1px solid rgba(124, 125, 255, 0.2);
+  border-radius: var(--radius);
+  color: var(--accent-primary);
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.notif-reply-btn:hover {
+  background: rgba(124, 125, 255, 0.2);
+}
+
+.notif-reply-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* ===== Compose Modal Redesign ===== */
 .compose-modal {
   max-width: 520px;

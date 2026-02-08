@@ -175,6 +175,8 @@ export function renderNotification(notif) {
   card.className = `notif-card platform-${notif.platform}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
+  if (notif.accountId) card.dataset.accountId = notif.accountId;
+  if (notif.post?.id) card.dataset.postId = notif.post.id;
   if (notif.themeColor) card.style.borderLeftColor = notif.themeColor;
 
   let iconHtml;
@@ -228,6 +230,11 @@ export function renderNotification(notif) {
         }
       }
       html += `</div>`;
+    }
+    // Reply button for reply/mention notifications
+    const replyTypes = ['reply', 'mention', 'quote'];
+    if (replyTypes.includes(notif.type) && notif.post.id) {
+      html += `<button class="notif-reply-btn" title="답글">${iconReply} 답글</button>`;
     }
   }
 
