@@ -62,9 +62,23 @@ class StarShipApp {
   loadColumnState() {
     try {
       const data = localStorage.getItem(COLUMN_STATE_KEY);
-      if (data) return JSON.parse(data);
+      if (data) {
+        const state = JSON.parse(data);
+        // Ensure order array exists (migration from old format)
+        if (!Array.isArray(state.order)) {
+          state.order = [];
+          if (state.all) state.order.push('all');
+          if (state.notifications) state.order.push('notifications');
+          if (state.accounts) {
+            for (const id of Object.keys(state.accounts)) {
+              if (state.accounts[id]) state.order.push(`account:${id}`);
+            }
+          }
+        }
+        return state;
+      }
     } catch {}
-    return { all: true, notifications: true, accounts: {} };
+    return { all: true, notifications: true, accounts: {}, order: ['all', 'notifications'] };
   }
 
   saveColumnState() {
@@ -302,6 +316,7 @@ class StarShipApp {
       if (closeBtn) {
         const colType = closeBtn.dataset.columnType;
         const accountId = closeBtn.dataset.accountId;
+        const orderKey = colType === 'account' ? `account:${accountId}` : colType;
         if (colType === 'all') {
           this.columnState.all = false;
         } else if (colType === 'notifications') {
@@ -309,6 +324,7 @@ class StarShipApp {
         } else if (accountId) {
           this.columnState.accounts[accountId] = false;
         }
+        this.updateColumnOrder(orderKey, false);
         this.saveColumnState();
         this.renderToggleBar();
         this.toggleColumnSmooth(colType, false, accountId);
@@ -434,22 +450,37 @@ class StarShipApp {
 
     if (type === 'all') {
       this.columnState.all = !this.columnState.all;
+      this.updateColumnOrder('all', this.columnState.all);
       this.saveColumnState();
       this.renderToggleBar();
       this.toggleColumnSmooth('all', this.columnState.all);
     } else if (type === 'notifications') {
       this.columnState.notifications = !this.columnState.notifications;
+      this.updateColumnOrder('notifications', this.columnState.notifications);
       this.saveColumnState();
       this.renderToggleBar();
       this.toggleColumnSmooth('notifications', this.columnState.notifications);
     } else if (type === 'account') {
       const accountId = toggle.dataset.accountId;
       this.columnState.accounts[accountId] = !this.columnState.accounts[accountId];
+      this.updateColumnOrder(`account:${accountId}`, this.columnState.accounts[accountId]);
       this.saveColumnState();
       this.renderToggleBar();
       this.toggleColumnSmooth('account', this.columnState.accounts[accountId], accountId);
     } else if (type === 'compose') {
       this.openComposeModal();
+    }
+  }
+
+  updateColumnOrder(key, visible) {
+    if (!this.columnState.order) this.columnState.order = [];
+    const idx = this.columnState.order.indexOf(key);
+    if (visible) {
+      // Add to end if not already present
+      if (idx === -1) this.columnState.order.push(key);
+    } else {
+      // Remove from order
+      if (idx !== -1) this.columnState.order.splice(idx, 1);
     }
   }
 
@@ -529,24 +560,15 @@ class StarShipApp {
     return null;
   }
 
-  // Determine correct insertion position to maintain column order:
-  // 전체 → 알림 → accounts (in store order)
+  // Determine correct insertion position using the saved toggle order
   getColumnInsertionPoint(type, accountId) {
     const existing = [...this.columnsContainer.querySelectorAll('.column')];
-    const accounts = this.store.getAll();
-
-    // Build the ideal ordered list of column keys
-    const order = [];
-    if (this.columnState.all) order.push('all');
-    if (this.columnState.notifications) order.push('notifications');
-    for (const acc of accounts) {
-      if (this.columnState.accounts[acc.id]) order.push(`account:${acc.id}`);
-    }
+    const order = this.columnState.order || [];
 
     const myKey = type === 'account' ? `account:${accountId}` : type;
     const myIndex = order.indexOf(myKey);
 
-    // Find the first existing column that should come AFTER this one
+    // Find the first existing column that should come AFTER this one in the order
     for (let i = myIndex + 1; i < order.length; i++) {
       const key = order[i];
       for (const col of existing) {
@@ -561,30 +583,32 @@ class StarShipApp {
 
   renderColumns() {
     this.columnsContainer.innerHTML = '';
-    const accounts = this.store.getAll();
-    if (accounts.length === 0) return;
+    const allAccounts = this.store.getAll();
+    if (allAccounts.length === 0) return;
 
-    // "전체" column
-    if (this.columnState.all) {
-      const col = this.createColumn('전체', 'all', null);
-      this.columnsContainer.appendChild(col);
-      this.loadTimelineForColumn(col.querySelector('.column-content'), accounts);
-    }
+    const order = this.columnState.order || [];
 
-    // "알림" column
-    if (this.columnState.notifications) {
-      const col = this.createColumn('알림', 'notifications', null);
-      this.columnsContainer.appendChild(col);
-      this.loadNotificationsForColumn(col.querySelector('.column-content'), accounts);
-    }
-
-    // Individual account columns
-    for (const account of accounts) {
-      if (this.columnState.accounts[account.id]) {
-        const name = this.escapeHtml(account.label || account.profile.displayName);
-        const col = this.createColumn(name, 'account', account.id);
+    // Render columns in saved toggle order
+    for (const key of order) {
+      if (key === 'all' && this.columnState.all) {
+        const col = this.createColumn('전체', 'all', null);
         this.columnsContainer.appendChild(col);
-        this.loadTimelineForColumn(col.querySelector('.column-content'), [account]);
+        this.loadTimelineForColumn(col.querySelector('.column-content'), allAccounts);
+      } else if (key === 'notifications' && this.columnState.notifications) {
+        const col = this.createColumn('알림', 'notifications', null);
+        this.columnsContainer.appendChild(col);
+        this.loadNotificationsForColumn(col.querySelector('.column-content'), allAccounts);
+      } else if (key.startsWith('account:')) {
+        const accountId = key.slice('account:'.length);
+        if (this.columnState.accounts[accountId]) {
+          const account = this.store.getById(accountId);
+          if (account) {
+            const name = this.escapeHtml(account.label || account.profile.displayName);
+            const col = this.createColumn(name, 'account', account.id);
+            this.columnsContainer.appendChild(col);
+            this.loadTimelineForColumn(col.querySelector('.column-content'), [account]);
+          }
+        }
       }
     }
   }
