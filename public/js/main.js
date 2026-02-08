@@ -311,7 +311,7 @@ class StarShipApp {
         }
         this.saveColumnState();
         this.renderToggleBar();
-        this.renderColumns();
+        this.toggleColumnSmooth(colType, false, accountId);
       }
 
       // Column refresh buttons
@@ -435,21 +435,127 @@ class StarShipApp {
       this.columnState.all = !this.columnState.all;
       this.saveColumnState();
       this.renderToggleBar();
-      this.renderColumns();
+      this.toggleColumnSmooth('all', this.columnState.all);
     } else if (type === 'notifications') {
       this.columnState.notifications = !this.columnState.notifications;
       this.saveColumnState();
       this.renderToggleBar();
-      this.renderColumns();
+      this.toggleColumnSmooth('notifications', this.columnState.notifications);
     } else if (type === 'account') {
       const accountId = toggle.dataset.accountId;
       this.columnState.accounts[accountId] = !this.columnState.accounts[accountId];
       this.saveColumnState();
       this.renderToggleBar();
-      this.renderColumns();
+      this.toggleColumnSmooth('account', this.columnState.accounts[accountId], accountId);
     } else if (type === 'compose') {
       this.openComposeModal();
     }
+  }
+
+  toggleColumnSmooth(type, visible, accountId = null) {
+    if (visible) {
+      // Build and insert column at the correct position
+      const col = this.buildSingleColumn(type, accountId);
+      if (!col) return;
+
+      const refNode = this.getColumnInsertionPoint(type, accountId);
+      this.columnsContainer.insertBefore(col, refNode);
+
+      // Animate in
+      col.style.opacity = '0';
+      col.style.transform = 'scale(0.95)';
+      col.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      requestAnimationFrame(() => {
+        col.style.opacity = '1';
+        col.style.transform = 'scale(1)';
+        setTimeout(() => { col.style.transition = ''; col.style.transform = ''; }, 350);
+      });
+
+      // Load data
+      this.loadColumnData(col, type, accountId);
+    } else {
+      // Find and animate out
+      const col = this.findColumnElement(type, accountId);
+      if (!col) return;
+
+      col.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+      col.style.opacity = '0';
+      col.style.transform = 'scale(0.95)';
+      setTimeout(() => col.remove(), 260);
+    }
+  }
+
+  buildSingleColumn(type, accountId) {
+    if (type === 'all') {
+      return this.createColumn('전체', 'all', null);
+    } else if (type === 'notifications') {
+      return this.createColumn('알림', 'notifications', null);
+    } else if (type === 'account' && accountId) {
+      const account = this.store.getById(accountId);
+      if (!account) return null;
+      const name = this.escapeHtml(account.label || account.profile.displayName);
+      return this.createColumn(name, 'account', account.id);
+    }
+    return null;
+  }
+
+  loadColumnData(col, type, accountId) {
+    const content = col.querySelector('.column-content');
+    const accounts = this.store.getAll();
+    if (type === 'all') {
+      this.loadTimelineForColumn(content, accounts);
+    } else if (type === 'notifications') {
+      this.loadNotificationsForColumn(content, accounts);
+    } else if (type === 'account' && accountId) {
+      const account = this.store.getById(accountId);
+      if (account) {
+        this.loadTimelineForColumn(content, [account]);
+      }
+    }
+  }
+
+  findColumnElement(type, accountId) {
+    const columns = this.columnsContainer.querySelectorAll('.column');
+    for (const col of columns) {
+      if (col.dataset.columnType === type) {
+        if (type === 'account') {
+          if (col.dataset.accountId === accountId) return col;
+        } else {
+          return col;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Determine correct insertion position to maintain column order:
+  // 전체 → 알림 → accounts (in store order)
+  getColumnInsertionPoint(type, accountId) {
+    const existing = [...this.columnsContainer.querySelectorAll('.column')];
+    const accounts = this.store.getAll();
+
+    // Build the ideal ordered list of column keys
+    const order = [];
+    if (this.columnState.all) order.push('all');
+    if (this.columnState.notifications) order.push('notifications');
+    for (const acc of accounts) {
+      if (this.columnState.accounts[acc.id]) order.push(`account:${acc.id}`);
+    }
+
+    const myKey = type === 'account' ? `account:${accountId}` : type;
+    const myIndex = order.indexOf(myKey);
+
+    // Find the first existing column that should come AFTER this one
+    for (let i = myIndex + 1; i < order.length; i++) {
+      const key = order[i];
+      for (const col of existing) {
+        const colKey = col.dataset.columnType === 'account'
+          ? `account:${col.dataset.accountId}`
+          : col.dataset.columnType;
+        if (colKey === key) return col;
+      }
+    }
+    return null; // append to end
   }
 
   renderColumns() {
