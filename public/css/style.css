@@ -1217,20 +1217,15 @@ textarea.input {
 /* ===== Merged Border (dedup) ===== */
 .post-card.merged-border {
   border-left-color: transparent !important;
-  position: relative;
-  overflow: hidden;
+  background:
+    linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
+    var(--merged-gradient) border-box;
 }
 
-.post-card.merged-border::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--merged-gradient);
-  border-radius: 0 2px 2px 0;
-  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--merged-glow, #7c7dff) 40%, transparent);
+.post-card.merged-border:hover {
+  background:
+    linear-gradient(var(--bg-hover), var(--bg-hover)) padding-box,
+    var(--merged-gradient) border-box;
 }
 
 /* ===== Notification Post Content ===== */
