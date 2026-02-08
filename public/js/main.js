@@ -583,8 +583,6 @@ class StarShipApp {
       this.saveColumnState();
       this.renderToggleBar();
       this.toggleColumnSmooth('account', this.columnState.accounts[accountId], accountId);
-    } else if (type === 'compose') {
-      this.openComposeModal();
     }
   }
 
