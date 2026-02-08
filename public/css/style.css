@@ -1611,6 +1611,12 @@ textarea.input {
   width: 100%;
   flex-basis: 100%;
 }
+.notif-post-content > *:last-child {
+  margin-bottom: 0;
+}
+.notif-post-content > *:first-child {
+  margin-top: 0;
+}
 
 .notif-post-content.collapsed {
   max-height: 6em;
