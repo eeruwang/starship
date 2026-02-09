@@ -1338,18 +1338,27 @@ class StarShipApp {
 
       const tabData = { notes, renotes, replies };
 
+      // Update tab labels with counts
+      const newTabs = tabsEl.cloneNode(true);
+      tabsEl.replaceWith(newTabs);
+      const tabBtns = newTabs.querySelectorAll('.profile-tab');
+      const tabLabels = { notes: '노트', renotes: '리노트', replies: '댓글' };
+      tabBtns.forEach(btn => {
+        const key = btn.dataset.profileTab;
+        const count = (tabData[key] || []).length;
+        btn.innerHTML = `${tabLabels[key]} <span class="tab-count">${count}</span>`;
+      });
+
       // Render initial tab
       this._renderProfileTab('notes', tabData, postsEl);
 
-      // Tab click handlers (replace old listeners)
-      const newTabs = tabsEl.cloneNode(true);
-      tabsEl.replaceWith(newTabs);
+      // Tab click handlers
       newTabs.addEventListener('click', (e) => {
         const tab = e.target.closest('.profile-tab');
         if (!tab) return;
         const tabName = tab.dataset.profileTab;
         if (!tabName) return;
-        newTabs.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+        tabBtns.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         this._renderProfileTab(tabName, tabData, postsEl);
       });
