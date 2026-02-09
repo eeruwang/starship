@@ -54,8 +54,9 @@ export function renderPost(post) {
 
   // Reply context
   if (displayPost.replyTo) {
+    const parentCw = displayPost.replyTo.contentWarning;
     const parentText = stripHtml(displayPost.replyTo.content);
-    const isLong = parentText.length > 200;
+    const isLong = !parentCw && parentText.length > 200;
     const replyCtxId = `reply-ctx-${post.id}`;
     html += `
       <div class="reply-context">
@@ -63,7 +64,8 @@ export function renderPost(post) {
           <img class="reply-context-avatar" src="${displayPost.replyTo.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
           <span class="reply-context-author">${displayPost.replyTo.author.displayNameHtml || escapeHtml(displayPost.replyTo.author.displayName)}</span>
         </div>
-        <div class="reply-context-content${isLong ? ' collapsed' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
+        ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
+        <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
         ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
       </div>
     `;

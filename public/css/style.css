@@ -928,6 +928,21 @@ h4.mfm-heading { font-size: 1em; }
   width: auto;
 }
 
+/* CW inside reply context */
+.reply-context-cw {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.reply-context-cw .cw-toggle {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+}
+
 .expand-toggle {
   background: none;
   border: none;

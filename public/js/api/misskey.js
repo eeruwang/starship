@@ -304,6 +304,7 @@ export class MisskeyClient {
         id: actualNote.reply.id,
         content: this.mfmToHtml(actualNote.reply.text || '', this.buildEmojiMap(actualNote.reply)),
         author: this.normalizeUser(actualNote.reply.user),
+        contentWarning: actualNote.reply.cw || null,
       } : null,
       replyToId: actualNote.replyId || null,
       instanceUrl: this.instanceUrl,

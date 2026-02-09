@@ -498,6 +498,7 @@ export const DataLoadingMixin = {
               id: normalized.id,
               content: normalized.content,
               author: normalized.author,
+              contentWarning: normalized.contentWarning || null,
             };
           }
         } else {
@@ -508,6 +509,7 @@ export const DataLoadingMixin = {
               id: normalized.id,
               content: normalized.content,
               author: normalized.author,
+              contentWarning: normalized.contentWarning || null,
             };
           }
         }
