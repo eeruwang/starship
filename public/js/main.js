@@ -1144,9 +1144,13 @@ class StarShipApp {
     const fieldsEl = document.getElementById('profile-fields');
     const actionsEl = document.getElementById('profile-actions');
     const editSection = document.getElementById('profile-edit');
+    const tabsEl = document.getElementById('profile-tabs');
+    const postsEl = document.getElementById('profile-posts');
 
     // Reset
     banner.style.backgroundImage = '';
+    banner.style.backgroundPosition = '';
+    banner.style.backgroundSize = '';
     banner.style.background = 'linear-gradient(135deg, var(--accent-primary), #a78bfa)';
     avatar.src = author.avatarUrl || '';
     nameEl.innerHTML = author.displayNameHtml || this.escapeHtml(author.displayName);
@@ -1156,6 +1160,9 @@ class StarShipApp {
     fieldsEl.innerHTML = '';
     actionsEl.innerHTML = '';
     editSection.style.display = 'none';
+    tabsEl.style.display = 'none';
+    postsEl.style.display = 'none';
+    postsEl.innerHTML = '';
 
     this.openModal(modal);
 
@@ -1170,8 +1177,11 @@ class StarShipApp {
       // Banner
       const bannerUrl = user.bannerUrl || user.header;
       if (bannerUrl) {
+        banner.style.background = 'none';
         banner.style.backgroundImage = `url(${bannerUrl})`;
-        banner.style.background = `url(${bannerUrl}) center/cover`;
+        banner.style.backgroundPosition = 'center';
+        banner.style.backgroundSize = 'cover';
+        banner.style.backgroundColor = 'var(--bg-tertiary)';
       }
 
       // Avatar
@@ -1231,6 +1241,13 @@ class StarShipApp {
       }
       actionsEl.innerHTML = actionsHtml;
 
+      // Show notes tabs for own account
+      if (myAccount) {
+        tabsEl.style.display = 'flex';
+        postsEl.style.display = 'block';
+        this._loadProfileNotes(user.id, platform, accountId, client, isMisskey, account);
+      }
+
       // Edit handlers
       if (myAccount) {
         const editBtn = document.getElementById('btn-profile-edit');
@@ -1284,6 +1301,75 @@ class StarShipApp {
       }
     } catch (err) {
       bioEl.innerHTML = `<span style="color:var(--text-muted)">프로필을 불러올 수 없습니다</span>`;
+    }
+  }
+
+  async _loadProfileNotes(userId, platform, accountId, client, isMisskey, account) {
+    const postsEl = document.getElementById('profile-posts');
+    const tabsEl = document.getElementById('profile-tabs');
+    postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+
+    try {
+      let allNotes;
+      if (isMisskey) {
+        const raw = await client.getUserNotes(userId, 30);
+        allNotes = (raw || []).map(n => client.normalizePost(n));
+      } else {
+        const raw = await client.getUserStatuses(userId, 30);
+        allNotes = (raw || []).map(s => client.normalizePost(s));
+      }
+
+      // Add meta to posts
+      allNotes.forEach(post => {
+        post.accountId = accountId;
+        post.accountPlatform = platform;
+        post.themeColor = account?.themeColor || null;
+        const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
+        post.isOwn = String(ownerId) === String(account?.profile?.id);
+      });
+
+      // Cache all posts
+      this.cachePosts(allNotes);
+
+      // Split into categories
+      const notes = allNotes.filter(n => !n.rebloggedBy && !n.replyToId);
+      const renotes = allNotes.filter(n => !!n.rebloggedBy);
+      const replies = allNotes.filter(n => !!n.replyToId && !n.rebloggedBy);
+
+      const tabData = { notes, renotes, replies };
+
+      // Render initial tab
+      this._renderProfileTab('notes', tabData, postsEl);
+
+      // Tab click handlers (replace old listeners)
+      const newTabs = tabsEl.cloneNode(true);
+      tabsEl.replaceWith(newTabs);
+      newTabs.addEventListener('click', (e) => {
+        const tab = e.target.closest('.profile-tab');
+        if (!tab) return;
+        const tabName = tab.dataset.profileTab;
+        if (!tabName) return;
+        newTabs.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        this._renderProfileTab(tabName, tabData, postsEl);
+      });
+    } catch (err) {
+      console.error('Failed to load profile notes:', err);
+      postsEl.innerHTML = '<div class="profile-posts-empty">노트를 불러올 수 없습니다</div>';
+    }
+  }
+
+  _renderProfileTab(tabName, tabData, container) {
+    const posts = tabData[tabName] || [];
+    container.innerHTML = '';
+    if (posts.length === 0) {
+      const labels = { notes: '노트', renotes: '리노트', replies: '댓글' };
+      container.innerHTML = `<div class="profile-posts-empty">${labels[tabName] || '게시물'}이 없습니다</div>`;
+      return;
+    }
+    for (const post of posts) {
+      const el = renderPost(post);
+      container.appendChild(el);
     }
   }
 

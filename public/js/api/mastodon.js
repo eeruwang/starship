@@ -46,6 +46,10 @@ export class MastodonClient {
     return this.request('GET', `/api/v1/accounts/${encodeURIComponent(userId)}`);
   }
 
+  async getUserStatuses(userId, limit = 20) {
+    return this.request('GET', `/api/v1/accounts/${encodeURIComponent(userId)}/statuses?limit=${limit}`);
+  }
+
   async updateProfile({ displayName, note }) {
     const body = {};
     if (displayName !== undefined) body.display_name = displayName;

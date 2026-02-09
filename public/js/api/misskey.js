@@ -51,6 +51,10 @@ export class MisskeyClient {
     return this.request('users/show', { userId });
   }
 
+  async getUserNotes(userId, limit = 20) {
+    return this.request('users/notes', { userId, limit, withRenotes: true, includeReplies: true });
+  }
+
   async updateProfile({ name, description }) {
     const body = {};
     if (name !== undefined) body.name = name;
