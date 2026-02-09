@@ -67,6 +67,10 @@ export class MisskeyClient {
     return this.request('notes/children', { noteId, limit });
   }
 
+  async getNoteConversation(noteId, limit = 30) {
+    return this.request('notes/conversation', { noteId, limit });
+  }
+
   async createReaction(noteId, reaction = '❤') {
     return this.request('notes/reactions/create', { noteId, reaction });
   }

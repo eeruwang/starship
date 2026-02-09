@@ -1731,6 +1731,99 @@ textarea.input {
   display: block;
 }
 
+/* ===== Thread View ===== */
+.modal-thread {
+  width: min(520px, 95vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.thread-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.thread-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.thread-content {
+  overflow-y: auto;
+  padding: 0.5rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.thread-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.thread-content .post-card {
+  cursor: default;
+  position: relative;
+}
+
+.thread-content .post-card.thread-ancestor,
+.thread-content .post-card.thread-descendant {
+  opacity: 0.7;
+}
+
+.thread-content .post-card.thread-ancestor:hover,
+.thread-content .post-card.thread-descendant:hover {
+  opacity: 1;
+}
+
+/* Connector line between thread posts */
+.thread-content .post-card.thread-ancestor::after,
+.thread-content .post-card.thread-target::after {
+  content: '';
+  position: absolute;
+  left: 28px;
+  bottom: -8px;
+  width: 2px;
+  height: 8px;
+  background: var(--border-color);
+}
+
+.thread-content .post-card:last-child::after {
+  display: none;
+}
+
+/* Highlighted target post */
+.thread-content .post-card.thread-target {
+  border-left: 3px solid var(--accent-primary);
+  background: rgba(99, 100, 255, 0.06);
+}
+
+/* Post cards in thread should be clickable for actions but not for thread-open */
+.thread-content .post-card .post-content {
+  cursor: text;
+  user-select: text;
+}
+
+/* Make regular post cards look clickable */
+.columns-container .post-card {
+  cursor: pointer;
+}
+.columns-container .post-card .post-action,
+.columns-container .post-card a {
+  cursor: pointer;
+}
+
 /* ===== Image Lightbox ===== */
 .lightbox-overlay {
   position: fixed;

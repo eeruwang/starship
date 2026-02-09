@@ -12,6 +12,7 @@ import { ComposeMixin } from './mixins/compose.js';
 import { DataLoadingMixin } from './mixins/data-loading.js';
 import { AuthUIMixin } from './mixins/auth-ui.js';
 import { AccountSetupMixin } from './mixins/account-setup.js';
+import { ThreadViewMixin } from './mixins/thread-view.js';
 
 const COLUMN_STATE_KEY = 'starship_column_state';
 const SETTINGS_KEY = 'starship_settings';
@@ -361,6 +362,22 @@ class StarShipApp {
       const accountId = card.dataset.accountId;
       const reaction = badge.dataset.reaction;
       this.showReactionUsers(badge, postId, platform, accountId, reaction);
+    });
+
+    // Post card click: open thread view
+    document.addEventListener('click', (e) => {
+      // Skip if clicking interactive elements
+      if (e.target.closest('.post-action, .reaction-badge, a, button, [data-lightbox], .expand-toggle, .cw-toggle, .post-media, img')) return;
+      const card = e.target.closest('.post-card');
+      if (!card) return;
+      // Don't open thread from inside the thread modal itself
+      if (card.closest('.thread-content')) return;
+      const postId = card.dataset.postId;
+      const platform = card.dataset.platform;
+      const accountId = card.dataset.accountId;
+      if (postId && platform && accountId) {
+        this.openThreadView(postId, platform, accountId);
+      }
     });
 
     // Image lightbox (delegated)
@@ -1008,6 +1025,7 @@ Object.assign(StarShipApp.prototype,
   DataLoadingMixin,
   AuthUIMixin,
   AccountSetupMixin,
+  ThreadViewMixin,
 );
 
 // Initialize
