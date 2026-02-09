@@ -1,6 +1,7 @@
 /**
  * Thread View Mixin
  * Handles loading and displaying conversation threads (ancestors + descendants)
+ * with tree-structured replies and visual hierarchy.
  */
 import { renderPost } from '../ui/dashboard.js';
 
@@ -22,7 +23,6 @@ export const ThreadViewMixin = {
       let descendants = [];
 
       if (account.platform === 'mastodon') {
-        // Mastodon: single API call for full context
         const [status, context] = await Promise.all([
           client.getStatus(postId),
           client.getStatusContext(postId),
@@ -31,14 +31,12 @@ export const ThreadViewMixin = {
         ancestors = (context.ancestors || []).map(s => client.normalizePost(s));
         descendants = (context.descendants || []).map(s => client.normalizePost(s));
       } else {
-        // Misskey: separate calls for conversation + children
         const [note, conversation, children] = await Promise.all([
           client.getNote(postId),
           client.getNoteConversation(postId, 30).catch(() => []),
           client.getNoteChildren(postId, 30).catch(() => []),
         ]);
         targetPost = note ? client.normalizePost(note) : null;
-        // conversation returns oldest-first (root → parent), reverse for display order
         ancestors = (conversation || []).map(n => client.normalizePost(n)).reverse();
         descendants = (children || []).map(n => client.normalizePost(n));
       }
@@ -68,7 +66,7 @@ export const ThreadViewMixin = {
         return;
       }
 
-      // Ancestors
+      // Ancestors (linear chain)
       for (const post of ancestors) {
         const el = renderPost(post);
         el.classList.add('thread-post', 'thread-ancestor');
@@ -82,11 +80,9 @@ export const ThreadViewMixin = {
         content.appendChild(el);
       }
 
-      // Descendants
-      for (const post of descendants) {
-        const el = renderPost(post);
-        el.classList.add('thread-post', 'thread-descendant');
-        content.appendChild(el);
+      // Descendants: build a reply tree and render with indentation
+      if (descendants.length > 0) {
+        this._renderDescendantTree(content, descendants, targetPost?.id);
       }
 
       // Scroll to the target post
@@ -99,6 +95,59 @@ export const ThreadViewMixin = {
     } catch (err) {
       console.error('Thread load failed:', err);
       content.innerHTML = `<div class="thread-loading">스레드를 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  /**
+   * Build a tree from descendants based on replyToId and render with indentation.
+   */
+  _renderDescendantTree(container, descendants, targetPostId) {
+    // Build lookup: postId → children
+    const childrenMap = new Map();
+    const postMap = new Map();
+
+    for (const post of descendants) {
+      postMap.set(String(post.id), post);
+      const parentId = String(post.replyToId || targetPostId || '');
+      if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+      childrenMap.get(parentId).push(post);
+    }
+
+    // Render tree recursively with depth tracking
+    const maxDepth = 4;
+    const renderNode = (postId, depth) => {
+      const children = childrenMap.get(String(postId)) || [];
+      for (const child of children) {
+        const el = renderPost(child);
+        el.classList.add('thread-post', 'thread-descendant');
+        const level = Math.min(depth, maxDepth);
+        el.classList.add(`thread-depth-${level}`);
+        el.style.marginLeft = `${level * 20}px`;
+        container.appendChild(el);
+        // Recurse into this child's replies
+        renderNode(child.id, depth + 1);
+      }
+    };
+
+    renderNode(targetPostId, 1);
+
+    // Any orphaned descendants (replyToId doesn't match any known post or target)
+    const rendered = new Set();
+    const collectRendered = (pid) => {
+      const children = childrenMap.get(String(pid)) || [];
+      for (const c of children) {
+        rendered.add(String(c.id));
+        collectRendered(c.id);
+      }
+    };
+    collectRendered(targetPostId);
+
+    for (const post of descendants) {
+      if (!rendered.has(String(post.id))) {
+        const el = renderPost(post);
+        el.classList.add('thread-post', 'thread-descendant');
+        container.appendChild(el);
+      }
     }
   },
 
