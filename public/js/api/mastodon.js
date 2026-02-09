@@ -46,8 +46,10 @@ export class MastodonClient {
     return this.request('GET', `/api/v1/accounts/${encodeURIComponent(userId)}`);
   }
 
-  async getUserStatuses(userId, limit = 20) {
-    return this.request('GET', `/api/v1/accounts/${encodeURIComponent(userId)}/statuses?limit=${limit}`);
+  async getUserStatuses(userId, limit = 20, maxId = null) {
+    let path = `/api/v1/accounts/${encodeURIComponent(userId)}/statuses?limit=${limit}`;
+    if (maxId) path += `&max_id=${maxId}`;
+    return this.request('GET', path);
   }
 
   async updateProfile({ displayName, note }) {

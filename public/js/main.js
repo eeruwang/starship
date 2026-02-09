@@ -1147,6 +1147,14 @@ class StarShipApp {
     const tabsEl = document.getElementById('profile-tabs');
     const postsEl = document.getElementById('profile-posts');
 
+    // Cleanup previous scroll listener
+    const scrollEl = modal.querySelector('.profile-scroll');
+    if (this._profileScrollHandler && scrollEl) {
+      scrollEl.removeEventListener('scroll', this._profileScrollHandler);
+      this._profileScrollHandler = null;
+    }
+    this._profileState = null;
+
     // Reset
     banner.style.backgroundImage = '';
     banner.style.backgroundPosition = '';
@@ -1341,69 +1349,156 @@ class StarShipApp {
   async _loadProfileNotes(userId, platform, accountId, client, isMisskey, account) {
     const postsEl = document.getElementById('profile-posts');
     const tabsEl = document.getElementById('profile-tabs');
+    const scrollEl = document.querySelector('#modal-profile .profile-scroll');
     postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
 
+    // State for infinite scroll
+    this._profileState = {
+      userId, platform, accountId, client, isMisskey, account,
+      tabData: { notes: [], renotes: [], replies: [] },
+      activeTab: 'notes',
+      loading: false,
+      hasMore: true,
+      lastRawId: null,
+    };
+
     try {
-      let allNotes;
-      if (isMisskey) {
-        const raw = await client.getUserNotes(userId, 30);
-        allNotes = (raw || []).map(n => client.normalizePost(n));
-      } else {
-        const raw = await client.getUserStatuses(userId, 30);
-        allNotes = (raw || []).map(s => client.normalizePost(s));
-      }
+      await this._fetchMoreProfileNotes();
 
-      // Add meta to posts
-      allNotes.forEach(post => {
-        post.accountId = accountId;
-        post.accountPlatform = platform;
-        post.themeColor = account?.themeColor || null;
-        const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
-        post.isOwn = String(ownerId) === String(account?.profile?.id);
-      });
-
-      // Cache all posts
-      this.cachePosts(allNotes);
-
-      // Split into categories
-      const notes = allNotes.filter(n => !n.rebloggedBy && !n.replyToId);
-      const renotes = allNotes.filter(n => !!n.rebloggedBy);
-      const replies = allNotes.filter(n => !!n.replyToId && !n.rebloggedBy);
-
-      const tabData = { notes, renotes, replies };
-
-      // Update tab labels with counts
+      // Setup tabs
       const newTabs = tabsEl.cloneNode(true);
       tabsEl.replaceWith(newTabs);
-      const tabBtns = newTabs.querySelectorAll('.profile-tab');
-      const tabLabels = { notes: '노트', renotes: '리노트', replies: '댓글' };
-      tabBtns.forEach(btn => {
-        const key = btn.dataset.profileTab;
-        const count = (tabData[key] || []).length;
-        btn.innerHTML = `${tabLabels[key]} <span class="tab-count">${count}</span>`;
-      });
+      this._profileState.tabsEl = newTabs;
+      this._updateProfileTabCounts();
+      this._renderProfileTab('notes', postsEl);
 
-      // Render initial tab
-      this._renderProfileTab('notes', tabData, postsEl);
-
-      // Tab click handlers
+      // Tab click
       newTabs.addEventListener('click', (e) => {
         const tab = e.target.closest('.profile-tab');
         if (!tab) return;
         const tabName = tab.dataset.profileTab;
         if (!tabName) return;
-        tabBtns.forEach(t => t.classList.remove('active'));
+        newTabs.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        this._renderProfileTab(tabName, tabData, postsEl);
+        this._profileState.activeTab = tabName;
+        this._renderProfileTab(tabName, postsEl);
       });
+
+      // Infinite scroll on the profile-scroll container
+      if (this._profileScrollHandler) {
+        scrollEl.removeEventListener('scroll', this._profileScrollHandler);
+      }
+      this._profileScrollHandler = () => {
+        if (!this._profileState || this._profileState.loading || !this._profileState.hasMore) return;
+        const { scrollTop, scrollHeight, clientHeight } = scrollEl;
+        if (scrollTop + clientHeight >= scrollHeight - 100) {
+          this._loadMoreProfileNotes();
+        }
+      };
+      scrollEl.addEventListener('scroll', this._profileScrollHandler);
     } catch (err) {
       console.error('Failed to load profile notes:', err);
       postsEl.innerHTML = '<div class="profile-posts-empty">노트를 불러올 수 없습니다</div>';
     }
   }
 
-  _renderProfileTab(tabName, tabData, container) {
-    const posts = tabData[tabName] || [];
+  async _fetchMoreProfileNotes() {
+    const s = this._profileState;
+    if (!s || s.loading || !s.hasMore) return [];
+    s.loading = true;
+
+    try {
+      let raw;
+      if (s.isMisskey) {
+        raw = await s.client.getUserNotes(s.userId, 20, s.lastRawId);
+      } else {
+        raw = await s.client.getUserStatuses(s.userId, 20, s.lastRawId);
+      }
+      if (!raw || raw.length === 0) {
+        s.hasMore = false;
+        return [];
+      }
+      s.lastRawId = raw[raw.length - 1].id;
+      if (raw.length < 20) s.hasMore = false;
+
+      const normalized = raw.map(n => s.client.normalizePost(n));
+      normalized.forEach(post => {
+        post.accountId = s.accountId;
+        post.accountPlatform = s.platform;
+        post.themeColor = s.account?.themeColor || null;
+        const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
+        post.isOwn = String(ownerId) === String(s.account?.profile?.id);
+      });
+      this.cachePosts(normalized);
+
+      // Categorize and append
+      for (const n of normalized) {
+        if (n.rebloggedBy) s.tabData.renotes.push(n);
+        else if (n.replyToId) s.tabData.replies.push(n);
+        else s.tabData.notes.push(n);
+      }
+      return normalized;
+    } finally {
+      s.loading = false;
+    }
+  }
+
+  async _loadMoreProfileNotes() {
+    const s = this._profileState;
+    if (!s) return;
+    const postsEl = document.getElementById('profile-posts');
+    const prevCounts = {
+      notes: s.tabData.notes.length,
+      renotes: s.tabData.renotes.length,
+      replies: s.tabData.replies.length,
+    };
+
+    // Show loading indicator
+    let loader = postsEl.querySelector('.profile-load-more');
+    if (!loader) {
+      loader = document.createElement('div');
+      loader.className = 'profile-posts-empty profile-load-more';
+      loader.innerHTML = '<div class="spinner"></div>';
+      postsEl.appendChild(loader);
+    }
+
+    await this._fetchMoreProfileNotes();
+    this._updateProfileTabCounts();
+
+    // Remove loader
+    loader = postsEl.querySelector('.profile-load-more');
+    if (loader) loader.remove();
+
+    // Append only new posts for active tab
+    const tab = s.activeTab;
+    const allPosts = s.tabData[tab] || [];
+    const prevCount = prevCounts[tab] || 0;
+    const newPosts = allPosts.slice(prevCount);
+    for (const post of newPosts) {
+      postsEl.appendChild(renderPost(post));
+    }
+
+    // Remove empty message if posts appeared
+    if (allPosts.length > 0) {
+      const empty = postsEl.querySelector('.profile-posts-empty:not(.profile-load-more)');
+      if (empty) empty.remove();
+    }
+  }
+
+  _updateProfileTabCounts() {
+    const s = this._profileState;
+    if (!s || !s.tabsEl) return;
+    const tabLabels = { notes: '노트', renotes: '리노트', replies: '댓글' };
+    s.tabsEl.querySelectorAll('.profile-tab').forEach(btn => {
+      const key = btn.dataset.profileTab;
+      const count = (s.tabData[key] || []).length;
+      btn.innerHTML = `${tabLabels[key]} <span class="tab-count">${count}</span>`;
+    });
+  }
+
+  _renderProfileTab(tabName, container) {
+    const s = this._profileState;
+    const posts = s ? (s.tabData[tabName] || []) : [];
     container.innerHTML = '';
     if (posts.length === 0) {
       const labels = { notes: '노트', renotes: '리노트', replies: '댓글' };
@@ -1411,8 +1506,7 @@ class StarShipApp {
       return;
     }
     for (const post of posts) {
-      const el = renderPost(post);
-      container.appendChild(el);
+      container.appendChild(renderPost(post));
     }
   }
 
