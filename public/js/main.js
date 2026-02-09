@@ -499,17 +499,20 @@ class StarShipApp {
     // Column headers: drag to scroll columns container horizontally (with momentum)
     {
       let isDragging = false, startX = 0, scrollStart = 0, moved = false;
-      let lastX = 0, lastTime = 0, velocity = 0, momentumId = null;
+      let velocity = 0, momentumId = null;
+      let prevX = 0, prevTime = 0;
       const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
+      const SMOOTHING = 0.6; // velocity smoothing factor (0-1, higher = more responsive)
 
       const startDrag = (e, isTouch) => {
         const header = e.target.closest('.column-header');
         if (!header || e.target.closest('button')) return;
         if (momentumId) { cancelAnimationFrame(momentumId); momentumId = null; }
         isDragging = true;
-        startX = getX(e);
-        lastX = startX;
-        lastTime = Date.now();
+        const x = getX(e);
+        startX = x;
+        prevX = x;
+        prevTime = performance.now();
         velocity = 0;
         scrollStart = this.columnsContainer.scrollLeft;
         moved = false;
@@ -521,27 +524,30 @@ class StarShipApp {
       const onMove = (e) => {
         if (!isDragging) return;
         const x = getX(e);
-        const dx = x - startX;
-        const now = Date.now();
-        const dt = now - lastTime;
-        if (dt > 0) velocity = (x - lastX) / dt;
-        lastX = x;
-        lastTime = now;
-        if (Math.abs(dx) > 5) {
-          moved = true;
-          this.columnsContainer.scrollLeft = scrollStart - dx;
+        const now = performance.now();
+        const dt = now - prevTime;
+        // Smooth velocity with exponential moving average
+        if (dt > 0) {
+          const instantV = (x - prevX) / dt;
+          velocity = velocity * (1 - SMOOTHING) + instantV * SMOOTHING;
         }
+        prevX = x;
+        prevTime = now;
+        // Scroll immediately (no dead zone) for fluid feel
+        this.columnsContainer.scrollLeft = scrollStart - (x - startX);
+        // Mark as drag after 3px for click prevention
+        if (Math.abs(x - startX) > 3) moved = true;
       };
       const onEnd = () => {
         if (!isDragging) return;
         isDragging = false;
         this.columnsContainer.style.cursor = '';
-        // Momentum: continue scrolling based on release velocity
-        if (Math.abs(velocity) > 0.3) {
-          let v = -velocity * 12; // px per frame, inverted for scroll direction
-          const decel = 0.95;
+        // Momentum: continue scrolling based on smoothed velocity
+        if (Math.abs(velocity) > 0.15) {
+          let v = -velocity * 16; // scale to ~px per frame at 60fps
+          const decel = 0.96;
           const step = () => {
-            if (Math.abs(v) < 0.5) { momentumId = null; return; }
+            if (Math.abs(v) < 0.3) { momentumId = null; return; }
             this.columnsContainer.scrollLeft += v;
             v *= decel;
             momentumId = requestAnimationFrame(step);
