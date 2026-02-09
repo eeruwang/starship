@@ -162,8 +162,11 @@ class StarShipApp {
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
     document.getElementById('btn-welcome-login')?.addEventListener('click', () => this.handleAuthButtonClick());
 
-    // Header compose button
-    document.getElementById('btn-compose-header').addEventListener('click', () => this.openComposeModal());
+    // Header compose button: pre-select focused column's account
+    document.getElementById('btn-compose-header').addEventListener('click', () => {
+      const accountId = this.getFocusedColumnAccountId();
+      this.openComposeModal(null, accountId || null);
+    });
 
     // Refresh (full reload: re-fetch profiles + all content)
     this.btnRefreshAll.addEventListener('click', () => this.refreshAll(true));
@@ -417,7 +420,8 @@ class StarShipApp {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         e.stopPropagation();
-        this.openComposeModal();
+        const accountId = this.getFocusedColumnAccountId();
+        this.openComposeModal(null, accountId || null);
         return;
       }
 
@@ -562,6 +566,16 @@ class StarShipApp {
       document.addEventListener('touchmove', onMove, { passive: true });
       document.addEventListener('mouseup', onEnd);
       document.addEventListener('touchend', onEnd);
+
+      // Click on column header (not drag): focus the column
+      this.columnsContainer.addEventListener('click', (e) => {
+        if (moved) return; // was a drag, not a click
+        const header = e.target.closest('.column-header');
+        if (!header || e.target.closest('button')) return;
+        const col = header.closest('.column');
+        if (!col) return;
+        this.focusColumn(col);
+      });
     }
 
     // Column close buttons (delegated)
@@ -600,16 +614,29 @@ class StarShipApp {
     const columns = this.columnsContainer.querySelectorAll('.column');
     if (columns.length === 0) return;
 
-    // Remove old focus
-    columns.forEach(c => c.classList.remove('focused'));
-
     this.focusedColumnIndex += direction;
     if (this.focusedColumnIndex < 0) this.focusedColumnIndex = 0;
     if (this.focusedColumnIndex >= columns.length) this.focusedColumnIndex = columns.length - 1;
 
-    const target = columns[this.focusedColumnIndex];
-    target.classList.add('focused');
-    target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    this.focusColumn(columns[this.focusedColumnIndex]);
+  }
+
+  focusColumn(col) {
+    const columns = this.columnsContainer.querySelectorAll('.column');
+    columns.forEach(c => c.classList.remove('focused'));
+    col.classList.add('focused');
+    // Update index
+    this.focusedColumnIndex = [...columns].indexOf(col);
+    col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+
+  // Get the account ID of the currently focused column (null if 'all' or 'notifications')
+  getFocusedColumnAccountId() {
+    const columns = this.columnsContainer.querySelectorAll('.column');
+    const focused = columns[this.focusedColumnIndex];
+    if (!focused) return null;
+    if (focused.dataset.columnType === 'account') return focused.dataset.accountId || null;
+    return null;
   }
 
   // ===== Lightbox =====
