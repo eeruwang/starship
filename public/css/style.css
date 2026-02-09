@@ -93,6 +93,18 @@ body {
   gap: 1rem;
 }
 
+.logo-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.logo-icon {
+  flex-shrink: 0;
+  border-radius: 5px;
+}
+
 .logo {
   font-size: 20px;
   font-weight: 700;
@@ -2813,6 +2825,10 @@ textarea.input {
   .logo {
     font-size: 17px;
   }
+  .logo-icon {
+    width: 22px;
+    height: 22px;
+  }
   .tagline {
     display: none;
   }
@@ -2866,6 +2882,10 @@ textarea.input {
     flex-direction: row;
     gap: 4px;
     padding: 6px 8px;
+  }
+  .logo-icon {
+    width: 20px;
+    height: 20px;
   }
   .logo {
     font-size: 15px;
