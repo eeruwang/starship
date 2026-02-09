@@ -24,6 +24,7 @@ class StarShipApp {
     this.focusedColumnIndex = 0;
     this.postCache = new Map(); // key: `${platform}:${id}`, value: post
     this.POST_CACHE_MAX = 500;
+    this._ogCache = new Map(); // URL → { title, description, image, siteName }
     this._columnPagination = new WeakMap();
     this.composeFiles = [];
     this.composeSelectedAccounts = new Set();
@@ -1480,6 +1481,7 @@ class StarShipApp {
     for (const post of newPosts) {
       postsEl.appendChild(renderPost(post));
     }
+    this.enrichLinkCards(postsEl);
 
     // Remove empty message if posts appeared
     if (allPosts.length > 0) {
@@ -1510,6 +1512,70 @@ class StarShipApp {
     }
     for (const post of posts) {
       container.appendChild(renderPost(post));
+    }
+    this.enrichLinkCards(container);
+  }
+
+  /** Fetch OG metadata for link cards that lack title/image and update DOM */
+  enrichLinkCards(container) {
+    const cards = container.querySelectorAll('.link-card[data-og-pending]');
+    if (cards.length === 0) return;
+    for (const card of cards) {
+      const url = card.dataset.ogUrl;
+      if (!url) continue;
+      card.removeAttribute('data-og-pending');
+      this._enrichSingleCard(card, url);
+    }
+  }
+
+  async _enrichSingleCard(card, url) {
+    let og = this._ogCache.get(url);
+    if (!og) {
+      try {
+        const res = await fetch(`/api/og?url=${encodeURIComponent(url)}`);
+        if (!res.ok) return;
+        og = await res.json();
+        if (og.error) return;
+        this._ogCache.set(url, og);
+      } catch { return; }
+    }
+
+    // Update the card DOM with OG data
+    if (og.image) {
+      const img = document.createElement('img');
+      img.className = 'link-card-image';
+      img.src = og.image;
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = function() {
+        this.parentElement.classList.remove('link-card-has-image');
+        this.style.display = 'none';
+      };
+      card.classList.add('link-card-has-image');
+      card.prepend(img);
+    }
+
+    const infoEl = card.querySelector('.link-card-info');
+    if (!infoEl) return;
+
+    if (og.siteName) {
+      const siteEl = infoEl.querySelector('.link-card-site');
+      if (siteEl) siteEl.textContent = og.siteName;
+    }
+    if (og.title) {
+      const urlEl = infoEl.querySelector('.link-card-url');
+      if (urlEl) urlEl.remove();
+      const titleEl = document.createElement('div');
+      titleEl.className = 'link-card-title';
+      titleEl.textContent = og.title;
+      const siteEl = infoEl.querySelector('.link-card-site');
+      if (siteEl) siteEl.after(titleEl);
+    }
+    if (og.description) {
+      const descEl = document.createElement('div');
+      descEl.className = 'link-card-desc';
+      descEl.textContent = og.description;
+      infoEl.appendChild(descEl);
     }
   }
 

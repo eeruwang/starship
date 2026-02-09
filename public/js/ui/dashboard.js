@@ -125,9 +125,11 @@ export function renderPost(post) {
     const lc = displayPost.linkCard;
     const hasImage = lc.image;
     const hasTitle = lc.title;
+    const needsOg = !hasTitle && !hasImage;
     const cardClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
+    const ogAttrs = needsOg ? ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"` : '';
     html += `
-      <a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener">
+      <a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${ogAttrs}>
         ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
         <div class="link-card-info">
           <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>

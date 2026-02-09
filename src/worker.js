@@ -25,6 +25,11 @@ export default {
       return handleProxy(request, url);
     }
 
+    // OG metadata fetch (no DB needed)
+    if (url.pathname === '/api/og' && request.method === 'GET') {
+      return handleOgFetch(url);
+    }
+
     // Auth & sync API
     if (url.pathname.startsWith('/api/')) {
       await ensureTables(env.FEDI_ACCOUNTS);
@@ -434,6 +439,124 @@ function corsHeaders() {
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };
+}
+
+// ===== OG Metadata =====
+
+async function handleOgFetch(url) {
+  const targetUrl = url.searchParams.get('url');
+  if (!targetUrl) {
+    return jsonResponse({ error: 'Missing "url" parameter' }, 400);
+  }
+
+  let parsed;
+  try { parsed = new URL(targetUrl); } catch {
+    return jsonResponse({ error: 'Invalid URL' }, 400);
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return jsonResponse({ error: 'Only HTTP(S) URLs allowed' }, 400);
+  }
+
+  try {
+    const res = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; StarShip/1.0; +https://github.com)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+    });
+
+    if (!res.ok) {
+      return jsonResponse({ error: `Fetch failed: ${res.status}` }, 502);
+    }
+
+    // Only parse first 64KB to avoid large payloads
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let html = '';
+    while (html.length < 65536) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+    }
+    reader.cancel();
+
+    const og = {};
+
+    // og:title
+    const titleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+    og.title = titleMatch ? decodeHtmlEntities(titleMatch[1]) : null;
+
+    // og:description
+    const descMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+    og.description = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
+
+    // og:image
+    const imgMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    og.image = imgMatch ? imgMatch[1] : null;
+
+    // og:site_name
+    const siteMatch = html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:site_name["']/i);
+    og.siteName = siteMatch ? decodeHtmlEntities(siteMatch[1]) : null;
+
+    // twitter:title fallback
+    if (!og.title) {
+      const twTitle = html.match(/<meta[^>]*(?:name|property)=["']twitter:title["'][^>]*content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*(?:name|property)=["']twitter:title["']/i);
+      og.title = twTitle ? decodeHtmlEntities(twTitle[1]) : null;
+    }
+
+    // twitter:description fallback
+    if (!og.description) {
+      const twDesc = html.match(/<meta[^>]*(?:name|property)=["']twitter:description["'][^>]*content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*(?:name|property)=["']twitter:description["']/i);
+      og.description = twDesc ? decodeHtmlEntities(twDesc[1]) : null;
+    }
+
+    // twitter:image fallback
+    if (!og.image) {
+      const twImg = html.match(/<meta[^>]*(?:name|property)=["']twitter:image(?::src)?["'][^>]*content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*(?:name|property)=["']twitter:image(?::src)?["']/i);
+      og.image = twImg ? twImg[1] : null;
+    }
+
+    // <title> fallback
+    if (!og.title) {
+      const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      og.title = titleTag ? decodeHtmlEntities(titleTag[1].trim()) : null;
+    }
+
+    // meta description fallback
+    if (!og.description) {
+      const metaDesc = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
+      og.description = metaDesc ? decodeHtmlEntities(metaDesc[1]) : null;
+    }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=86400',
+      ...corsHeaders(),
+    };
+    return new Response(JSON.stringify(og), { status: 200, headers });
+  } catch (err) {
+    return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
+  }
+}
+
+function decodeHtmlEntities(text) {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&#(\d+);/g, (m, c) => String.fromCharCode(parseInt(c)));
 }
 
 // ===== Proxy =====

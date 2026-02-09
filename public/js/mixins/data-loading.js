@@ -180,6 +180,7 @@ export const DataLoadingMixin = {
         for (const post of allPosts) {
           container.appendChild(renderPost(post));
         }
+        this.enrichLinkCards(container);
       } else {
         // Smooth incremental update: prepend new posts with animation
         // Build a set of both platform:id keys AND canonical URIs for robust matching
@@ -228,6 +229,8 @@ export const DataLoadingMixin = {
           setTimeout(() => {
             container.querySelectorAll('.new-post').forEach(el => el.classList.remove('new-post'));
           }, 400);
+
+          this.enrichLinkCards(container);
         }
       }
     } catch (err) {
@@ -339,6 +342,7 @@ export const DataLoadingMixin = {
         for (const post of newPosts) {
           container.appendChild(renderPost(post));
         }
+        this.enrichLinkCards(container);
       }
     } catch (err) {
       console.error('Failed to load older posts:', err);

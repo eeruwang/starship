@@ -85,6 +85,9 @@ export const ThreadViewMixin = {
         this._renderDescendantTree(content, descendants, targetPost?.id);
       }
 
+      // Enrich link cards with OG data
+      this.enrichLinkCards(content);
+
       // Scroll to the target post
       requestAnimationFrame(() => {
         const target = content.querySelector('.thread-target');
