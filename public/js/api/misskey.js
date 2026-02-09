@@ -85,6 +85,12 @@ export class MisskeyClient {
     return this.request('notes/delete', { noteId });
   }
 
+  async editNote(noteId, text, options = {}) {
+    const body = { noteId, text };
+    if (options.cw !== undefined) body.cw = options.cw || null;
+    return this.request('notes/update', body);
+  }
+
   async renote(noteId) {
     return this.request('notes/create', { renoteId: noteId });
   }
@@ -401,7 +407,30 @@ export class MisskeyClient {
       return `\x00IC${idx}\x00`;
     });
 
-    // 3. Extract markdown links [text](url) as placeholders
+    // 3. MFM $[function content] (innermost first, repeat for nesting)
+    let prevHtml;
+    do {
+      prevHtml = html;
+      html = html.replace(/\$\[(\w+)(?:\.[\w=,.]+)?\s+([^\[\]]*)\]/g, (match, func, content) => {
+        switch (func) {
+          case 'flip': return `<span class="mfm-flip">${content}</span>`;
+          case 'x2': return `<span class="mfm-x2">${content}</span>`;
+          case 'x3': return `<span class="mfm-x3">${content}</span>`;
+          case 'x4': return `<span class="mfm-x4">${content}</span>`;
+          case 'blur': return `<span class="mfm-blur">${content}</span>`;
+          case 'sparkle': return `<span class="mfm-sparkle">${content}</span>`;
+          case 'spin': return `<span class="mfm-spin">${content}</span>`;
+          case 'shake': return `<span class="mfm-shake">${content}</span>`;
+          case 'bounce': return `<span class="mfm-bounce">${content}</span>`;
+          case 'jump': return `<span class="mfm-jump">${content}</span>`;
+          case 'tada': return `<span class="mfm-tada">${content}</span>`;
+          case 'rainbow': return `<span class="mfm-rainbow">${content}</span>`;
+          default: return content;
+        }
+      });
+    } while (html !== prevHtml);
+
+    // 4. Extract markdown links [text](url) as placeholders
     const mdLinks = [];
     html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (match, linkText, url) => {
       const idx = mdLinks.length;
@@ -409,7 +438,7 @@ export class MisskeyClient {
       return `\x00ML${idx}\x00`;
     });
 
-    // 4. Extract bare URLs as placeholders
+    // 5. Extract bare URLs as placeholders
     const extractedUrls = [];
     html = html.replace(/(https?:\/\/[^\s<]+)/g, (match) => {
       const cleaned = match.replace(/[).,;:!?&]+$/, '').replace(/&amp;$/, '');
@@ -417,6 +446,12 @@ export class MisskeyClient {
       extractedUrls.push(cleaned);
       const trailing = match.slice(cleaned.length);
       return `\x00URL${idx}\x00${trailing}`;
+    });
+
+    // Headings (before hashtags to avoid # conflict)
+    html = html.replace(/^(#{1,6})\s+(.+)/gm, (match, hashes, content) => {
+      const level = Math.min(hashes.length, 4);
+      return `<h${level} class="mfm-heading">${content}</h${level}>`;
     });
 
     // Bold

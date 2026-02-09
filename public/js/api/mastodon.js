@@ -82,6 +82,17 @@ export class MastodonClient {
     return this.request('DELETE', `/api/v1/statuses/${encodeURIComponent(id)}`);
   }
 
+  async getStatusSource(id) {
+    return this.request('GET', `/api/v1/statuses/${encodeURIComponent(id)}/source`);
+  }
+
+  async editStatus(id, text, options = {}) {
+    const body = { status: text };
+    if (options.spoilerText) body.spoiler_text = options.spoilerText;
+    if (options.mediaIds) body.media_ids = options.mediaIds;
+    return this.request('PUT', `/api/v1/statuses/${encodeURIComponent(id)}`, body);
+  }
+
   async bookmark(id) {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
   }

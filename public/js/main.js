@@ -225,12 +225,42 @@ class StarShipApp {
     // Manual token add
     this.btnConfirmAdd.addEventListener('click', () => this.handleAddAccount());
 
-    // Toggle bar clicks
-    this.toggleBar.addEventListener('click', (e) => {
-      const toggle = e.target.closest('.col-toggle');
-      if (!toggle) return;
-      this.handleToggleClick(toggle);
-    });
+    // Toggle bar: drag to scroll
+    {
+      let isDragging = false, startX = 0, scrollStart = 0, moved = false;
+      this.toggleBar.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.pageX;
+        scrollStart = this.toggleBar.scrollLeft;
+        moved = false;
+        this.toggleBar.style.cursor = 'grabbing';
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.pageX - startX;
+        if (Math.abs(dx) > 5) {
+          moved = true;
+          this.toggleBar.scrollLeft = scrollStart - dx;
+        }
+      });
+      document.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          this.toggleBar.style.cursor = '';
+        }
+      });
+      // Prevent toggle click when dragging
+      this.toggleBar.addEventListener('click', (e) => {
+        if (moved) {
+          e.stopPropagation();
+          moved = false;
+          return;
+        }
+        const toggle = e.target.closest('.col-toggle');
+        if (!toggle) return;
+        this.handleToggleClick(toggle);
+      }, true);
+    }
 
     // CW toggle (delegated)
     document.addEventListener('click', (e) => {
@@ -277,6 +307,8 @@ class StarShipApp {
         this.handlePostAction('quote', postId, platform, accountId, btn);
       } else if (action === 'reaction') {
         this.handlePostAction('reaction', postId, platform, accountId, btn);
+      } else if (action === 'edit') {
+        this.openEditModal(postId, platform, accountId);
       } else if (action === 'delete') {
         this.handleDeletePost(postId, platform, accountId, btn);
       }
@@ -758,9 +790,17 @@ class StarShipApp {
     col.dataset.columnType = type;
     if (accountId) col.dataset.accountId = accountId;
 
+    let avatarHtml = '';
+    if (type === 'account' && accountId) {
+      const account = this.store.getById(accountId);
+      if (account?.profile?.avatarUrl) {
+        avatarHtml = `<img class="column-header-avatar" src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
+      }
+    }
+
     col.innerHTML = `
       <div class="column-header">
-        <h2>${title}</h2>
+        <h2>${avatarHtml}${title}</h2>
         <div class="column-header-actions">
           <button class="btn btn-icon btn-small" data-action="refresh-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="새로고침">${iconRefresh}</button>
           <button class="btn btn-icon btn-small" data-action="close-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="닫기">${iconClose}</button>
@@ -1547,6 +1587,99 @@ class StarShipApp {
     }
   }
 
+  async openEditModal(postId, platform, accountId) {
+    const client = this.store.getClient(accountId);
+    const account = this.store.getById(accountId);
+    if (!client || !account) return;
+
+    let sourceText = '';
+    let sourceCw = '';
+
+    try {
+      if (account.platform === 'mastodon') {
+        const source = await client.getStatusSource(postId);
+        sourceText = source.text || '';
+        sourceCw = source.spoiler_text || '';
+      } else {
+        const cachedPost = this.postCache.get(`${platform}:${postId}`);
+        const raw = cachedPost?.raw;
+        const actualRaw = (raw?.renote && !raw?.text) ? raw.renote : raw;
+        sourceText = actualRaw?.text || '';
+        sourceCw = actualRaw?.cw || '';
+      }
+    } catch (err) {
+      alert('원문을 가져오는데 실패했습니다: ' + err.message);
+      return;
+    }
+
+    // Open compose modal in edit mode
+    this.openComposeModal();
+    this.composeText.dataset.editPostId = postId;
+    this.composeText.dataset.editPlatform = platform;
+    this.composeText.dataset.editAccountId = accountId;
+    this.composeText.value = sourceText;
+    this.composeCw.value = sourceCw;
+    this.composeTitle.textContent = '글 수정';
+    this.composeText.placeholder = '수정할 내용을 입력하세요...';
+    this.btnComposeSubmit.textContent = '수정';
+
+    // Lock to the editing account
+    this.composeSelectedAccounts.clear();
+    this.composeSelectedAccounts.add(accountId);
+    const toggles = this.composeAccountsContainer.querySelectorAll('.compose-account-toggle');
+    for (const toggle of toggles) {
+      if (toggle.dataset.accountId === accountId) {
+        toggle.classList.add('active');
+      } else {
+        toggle.classList.remove('active');
+        toggle.disabled = true;
+        toggle.style.opacity = '0.3';
+      }
+    }
+  }
+
+  async handleEditSubmit() {
+    const editPostId = this.composeText.dataset.editPostId;
+    const editPlatform = this.composeText.dataset.editPlatform;
+    const editAccountId = this.composeText.dataset.editAccountId;
+    const text = this.composeText.value.trim();
+    const cw = this.composeCw.value.trim();
+
+    if (!text) {
+      this.composeError.textContent = '내용을 입력하세요.';
+      this.composeError.style.display = 'block';
+      return;
+    }
+
+    this.btnComposeSubmit.disabled = true;
+    this.btnComposeSubmit.textContent = '수정 중...';
+    this.composeError.style.display = 'none';
+
+    const client = this.store.getClient(editAccountId);
+    const account = this.store.getById(editAccountId);
+    if (!client || !account) return;
+
+    try {
+      if (account.platform === 'mastodon') {
+        await client.editStatus(editPostId, text, {
+          spoilerText: cw || undefined,
+        });
+      } else {
+        await client.editNote(editPostId, text, {
+          cw: cw || undefined,
+        });
+      }
+      this.closeModal(this.modalCompose);
+      await this.refreshSinglePost(editPostId, editPlatform, editAccountId);
+    } catch (err) {
+      this.composeError.textContent = '수정 실패: ' + err.message;
+      this.composeError.style.display = 'block';
+    }
+
+    this.btnComposeSubmit.disabled = false;
+    this.btnComposeSubmit.textContent = '수정';
+  }
+
   // Get the original (deepest) post from a renote/reblog chain
   getOriginalPostId(postId, platform) {
     const cached = this.postCache.get(`${platform}:${postId}`);
@@ -1927,6 +2060,9 @@ class StarShipApp {
     this.composeError.style.display = 'none';
     this.btnComposeSubmit.disabled = false;
     this.btnComposeSubmit.textContent = '게시';
+    delete this.composeText.dataset.editPostId;
+    delete this.composeText.dataset.editPlatform;
+    delete this.composeText.dataset.editAccountId;
 
     const replyCtx = document.getElementById('compose-reply-context');
     if (replyToId) {
@@ -2147,6 +2283,11 @@ class StarShipApp {
   }
 
   async handleComposeSubmit() {
+    // Edit mode
+    if (this.composeText.dataset.editPostId) {
+      return this.handleEditSubmit();
+    }
+
     const selectedIds = [...this.composeSelectedAccounts];
     const text = this.composeText.value.trim();
     const cw = this.composeCw.value.trim();
