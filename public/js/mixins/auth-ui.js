@@ -118,9 +118,6 @@ export const AuthUIMixin = {
       case 'import-data':
         document.getElementById('import-file-input').click();
         break;
-      case 'toggle-registration':
-        await this.toggleRegistration();
-        break;
       case 'manage-invite-codes':
         this.openInviteCodeModal();
         break;
@@ -132,11 +129,7 @@ export const AuthUIMixin = {
     }
   },
 
-  async toggleRegistration() {
-    const modes = ['open', 'invite', 'closed'];
-    const current = this._siteInfo.registrationMode || 'open';
-    const idx = modes.indexOf(current);
-    const newMode = modes[(idx + 1) % modes.length];
+  async setRegistrationMode(newMode) {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
@@ -157,10 +150,10 @@ export const AuthUIMixin = {
   },
 
   updateAdminUI() {
-    const text = document.getElementById('toggle-reg-text');
     const mode = this._siteInfo.registrationMode || 'open';
-    const labels = { open: '회원가입: 오픈', invite: '회원가입: 베타', closed: '회원가입: 닫음' };
-    text.textContent = labels[mode] || labels.open;
+    document.querySelectorAll('.reg-mode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.regMode === mode);
+    });
   },
 
   toggleAuthMode() {

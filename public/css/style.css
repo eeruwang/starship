@@ -1714,6 +1714,43 @@ textarea.input {
   letter-spacing: 0.05em;
 }
 
+.reg-mode-group {
+  display: flex;
+  gap: 3px;
+  padding: 0.3rem 0.4rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius);
+  margin: 0.2rem 0.3rem 0.3rem;
+}
+.reg-mode-btn {
+  flex: 1;
+  padding: 0.35rem 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.reg-mode-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.reg-mode-btn.active[data-reg-mode="open"] {
+  background: #2e7d32;
+  color: #fff;
+}
+.reg-mode-btn.active[data-reg-mode="invite"] {
+  background: #e65100;
+  color: #fff;
+}
+.reg-mode-btn.active[data-reg-mode="closed"] {
+  background: var(--accent-danger);
+  color: #fff;
+}
+
 #turnstile-container {
   display: flex;
   justify-content: center;

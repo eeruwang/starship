@@ -189,6 +189,13 @@ class StarShipApp {
     document.querySelectorAll('.user-menu-item[data-action]').forEach(item => {
       item.addEventListener('click', () => this.handleUserMenuAction(item.dataset.action));
     });
+    // Registration mode buttons
+    document.querySelectorAll('.reg-mode-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.setRegistrationMode(btn.dataset.regMode);
+      });
+    });
     document.getElementById('import-file-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
