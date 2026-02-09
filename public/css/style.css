@@ -595,23 +595,38 @@ h3.mfm-heading { font-size: 1.1em; }
 h4.mfm-heading { font-size: 1em; }
 
 /* MFM $[] functions */
-.mfm-flip { display: inline-block; transform: scaleX(-1); }
 .mfm-x2 { font-size: 2em; }
 .mfm-x3 { font-size: 3em; }
 .mfm-x4 { font-size: 4em; }
 .mfm-blur { filter: blur(6px); transition: filter 0.3s; }
 .mfm-blur:hover { filter: none; }
 .mfm-sparkle { display: inline-block; animation: mfmSparkle 1.5s ease infinite; }
-.mfm-spin { display: inline-block; animation: spin 1.5s linear infinite; }
+.mfm-spin { display: inline-block; animation: mfmSpin 1.5s linear infinite; }
+.mfm-spin-x { display: inline-block; animation: mfmSpinX 1.5s linear infinite; }
+.mfm-spin-y { display: inline-block; animation: mfmSpinY 1.5s linear infinite; }
 .mfm-shake { display: inline-block; animation: mfmShake 0.4s ease infinite; }
 .mfm-bounce { display: inline-block; animation: mfmBounce 0.75s ease infinite; }
 .mfm-jump { display: inline-block; animation: mfmJump 0.75s ease infinite; }
 .mfm-tada { display: inline-block; animation: mfmTada 1s ease infinite; }
+.mfm-twitch { display: inline-block; animation: mfmTwitch 0.5s ease infinite; }
+.mfm-jelly { display: inline-block; animation: mfmJelly 1s ease infinite; transform-origin: center bottom; }
 .mfm-rainbow { background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); background-size: 200%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: mfmRainbow 2s linear infinite; }
 
 @keyframes mfmSparkle {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.6; transform: scale(0.95); }
+}
+@keyframes mfmSpin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+@keyframes mfmSpinX {
+  from { transform: perspective(200px) rotateX(0); }
+  to { transform: perspective(200px) rotateX(360deg); }
+}
+@keyframes mfmSpinY {
+  from { transform: perspective(200px) rotateY(0); }
+  to { transform: perspective(200px) rotateY(360deg); }
 }
 @keyframes mfmShake {
   0% { transform: translate(-2px, 0); }
@@ -633,6 +648,22 @@ h4.mfm-heading { font-size: 1em; }
   10%, 20% { transform: scale(0.9) rotate(-3deg); }
   30%, 50%, 70%, 90% { transform: scale(1.1) rotate(3deg); }
   40%, 60%, 80% { transform: scale(1.1) rotate(-3deg); }
+}
+@keyframes mfmTwitch {
+  0% { transform: translate(3px, -1px); }
+  25% { transform: translate(-1px, 3px); }
+  50% { transform: translate(-3px, -2px); }
+  75% { transform: translate(2px, 1px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes mfmJelly {
+  0% { transform: scaleX(1) scaleY(1); }
+  30% { transform: scaleX(1.25) scaleY(0.75); }
+  40% { transform: scaleX(0.75) scaleY(1.25); }
+  50% { transform: scaleX(1.15) scaleY(0.85); }
+  65% { transform: scaleX(0.95) scaleY(1.05); }
+  75% { transform: scaleX(1.05) scaleY(0.95); }
+  100% { transform: scaleX(1) scaleY(1); }
 }
 @keyframes mfmRainbow {
   0% { background-position: 0% 50%; }

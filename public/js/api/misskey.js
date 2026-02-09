@@ -412,24 +412,90 @@ export class MisskeyClient {
       return `\x00IC${idx}\x00`;
     });
 
-    // 3. MFM $[function content] (innermost first, repeat for nesting)
+    // 3. MFM $[function.params content] (innermost first, repeat for nesting)
     let prevHtml;
     do {
       prevHtml = html;
-      html = html.replace(/\$\[(\w+)(?:\.[\w=,.]+)?\s+([^\[\]]*)\]/g, (match, func, content) => {
+      html = html.replace(/\$\[(\w+)(?:\.([\w=,.\-]+))?\s+([^\[\]]*)\]/g, (match, func, paramStr, content) => {
+        const params = {};
+        if (paramStr) {
+          for (const p of paramStr.split(',')) {
+            const [k, v] = p.split('=');
+            params[k] = v !== undefined ? v : true;
+          }
+        }
+        const speed = params.speed || null;
+        const speedStyle = speed ? `animation-duration:${this.escapeHtml(speed)};` : '';
+
         switch (func) {
-          case 'flip': return `<span class="mfm-flip">${content}</span>`;
+          case 'flip': {
+            const h = params.h !== undefined;
+            const v = params.v !== undefined;
+            const tx = h && v ? 'scale(-1,-1)' : v ? 'scaleY(-1)' : 'scaleX(-1)';
+            return `<span style="display:inline-block;transform:${tx}">${content}</span>`;
+          }
           case 'x2': return `<span class="mfm-x2">${content}</span>`;
           case 'x3': return `<span class="mfm-x3">${content}</span>`;
           case 'x4': return `<span class="mfm-x4">${content}</span>`;
           case 'blur': return `<span class="mfm-blur">${content}</span>`;
-          case 'sparkle': return `<span class="mfm-sparkle">${content}</span>`;
-          case 'spin': return `<span class="mfm-spin">${content}</span>`;
-          case 'shake': return `<span class="mfm-shake">${content}</span>`;
-          case 'bounce': return `<span class="mfm-bounce">${content}</span>`;
-          case 'jump': return `<span class="mfm-jump">${content}</span>`;
-          case 'tada': return `<span class="mfm-tada">${content}</span>`;
-          case 'rainbow': return `<span class="mfm-rainbow">${content}</span>`;
+          case 'sparkle': return `<span class="mfm-sparkle" style="${speedStyle}">${content}</span>`;
+          case 'spin': {
+            const dir = params.left ? 'reverse' : params.alternate ? 'alternate' : 'normal';
+            const axis = params.y ? 'Y' : params.x ? 'X' : '';
+            const cls = axis ? `mfm-spin-${axis.toLowerCase()}` : 'mfm-spin';
+            return `<span class="${cls}" style="animation-direction:${dir};${speedStyle}">${content}</span>`;
+          }
+          case 'shake': return `<span class="mfm-shake" style="${speedStyle}">${content}</span>`;
+          case 'bounce': return `<span class="mfm-bounce" style="${speedStyle}">${content}</span>`;
+          case 'jump': return `<span class="mfm-jump" style="${speedStyle}">${content}</span>`;
+          case 'tada': return `<span class="mfm-tada" style="${speedStyle}">${content}</span>`;
+          case 'twitch': return `<span class="mfm-twitch" style="${speedStyle}">${content}</span>`;
+          case 'jelly': return `<span class="mfm-jelly" style="${speedStyle}">${content}</span>`;
+          case 'rainbow': return `<span class="mfm-rainbow" style="${speedStyle}">${content}</span>`;
+          case 'font': {
+            const face = params.serif ? 'serif' : params.monospace ? 'monospace' : params.cursive ? 'cursive' : params.fantasy ? 'fantasy' : null;
+            return face ? `<span style="font-family:${face}">${content}</span>` : content;
+          }
+          case 'fg': {
+            const c = params.color ? `#${this.escapeHtml(params.color)}` : 'inherit';
+            return `<span style="color:${c}">${content}</span>`;
+          }
+          case 'bg': {
+            const c = params.color ? `#${this.escapeHtml(params.color)}` : 'inherit';
+            return `<span style="background-color:${c};border-radius:2px;padding:0 2px">${content}</span>`;
+          }
+          case 'position': {
+            const x = parseFloat(params.x) || 0;
+            const y = parseFloat(params.y) || 0;
+            return `<span style="display:inline-block;transform:translate(${x}em,${y}em)">${content}</span>`;
+          }
+          case 'scale': {
+            const sx = Math.min(parseFloat(params.x) || 1, 5);
+            const sy = Math.min(parseFloat(params.y) || 1, 5);
+            return `<span style="display:inline-block;transform:scale(${sx},${sy})">${content}</span>`;
+          }
+          case 'rotate': {
+            const deg = parseFloat(params.deg) || 0;
+            return `<span style="display:inline-block;transform:rotate(${deg}deg)">${content}</span>`;
+          }
+          case 'ruby': {
+            // $[ruby base text] — content format: "base text"
+            const parts = content.split(/\s+/);
+            if (parts.length >= 2) {
+              const base = parts.slice(0, -1).join(' ');
+              const rt = parts[parts.length - 1];
+              return `<ruby>${base}<rp>(</rp><rt>${rt}</rt><rp>)</rp></ruby>`;
+            }
+            return content;
+          }
+          case 'unixtime': {
+            const ts = parseInt(content, 10);
+            if (!isNaN(ts)) {
+              const d = new Date(ts * 1000);
+              return `<time datetime="${d.toISOString()}" title="${d.toISOString()}">${d.toLocaleString('ko-KR')}</time>`;
+            }
+            return content;
+          }
           default: return content;
         }
       });
