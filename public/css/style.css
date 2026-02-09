@@ -1424,6 +1424,79 @@ textarea.input {
   margin-top: 0.25rem;
 }
 
+/* Settings about section */
+.settings-about {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.settings-about-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.settings-about-logo img {
+  border-radius: 6px;
+}
+
+.settings-about-name {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-misskey), var(--accent-mastodon));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.settings-about-version {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.settings-about-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 6px 0 10px;
+}
+
+.settings-about-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.settings-about-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  transition: color 0.2s, background 0.2s;
+}
+
+.settings-about-links a:hover {
+  color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.settings-about-copyright {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 .form-error {
   color: var(--accent-danger);
   font-size: 0.85rem;
