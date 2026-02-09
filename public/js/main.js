@@ -521,19 +521,23 @@ class StarShipApp {
 
     // Column headers: drag to scroll columns container horizontally (with momentum)
     {
-      let isDragging = false, startX = 0, scrollStart = 0, moved = false;
+      let isDragging = false, startX = 0, startY = 0, scrollStart = 0, moved = false;
       let velocity = 0, momentumId = null;
       let prevX = 0, prevTime = 0;
+      let directionLocked = false; // once locked horizontal, prevent vertical scroll
       const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
-      const SMOOTHING = 0.6; // velocity smoothing factor (0-1, higher = more responsive)
+      const getY = (e) => e.touches ? e.touches[0].pageY : e.pageY;
+      const SMOOTHING = 0.5;
 
       const startDrag = (e, isTouch) => {
         const header = e.target.closest('.column-header');
         if (!header || e.target.closest('button')) return;
         if (momentumId) { cancelAnimationFrame(momentumId); momentumId = null; }
         isDragging = true;
+        directionLocked = false;
         const x = getX(e);
         startX = x;
+        startY = isTouch ? getY(e) : 0;
         prevX = x;
         prevTime = performance.now();
         velocity = 0;
@@ -546,28 +550,47 @@ class StarShipApp {
       };
       const onMove = (e) => {
         if (!isDragging) return;
-        const x = getX(e);
+        const x = e.touches ? e.touches[0].pageX : e.pageX;
         const now = performance.now();
+
+        // Touch: lock direction after small movement
+        if (e.touches && !directionLocked) {
+          const y = e.touches[0].pageY;
+          const dx = Math.abs(x - startX);
+          const dy = Math.abs(y - startY);
+          if (dx + dy > 5) {
+            if (dx > dy) {
+              directionLocked = true; // horizontal drag confirmed
+            } else {
+              isDragging = false; // vertical scroll, release
+              return;
+            }
+          } else {
+            return; // wait for direction
+          }
+        }
+
+        // Prevent default scroll once locked horizontal
+        if (e.cancelable) e.preventDefault();
+
         const dt = now - prevTime;
-        // Smooth velocity with exponential moving average
         if (dt > 0) {
           const instantV = (x - prevX) / dt;
           velocity = velocity * (1 - SMOOTHING) + instantV * SMOOTHING;
         }
         prevX = x;
         prevTime = now;
-        // Scroll immediately (no dead zone) for fluid feel
         this.columnsContainer.scrollLeft = scrollStart - (x - startX);
-        // Mark as drag after 3px for click prevention
         if (Math.abs(x - startX) > 3) moved = true;
       };
-      const onEnd = () => {
+      const onEnd = (e) => {
         if (!isDragging) return;
+        // Use last known velocity (changedTouches has no pageX for velocity)
         isDragging = false;
+        directionLocked = false;
         this.columnsContainer.style.cursor = '';
-        // Momentum: continue scrolling based on smoothed velocity
-        if (Math.abs(velocity) > 0.15) {
-          let v = -velocity * 16; // scale to ~px per frame at 60fps
+        if (Math.abs(velocity) > 0.1) {
+          let v = -velocity * 16;
           const decel = 0.96;
           const step = () => {
             if (Math.abs(v) < 0.3) { momentumId = null; return; }
@@ -582,7 +605,7 @@ class StarShipApp {
       this.columnsContainer.addEventListener('mousedown', (e) => startDrag(e, false));
       this.columnsContainer.addEventListener('touchstart', (e) => startDrag(e, true), { passive: true });
       document.addEventListener('mousemove', onMove);
-      document.addEventListener('touchmove', onMove, { passive: true });
+      document.addEventListener('touchmove', onMove, { passive: false });
       document.addEventListener('mouseup', onEnd);
       document.addEventListener('touchend', onEnd);
 

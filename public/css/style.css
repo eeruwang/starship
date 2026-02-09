@@ -408,6 +408,8 @@ body {
   flex-shrink: 0;
   cursor: grab;
   user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
 }
 
 .column-header h2 {
