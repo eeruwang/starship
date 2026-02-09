@@ -1817,10 +1817,10 @@ textarea.input {
   margin-bottom: 6px;
 }
 
-/* Descendants */
+/* Descendants: full width, depth shown via left border color + thickness */
 .thread-content .post-card.thread-descendant {
   opacity: 0.75;
-  border-left: 2px solid transparent;
+  border-left: 3px solid var(--border-color);
   transition: opacity 0.15s, border-color 0.15s;
 }
 
@@ -1828,11 +1828,11 @@ textarea.input {
   opacity: 1;
 }
 
-/* Depth-based connector lines for reply tree */
+/* Depth-based colored left border for reply tree */
 .thread-content .post-card.thread-depth-1 { border-left-color: var(--accent-primary); }
-.thread-content .post-card.thread-depth-2 { border-left-color: #96d04a; }
-.thread-content .post-card.thread-depth-3 { border-left-color: #e36a8a; }
-.thread-content .post-card.thread-depth-4 { border-left-color: #ff9f43; }
+.thread-content .post-card.thread-depth-2 { border-left-color: #96d04a; border-left-width: 3px; }
+.thread-content .post-card.thread-depth-3 { border-left-color: #e36a8a; border-left-width: 3px; }
+.thread-content .post-card.thread-depth-4 { border-left-color: #ff9f43; border-left-width: 3px; }
 
 /* Post cards in thread should be clickable for actions but not for thread-open */
 .thread-content .post-card .post-content {

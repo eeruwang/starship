@@ -113,7 +113,7 @@ export const ThreadViewMixin = {
       childrenMap.get(parentId).push(post);
     }
 
-    // Render tree recursively with depth tracking
+    // Render tree recursively with depth tracking (no margin, use border color only)
     const maxDepth = 4;
     const renderNode = (postId, depth) => {
       const children = childrenMap.get(String(postId)) || [];
@@ -122,9 +122,7 @@ export const ThreadViewMixin = {
         el.classList.add('thread-post', 'thread-descendant');
         const level = Math.min(depth, maxDepth);
         el.classList.add(`thread-depth-${level}`);
-        el.style.marginLeft = `${level * 20}px`;
         container.appendChild(el);
-        // Recurse into this child's replies
         renderNode(child.id, depth + 1);
       }
     };
