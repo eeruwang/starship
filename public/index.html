@@ -47,7 +47,11 @@
               <div class="user-menu-label">관리자</div>
               <button class="user-menu-item" data-action="toggle-registration" id="btn-toggle-reg">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-                <span id="toggle-reg-text">회원가입 닫기</span>
+                <span id="toggle-reg-text">회원가입: 오픈</span>
+              </button>
+              <button class="user-menu-item" data-action="manage-invite-codes" id="btn-manage-invites">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="13" y2="13"/></svg>
+                초대코드 관리
               </button>
             </div>
             <div class="user-menu-divider"></div>
@@ -290,6 +294,10 @@
           <svg class="auth-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           <input type="password" id="auth-password" class="input auth-input" placeholder="비밀번호" autocomplete="current-password">
         </div>
+        <div class="auth-field" id="auth-invite-field" style="display:none;">
+          <svg class="auth-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="13" y2="13"/></svg>
+          <input type="text" id="auth-invite-code" class="input auth-input" placeholder="초대코드" autocomplete="off">
+        </div>
         <div id="turnstile-container" style="display:none;"></div>
         <div id="auth-error" class="form-error" style="display:none;"></div>
         <button id="btn-auth-submit" class="btn btn-primary auth-submit">로그인</button>
@@ -297,6 +305,34 @@
         <div class="auth-switch">
           <span id="auth-switch-text">계정이 없으신가요?</span>
           <button id="btn-auth-switch" class="btn-link">회원가입</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 초대코드 관리 모달 -->
+  <div class="modal-overlay" id="modal-invite-codes" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>초대코드 관리</h2>
+        <button class="btn btn-icon modal-close" data-close-modal="modal-invite-codes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="invite-generate-section">
+          <div class="invite-generate-row">
+            <div class="form-group" style="flex:1; margin-bottom:0;">
+              <label for="invite-count">생성 개수</label>
+              <input type="number" id="invite-count" class="input" value="1" min="1" max="50">
+            </div>
+            <div class="form-group" style="flex:1; margin-bottom:0;">
+              <label for="invite-max-uses">사용 횟수</label>
+              <input type="number" id="invite-max-uses" class="input" value="1" min="1" max="100">
+            </div>
+            <button class="btn btn-primary" id="btn-generate-invites" style="align-self:flex-end;">생성</button>
+          </div>
+        </div>
+        <div class="invite-list" id="invite-list">
+          <div class="invite-empty">초대코드가 없습니다</div>
         </div>
       </div>
     </div>

@@ -66,6 +66,14 @@ async function ensureTables(db) {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS invite_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      max_uses INTEGER NOT NULL DEFAULT 1,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`),
   ]);
   // Migrate: add role column if missing
   try { await db.prepare("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'").run(); } catch {}
@@ -139,6 +147,16 @@ async function handleApi(request, url, env) {
   if (path === '/api/admin/settings' && request.method === 'POST') {
     return handleAdminSaveSettings(request, db);
   }
+  if (path === '/api/admin/invite-codes' && request.method === 'GET') {
+    return handleGetInviteCodes(request, db);
+  }
+  if (path === '/api/admin/invite-codes' && request.method === 'POST') {
+    return handleCreateInviteCodes(request, db);
+  }
+  if (path.startsWith('/api/admin/invite-codes/') && request.method === 'DELETE') {
+    const code = decodeURIComponent(path.split('/').pop());
+    return handleDeleteInviteCode(request, db, code);
+  }
   // Public: get registration status & turnstile site key
   if (path === '/api/site-info' && request.method === 'GET') {
     return handleSiteInfo(db, env);
@@ -150,13 +168,21 @@ async function handleApi(request, url, env) {
 // ===== Auth Endpoints =====
 
 async function handleRegister(request, db, env) {
-  const { username, password, turnstileToken } = await request.json();
+  const { username, password, turnstileToken, inviteCode } = await request.json();
 
-  // Check if registration is open
-  const regSetting = await db.prepare("SELECT value FROM site_settings WHERE key = 'registration_open'").first();
-  const registrationOpen = regSetting ? regSetting.value === 'true' : true; // default open
-  if (!registrationOpen) {
+  // Check registration mode
+  const regMode = await getRegistrationMode(db);
+  if (regMode === 'closed') {
     return jsonResponse({ error: '현재 회원가입이 비활성화되어 있습니다' }, 403);
+  }
+  if (regMode === 'invite') {
+    if (!inviteCode) {
+      return jsonResponse({ error: '초대코드를 입력해주세요' }, 400);
+    }
+    const code = await db.prepare('SELECT * FROM invite_codes WHERE code = ?').bind(inviteCode.trim()).first();
+    if (!code || code.used_count >= code.max_uses) {
+      return jsonResponse({ error: '유효하지 않거나 이미 사용된 초대코드입니다' }, 403);
+    }
   }
 
   if (!username || !password) {
@@ -203,6 +229,11 @@ async function handleRegister(request, db, env) {
   await db.prepare(
     'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)'
   ).bind(token, userId, expiresAt).run();
+
+  // Increment invite code usage
+  if (regMode === 'invite' && inviteCode) {
+    await db.prepare('UPDATE invite_codes SET used_count = used_count + 1 WHERE code = ?').bind(inviteCode.trim()).run();
+  }
 
   // Fetch actual role (first user is auto-promoted to admin by ensureTables)
   const newUser = await db.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first();
@@ -316,12 +347,67 @@ async function handleAdminSaveSettings(request, db) {
 }
 
 async function handleSiteInfo(db, env) {
-  const regSetting = await db.prepare("SELECT value FROM site_settings WHERE key = 'registration_open'").first();
-  const registrationOpen = regSetting ? regSetting.value === 'true' : true;
+  const regMode = await getRegistrationMode(db);
   return jsonResponse({
-    registrationOpen,
+    registrationMode: regMode,
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
   });
+}
+
+// Helper: get registration mode with backward compat
+async function getRegistrationMode(db) {
+  const modeSetting = await db.prepare("SELECT value FROM site_settings WHERE key = 'registration_mode'").first();
+  if (modeSetting) return modeSetting.value; // 'open', 'invite', 'closed'
+  // Backward compat: check old registration_open key
+  const oldSetting = await db.prepare("SELECT value FROM site_settings WHERE key = 'registration_open'").first();
+  if (oldSetting) return oldSetting.value === 'true' ? 'open' : 'closed';
+  return 'open'; // default
+}
+
+// ===== Invite Code Endpoints =====
+
+async function handleGetInviteCodes(request, db) {
+  const user = await getSessionUser(request, db);
+  if (!user || user.role !== 'admin') return jsonResponse({ error: '권한이 없습니다' }, 403);
+
+  const rows = await db.prepare('SELECT code, max_uses, used_count, created_at FROM invite_codes ORDER BY created_at DESC').all();
+  return jsonResponse(rows.results);
+}
+
+async function handleCreateInviteCodes(request, db) {
+  const user = await getSessionUser(request, db);
+  if (!user || user.role !== 'admin') return jsonResponse({ error: '권한이 없습니다' }, 403);
+
+  const { count = 1, maxUses = 1 } = await request.json();
+  const num = Math.min(Math.max(1, parseInt(count) || 1), 50);
+  const uses = Math.max(1, parseInt(maxUses) || 1);
+
+  const codes = [];
+  const stmts = [];
+  for (let i = 0; i < num; i++) {
+    const code = generateInviteCode();
+    codes.push(code);
+    stmts.push(
+      db.prepare('INSERT INTO invite_codes (code, max_uses, created_by) VALUES (?, ?, ?)').bind(code, uses, user.id)
+    );
+  }
+  await db.batch(stmts);
+  return jsonResponse({ codes });
+}
+
+async function handleDeleteInviteCode(request, db, code) {
+  const user = await getSessionUser(request, db);
+  if (!user || user.role !== 'admin') return jsonResponse({ error: '권한이 없습니다' }, 403);
+
+  await db.prepare('DELETE FROM invite_codes WHERE code = ?').bind(code).run();
+  return jsonResponse({ ok: true });
+}
+
+function generateInviteCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => chars[b % chars.length]).join('');
 }
 
 // ===== Helpers =====

@@ -1558,6 +1558,75 @@ textarea.input {
   margin-top: 0.5rem;
 }
 
+/* ===== Invite Code Management ===== */
+.invite-generate-section {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.invite-generate-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.invite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.invite-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 2rem 0;
+  font-size: 0.85rem;
+}
+.invite-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-input);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+.invite-code {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  color: var(--accent-primary);
+  cursor: pointer;
+  flex: 1;
+}
+.invite-code:hover {
+  text-decoration: underline;
+}
+.invite-uses {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.invite-uses-full {
+  color: var(--accent-danger);
+}
+.invite-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.2rem;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.invite-delete:hover {
+  color: var(--accent-danger);
+  background: rgba(255,85,85,0.1);
+}
+
 /* ===== User Menu Dropdown ===== */
 .user-menu-wrap {
   position: relative;

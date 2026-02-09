@@ -121,6 +121,9 @@ export const AuthUIMixin = {
       case 'toggle-registration':
         await this.toggleRegistration();
         break;
+      case 'manage-invite-codes':
+        this.openInviteCodeModal();
+        break;
       case 'logout':
         if (confirm('로그아웃 하시겠습니까?')) {
           await this.logout();
@@ -130,20 +133,22 @@ export const AuthUIMixin = {
   },
 
   async toggleRegistration() {
-    const newVal = !this._siteInfo.registrationOpen;
+    const modes = ['open', 'invite', 'closed'];
+    const current = this._siteInfo.registrationMode || 'open';
+    const idx = modes.indexOf(current);
+    const newMode = modes[(idx + 1) % modes.length];
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ registration_open: String(newVal) }),
+        body: JSON.stringify({ registration_mode: newMode }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         alert(data.error || '설정 저장에 실패했습니다');
         return;
       }
-      // Re-fetch to confirm server state
       await this.fetchSiteInfo();
       this.updateAdminUI();
     } catch (err) {
@@ -153,14 +158,9 @@ export const AuthUIMixin = {
 
   updateAdminUI() {
     const text = document.getElementById('toggle-reg-text');
-    const icon = document.querySelector('#btn-toggle-reg svg line');
-    if (this._siteInfo.registrationOpen) {
-      text.textContent = '회원가입 닫기';
-      if (icon) icon.setAttribute('x1', '23');
-    } else {
-      text.textContent = '회원가입 열기';
-      if (icon) icon.setAttribute('x1', '20');
-    }
+    const mode = this._siteInfo.registrationMode || 'open';
+    const labels = { open: '회원가입: 오픈', invite: '회원가입: 베타', closed: '회원가입: 닫음' };
+    text.textContent = labels[mode] || labels.open;
   },
 
   toggleAuthMode() {
@@ -170,14 +170,26 @@ export const AuthUIMixin = {
 
   updateAuthModal() {
     const isLogin = this._authMode === 'login';
-    const regClosed = !isLogin && !this._siteInfo.registrationOpen;
+    const regMode = this._siteInfo.registrationMode || 'open';
+    const regClosed = !isLogin && regMode === 'closed';
+    const regInvite = !isLogin && regMode === 'invite';
     this.authModalTitle.textContent = isLogin ? '로그인' : '회원가입';
     this.authSubtitle.textContent = isLogin ? 'StarShip에 오신 것을 환영합니다'
-      : regClosed ? '현재 회원가입이 비활성화되어 있습니다' : '새 계정을 만들어보세요';
+      : regClosed ? '현재 회원가입이 비활성화되어 있습니다'
+      : regInvite ? '초대코드가 필요합니다' : '새 계정을 만들어보세요';
     this.authError.style.display = 'none';
     this.authPassword.autocomplete = isLogin ? 'current-password' : 'new-password';
     this.authSwitchText.textContent = isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?';
     this.btnAuthSwitch.textContent = isLogin ? '회원가입' : '로그인';
+    // Invite code field
+    const inviteField = document.getElementById('auth-invite-field');
+    if (inviteField) {
+      inviteField.style.display = regInvite ? '' : 'none';
+      if (!regInvite) {
+        const inviteInput = document.getElementById('auth-invite-code');
+        if (inviteInput) inviteInput.value = '';
+      }
+    }
     // Turnstile
     const container = document.getElementById('turnstile-container');
     if (!isLogin && this._siteInfo.turnstileSiteKey && !regClosed) {
@@ -264,6 +276,7 @@ export const AuthUIMixin = {
         body: JSON.stringify({
           username, password,
           ...(this._authMode === 'register' && this._turnstileToken ? { turnstileToken: this._turnstileToken } : {}),
+          ...(this._authMode === 'register' ? { inviteCode: (document.getElementById('auth-invite-code')?.value || '').trim() || undefined } : {}),
         }),
       });
       const data = await res.json();
@@ -342,6 +355,89 @@ export const AuthUIMixin = {
     if (!this._currentUser) return;
     clearTimeout(this._syncDebounce);
     this._syncDebounce = setTimeout(() => this.saveToCloud(), 2000);
+  },
+
+  async openInviteCodeModal() {
+    const modal = document.getElementById('modal-invite-codes');
+    this.openModal(modal);
+    await this.loadInviteCodes();
+
+    const genBtn = document.getElementById('btn-generate-invites');
+    const newBtn = genBtn.cloneNode(true);
+    genBtn.replaceWith(newBtn);
+    newBtn.addEventListener('click', async () => {
+      const count = parseInt(document.getElementById('invite-count').value) || 1;
+      const maxUses = parseInt(document.getElementById('invite-max-uses').value) || 1;
+      newBtn.disabled = true;
+      newBtn.textContent = '생성 중...';
+      try {
+        const res = await fetch('/api/admin/invite-codes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ count, maxUses }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.error || '생성 실패');
+          return;
+        }
+        await this.loadInviteCodes();
+      } catch {
+        alert('서버 연결 오류');
+      } finally {
+        newBtn.disabled = false;
+        newBtn.textContent = '생성';
+      }
+    });
+  },
+
+  async loadInviteCodes() {
+    const list = document.getElementById('invite-list');
+    try {
+      const res = await fetch('/api/admin/invite-codes', { credentials: 'same-origin', cache: 'no-store' });
+      if (!res.ok) { list.innerHTML = '<div class="invite-empty">불러오기 실패</div>'; return; }
+      const codes = await res.json();
+      if (!codes.length) {
+        list.innerHTML = '<div class="invite-empty">초대코드가 없습니다</div>';
+        return;
+      }
+      list.innerHTML = codes.map(c => {
+        const full = c.used_count >= c.max_uses;
+        return `<div class="invite-item">
+          <span class="invite-code" title="클릭하여 복사">${c.code}</span>
+          <span class="invite-uses ${full ? 'invite-uses-full' : ''}">${c.used_count}/${c.max_uses}</span>
+          <button class="invite-delete" data-code="${c.code}" title="삭제">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>`;
+      }).join('');
+
+      // Copy on click
+      list.querySelectorAll('.invite-code').forEach(el => {
+        el.addEventListener('click', () => {
+          navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+            const orig = el.textContent;
+            el.textContent = '복사됨!';
+            setTimeout(() => { el.textContent = orig; }, 1000);
+          });
+        });
+      });
+      // Delete
+      list.querySelectorAll('.invite-delete').forEach(el => {
+        el.addEventListener('click', async () => {
+          const code = el.dataset.code;
+          try {
+            await fetch(`/api/admin/invite-codes/${encodeURIComponent(code)}`, {
+              method: 'DELETE', credentials: 'same-origin',
+            });
+            await this.loadInviteCodes();
+          } catch { alert('삭제 실패'); }
+        });
+      });
+    } catch {
+      list.innerHTML = '<div class="invite-empty">불러오기 실패</div>';
+    }
   },
 
   async loadCloudData() {

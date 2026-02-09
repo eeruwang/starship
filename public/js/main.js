@@ -42,7 +42,7 @@ class StarShipApp {
     this.bindEvents();
     this.render();
     this.startAutoRefresh();
-    this._siteInfo = { registrationOpen: true, turnstileSiteKey: null };
+    this._siteInfo = { registrationMode: 'open', turnstileSiteKey: null };
     this._turnstileWidgetId = null;
     this._turnstileToken = null;
     this.fetchSiteInfo();
