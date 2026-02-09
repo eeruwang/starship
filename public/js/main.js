@@ -238,22 +238,47 @@ class StarShipApp {
 
     // Toggle bar: drag to scroll (mouse + touch)
     {
-      let isDragging = false, startX = 0, scrollStart = 0, moved = false;
+      let isDragging = false, startX = 0, startY = 0, scrollStart = 0, moved = false;
+      let directionLocked = false;
       const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
+      const getY = (e) => e.touches ? e.touches[0].pageY : e.pageY;
 
       const onStart = (e) => {
         isDragging = true;
+        directionLocked = false;
         startX = getX(e);
+        startY = e.touches ? getY(e) : 0;
         scrollStart = this.toggleBar.scrollLeft;
         moved = false;
-        this.toggleBar.style.cursor = 'grabbing';
-        // Prevent text selection while dragging
-        e.preventDefault();
+        if (!e.touches) {
+          this.toggleBar.style.cursor = 'grabbing';
+          e.preventDefault();
+        }
       };
       const onMove = (e) => {
         if (!isDragging) return;
-        const dx = getX(e) - startX;
-        if (Math.abs(dx) > 5) {
+        const x = e.touches ? e.touches[0].pageX : e.pageX;
+
+        // Touch direction lock
+        if (e.touches && !directionLocked) {
+          const y = e.touches[0].pageY;
+          const dx = Math.abs(x - startX);
+          const dy = Math.abs(y - startY);
+          if (dx + dy > 5) {
+            if (dx > dy) {
+              directionLocked = true;
+            } else {
+              isDragging = false;
+              return;
+            }
+          } else {
+            return;
+          }
+        }
+
+        if (e.cancelable) e.preventDefault();
+        const dx = x - startX;
+        if (Math.abs(dx) > 3) {
           moved = true;
           this.toggleBar.scrollLeft = scrollStart - dx;
         }
@@ -261,6 +286,7 @@ class StarShipApp {
       const onEnd = () => {
         if (isDragging) {
           isDragging = false;
+          directionLocked = false;
           this.toggleBar.style.cursor = '';
         }
       };
@@ -268,11 +294,23 @@ class StarShipApp {
       this.toggleBar.addEventListener('mousedown', onStart);
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onEnd);
-      this.toggleBar.addEventListener('touchstart', onStart, { passive: false });
-      document.addEventListener('touchmove', onMove, { passive: true });
-      document.addEventListener('touchend', onEnd);
+      this.toggleBar.addEventListener('touchstart', onStart, { passive: true });
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', (e) => {
+        const wasDrag = moved;
+        onEnd();
+        // Touch tap: manually trigger toggle if it wasn't a drag
+        if (!wasDrag && e.changedTouches && e.changedTouches.length) {
+          const touch = e.changedTouches[0];
+          const el = document.elementFromPoint(touch.clientX, touch.clientY);
+          const toggle = el && el.closest('.col-toggle');
+          if (toggle && this.toggleBar.contains(toggle)) {
+            this.handleToggleClick(toggle);
+          }
+        }
+      });
 
-      // Prevent toggle click when dragging
+      // Prevent toggle click when dragging (mouse)
       this.toggleBar.addEventListener('click', (e) => {
         if (moved) {
           e.stopPropagation();

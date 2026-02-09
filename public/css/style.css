@@ -30,6 +30,8 @@
 html {
   font-size: 14px;
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -92,17 +94,19 @@ body {
 }
 
 .logo {
-  font-size: 1.4rem;
+  font-size: 20px;
   font-weight: 700;
   background: linear-gradient(135deg, var(--accent-misskey), var(--accent-mastodon));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  white-space: nowrap;
 }
 
 .tagline {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .header-right {
@@ -112,7 +116,8 @@ body {
   flex-shrink: 0;
 }
 .header-right .btn {
-  height: 2.25rem;
+  height: 32px;
+  font-size: 13px;
   box-sizing: border-box;
 }
 
@@ -211,9 +216,9 @@ body {
   border: none;
   background: var(--bg-card);
   color: var(--text-secondary);
-  padding: 0.4rem 0.85rem;
+  padding: 6px 12px;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 12px;
   font-family: inherit;
   border-radius: 20px;
   transition: all 0.25s ease;
@@ -413,7 +418,7 @@ body {
 }
 
 .column-header h2 {
-  font-size: 1rem;
+  font-size: 14px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -2801,15 +2806,12 @@ textarea.input {
 
 /* Tablet (iPad Mini portrait ~744px, iPad ~820px, landscape ~1024px) */
 @media (min-width: 601px) and (max-width: 1024px) {
-  html {
-    font-size: 15px;
-  }
   .app-header {
     padding: 0.5rem 0.75rem;
     gap: 0.5rem;
   }
   .logo {
-    font-size: 1.15rem;
+    font-size: 17px;
   }
   .tagline {
     display: none;
@@ -2818,19 +2820,19 @@ textarea.input {
     gap: 0.25rem;
   }
   .header-right .btn {
-    font-size: 0.78rem;
-    padding: 0.4rem 0.6rem;
+    font-size: 12px;
+    padding: 5px 9px;
   }
   .header-right .btn-icon {
-    padding: 0.35rem;
+    padding: 5px;
     min-width: 32px;
   }
   .column-toggle-bar {
     padding: 0.45rem 0.75rem;
   }
   .col-toggle {
-    font-size: 0.8rem;
-    padding: 0.35rem 0.7rem;
+    font-size: 11px;
+    padding: 5px 10px;
   }
   .columns-container {
     gap: 0.5rem;
@@ -2861,15 +2863,41 @@ textarea.input {
     max-width: 85vw;
   }
   .app-header {
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
+    flex-direction: row;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+  .logo {
+    font-size: 15px;
   }
   .tagline {
     display: none;
   }
+  .header-right {
+    gap: 3px;
+  }
+  .header-right .btn {
+    font-size: 11px;
+    padding: 4px 7px;
+    height: auto;
+  }
+  .header-right .btn-icon {
+    padding: 4px;
+    min-width: 26px;
+  }
+  .header-right .btn-icon svg {
+    width: 15px;
+    height: 15px;
+  }
+  #btn-refresh-all {
+    display: none;
+  }
   .column-toggle-bar {
-    padding: 0.4rem 0.75rem;
+    padding: 5px 10px;
+  }
+  .col-toggle {
+    font-size: 11px;
+    padding: 4px 8px;
   }
 }
 
