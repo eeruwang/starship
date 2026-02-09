@@ -387,13 +387,15 @@ class StarShipApp {
       e.preventDefault();
       e.stopPropagation();
       const fullUrl = img.dataset.fullUrl || img.src;
-      this.openLightbox(fullUrl);
+      this.openLightbox(fullUrl, img);
     });
 
-    // Lightbox close
+    // Lightbox close: background, image, or close button
     this.lightboxClose.addEventListener('click', () => this.closeLightbox());
     this.lightbox.addEventListener('click', (e) => {
-      if (e.target === this.lightbox) this.closeLightbox();
+      if (e.target === this.lightbox || e.target === this.lightboxImg) {
+        this.closeLightbox();
+      }
     });
 
     // Horizontal scroll with mouse wheel
@@ -658,18 +660,38 @@ class StarShipApp {
 
   // ===== Lightbox =====
 
-  openLightbox(url) {
+  openLightbox(url, sourceImg) {
+    this._lightboxSourceImg = sourceImg || null;
     this.lightboxImg.src = url;
     this.lightbox.style.display = 'flex';
+    // Animate from source thumbnail position
+    if (sourceImg) {
+      const rect = sourceImg.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      this.lightboxImg.style.transformOrigin = `${cx}px ${cy}px`;
+      this.lightboxImg.classList.remove('lb-enter', 'lb-exit');
+      void this.lightboxImg.offsetWidth;
+      this.lightboxImg.classList.add('lb-enter');
+    }
     requestAnimationFrame(() => this.lightbox.classList.add('visible'));
   }
 
   closeLightbox() {
     this.lightbox.classList.remove('visible');
-    setTimeout(() => {
+    this.lightboxImg.classList.remove('lb-enter');
+    this.lightboxImg.classList.add('lb-exit');
+    const onDone = () => {
+      this.lightboxImg.removeEventListener('animationend', onDone);
       this.lightbox.style.display = 'none';
       this.lightboxImg.src = '';
-    }, 200);
+      this.lightboxImg.classList.remove('lb-exit');
+      this.lightboxImg.style.transformOrigin = '';
+      this._lightboxSourceImg = null;
+    };
+    this.lightboxImg.addEventListener('animationend', onDone);
+    // Fallback if animation doesn't fire
+    setTimeout(onDone, 350);
   }
 
   // ===== Rendering =====
