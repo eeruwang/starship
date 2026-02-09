@@ -183,14 +183,26 @@ export const AuthUIMixin = {
         if (inviteInput) inviteInput.value = '';
       }
     }
-    // Turnstile
+    // Turnstile: invite 모드에서는 코드 입력 후에만 표시
     const container = document.getElementById('turnstile-container');
-    if (!isLogin && this._siteInfo.turnstileSiteKey && !regClosed) {
+    const showTurnstile = !isLogin && this._siteInfo.turnstileSiteKey && !regClosed
+      && (!regInvite || (document.getElementById('auth-invite-code')?.value || '').trim().length > 0);
+    if (showTurnstile) {
       container.style.display = 'flex';
       this.renderTurnstile();
     } else {
       container.style.display = 'none';
       this.removeTurnstile();
+    }
+    // invite 코드 입력 시 Turnstile 표시/숨김 갱신
+    if (regInvite) {
+      const inviteInput = document.getElementById('auth-invite-code');
+      if (inviteInput && !inviteInput._turnstileListener) {
+        inviteInput._turnstileListener = true;
+        inviteInput.addEventListener('input', () => {
+          this._updateTurnstileForInvite();
+        });
+      }
     }
     // Button state
     if (isLogin) {
@@ -239,13 +251,34 @@ export const AuthUIMixin = {
   _updateRegisterButtonState() {
     if (this._authMode !== 'register') return;
     const needsTurnstile = !!this._siteInfo.turnstileSiteKey;
-    if (needsTurnstile && !this._turnstileToken) {
+    const regMode = this._siteInfo.registrationMode || 'open';
+    const regInvite = regMode === 'invite';
+    const inviteCode = (document.getElementById('auth-invite-code')?.value || '').trim();
+    if (regInvite && !inviteCode) {
+      this.btnAuthSubmit.disabled = true;
+      this.btnAuthSubmit.textContent = '초대코드를 입력해주세요';
+    } else if (needsTurnstile && !this._turnstileToken) {
       this.btnAuthSubmit.disabled = true;
       this.btnAuthSubmit.textContent = '인간 확인을 완료해주세요';
     } else {
       this.btnAuthSubmit.disabled = false;
       this.btnAuthSubmit.textContent = '가입하기';
     }
+  },
+
+  _updateTurnstileForInvite() {
+    const regMode = this._siteInfo.registrationMode || 'open';
+    if (regMode !== 'invite') return;
+    const inviteCode = (document.getElementById('auth-invite-code')?.value || '').trim();
+    const container = document.getElementById('turnstile-container');
+    if (inviteCode.length > 0 && this._siteInfo.turnstileSiteKey) {
+      container.style.display = 'flex';
+      this.renderTurnstile();
+    } else {
+      container.style.display = 'none';
+      this.removeTurnstile();
+    }
+    this._updateRegisterButtonState();
   },
 
   async handleAuthSubmit() {
@@ -295,8 +328,9 @@ export const AuthUIMixin = {
       if (this._authMode === 'register') {
         // New registration: save current local data to cloud
         await this.saveToCloud();
+        this.render();
       } else {
-        // Login: load cloud data
+        // Login: load cloud data (calls render internally)
         await this.loadCloudData();
       }
     } catch (err) {
