@@ -118,6 +118,24 @@ export function renderPost(post) {
     html += '</div>';
   }
 
+  // Link card
+  if (displayPost.linkCard && displayPost.linkCard.url) {
+    const lc = displayPost.linkCard;
+    const hasImage = lc.image;
+    const hasTitle = lc.title;
+    html += `
+      <a class="link-card" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener">
+        ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}
+        <div class="link-card-info">
+          <div class="link-card-site">${escapeHtml(lc.siteName || '')}</div>
+          ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
+          ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
+          ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
+        </div>
+      </a>
+    `;
+  }
+
   // Reactions (Misskey)
   if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
     html += '<div class="post-reactions">';

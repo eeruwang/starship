@@ -170,6 +170,15 @@ export class MastodonClient {
           `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
       }
     }
+    // Link card from Mastodon API
+    const card = status.card;
+    let linkCard = null;
+    if (card && card.url) {
+      let siteName = card.provider_name || '';
+      if (!siteName) { try { siteName = new URL(card.url).hostname; } catch {} }
+      linkCard = { url: card.url, title: card.title || null, description: card.description || null, image: card.image || null, siteName };
+    }
+
     return {
       id: status.id,
       platform: 'mastodon',
@@ -194,6 +203,7 @@ export class MastodonClient {
       reblogged: !!status.reblogged,
       myReaction: null,
       emojis: emojiMap,
+      linkCard,
       canonicalUri: status.uri || status.url,
       instanceUrl: this.instanceUrl,
       replyTo: null,

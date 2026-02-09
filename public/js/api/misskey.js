@@ -249,6 +249,20 @@ export class MisskeyClient {
 
     const emojiMap = this.buildEmojiMap(actualNote);
 
+    // Extract first external URL for link card
+    let linkCard = null;
+    const textUrls = (actualNote.text || '').match(/https?:\/\/[^\s]+/g);
+    if (textUrls) {
+      for (const rawUrl of textUrls) {
+        const cleanUrl = rawUrl.replace(/[).,;:!?]+$/, '');
+        try {
+          const parsed = new URL(cleanUrl);
+          linkCard = { url: cleanUrl, title: null, description: null, image: null, siteName: parsed.hostname };
+          break;
+        } catch { continue; }
+      }
+    }
+
     return {
       id: note.id,
       platform: this.platformType,
@@ -275,6 +289,7 @@ export class MisskeyClient {
       reactions: actualNote.reactions || {},
       reactionEmojis: actualNote.reactionEmojis || {},
       emojis: emojiMap,
+      linkCard,
       canonicalUri: actualNote.uri || `${this.instanceUrl}/notes/${actualNote.id}`,
       replyTo: actualNote.reply ? {
         id: actualNote.reply.id,
@@ -370,21 +385,32 @@ export class MisskeyClient {
   mfmToHtml(text, emojis = {}) {
     if (!text) return '';
     let html = this.escapeHtml(text);
+
+    // Extract URLs first to protect them from mention/hashtag parsing
+    const extractedUrls = [];
+    html = html.replace(/(https?:\/\/[^\s<]+)/g, (match) => {
+      // Clean trailing punctuation that's likely not part of the URL
+      const cleaned = match.replace(/[).,;:!?&]+$/, '').replace(/&amp;$/, '');
+      const idx = extractedUrls.length;
+      extractedUrls.push(cleaned);
+      // Keep any stripped trailing chars outside the placeholder
+      const trailing = match.slice(cleaned.length);
+      return `\x00URL${idx}\x00${trailing}`;
+    });
+
     // Bold
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // Italic
-    html = html.replace(/<i>(.+?)<\/i>/g, '<em>$1</em>');
+    // Italic (MFM <i> tags are escaped by escapeHtml)
+    html = html.replace(/&lt;i&gt;(.+?)&lt;\/i&gt;/g, '<em>$1</em>');
     // Strikethrough
     html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-    // Mentions
+    // Mentions (safe - URLs are placeholders now)
     html = html.replace(/@([\w.-]+)(?:@([\w.-]+))?/g, (match, user, host) => {
       return `<span class="mention">@${user}${host ? '@' + host : ''}</span>`;
     });
     // Hashtags
     html = html.replace(/#([\w\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\u4e00-\u9faf\uac00-\ud7af]+)/g,
       '<span class="hashtag">#$1</span>');
-    // URLs
-    html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
     // Custom emojis :name: or :name@host:
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
       const url = emojis[name] || emojis[name + '@.'] || null;
@@ -397,6 +423,24 @@ export class MisskeyClient {
       }
       return match;
     });
+
+    // Restore URLs as clickable links
+    html = html.replace(/\x00URL(\d+)\x00/g, (match, idx) => {
+      const url = extractedUrls[parseInt(idx)];
+      let displayUrl = url;
+      // Shorten display text for long URLs
+      if (displayUrl.length > 60) {
+        try {
+          const parsed = new URL(displayUrl.replaceAll('&amp;', '&'));
+          displayUrl = parsed.hostname + (parsed.pathname.length > 20 ? parsed.pathname.substring(0, 20) + '…' : parsed.pathname);
+          displayUrl = this.escapeHtml(displayUrl);
+        } catch {
+          displayUrl = displayUrl.substring(0, 57) + '…';
+        }
+      }
+      return `<a href="${url}" target="_blank" rel="noopener">${displayUrl}</a>`;
+    });
+
     // Newlines
     html = html.replace(/\n/g, '<br>');
     return html;
