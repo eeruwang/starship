@@ -125,11 +125,12 @@ export function renderPost(post) {
     const lc = displayPost.linkCard;
     const hasImage = lc.image;
     const hasTitle = lc.title;
+    const cardClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
     html += `
-      <a class="link-card" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener">
-        ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}
+      <a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener">
+        ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
         <div class="link-card-info">
-          <div class="link-card-site">${escapeHtml(lc.siteName || '')}</div>
+          <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>
           ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
           ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
           ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
