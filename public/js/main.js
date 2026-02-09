@@ -691,7 +691,7 @@ class StarShipApp {
     };
     this.lightboxImg.addEventListener('animationend', onDone);
     // Fallback if animation doesn't fire
-    setTimeout(onDone, 350);
+    setTimeout(onDone, 200);
   }
 
   // ===== Rendering =====

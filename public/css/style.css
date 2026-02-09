@@ -1875,7 +1875,7 @@ textarea.input {
   justify-content: center;
   cursor: zoom-out;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.15s ease;
 }
 .lightbox-overlay.visible {
   opacity: 1;
@@ -1891,12 +1891,12 @@ textarea.input {
 
 /* Lightbox open animation */
 .lightbox-overlay img.lb-enter {
-  animation: lb-zoom-in 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation: lb-zoom-in 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 /* Lightbox close animation */
 .lightbox-overlay img.lb-exit {
-  animation: lb-zoom-out 0.25s cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
+  animation: lb-zoom-out 0.15s cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
 }
 
 @keyframes lb-zoom-in {
