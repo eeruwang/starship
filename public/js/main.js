@@ -496,6 +496,68 @@ class StarShipApp {
       }
     });
 
+    // Column headers: drag to scroll columns container horizontally (with momentum)
+    {
+      let isDragging = false, startX = 0, scrollStart = 0, moved = false;
+      let lastX = 0, lastTime = 0, velocity = 0, momentumId = null;
+      const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
+
+      const startDrag = (e, isTouch) => {
+        const header = e.target.closest('.column-header');
+        if (!header || e.target.closest('button')) return;
+        if (momentumId) { cancelAnimationFrame(momentumId); momentumId = null; }
+        isDragging = true;
+        startX = getX(e);
+        lastX = startX;
+        lastTime = Date.now();
+        velocity = 0;
+        scrollStart = this.columnsContainer.scrollLeft;
+        moved = false;
+        if (!isTouch) {
+          this.columnsContainer.style.cursor = 'grabbing';
+          e.preventDefault();
+        }
+      };
+      const onMove = (e) => {
+        if (!isDragging) return;
+        const x = getX(e);
+        const dx = x - startX;
+        const now = Date.now();
+        const dt = now - lastTime;
+        if (dt > 0) velocity = (x - lastX) / dt;
+        lastX = x;
+        lastTime = now;
+        if (Math.abs(dx) > 5) {
+          moved = true;
+          this.columnsContainer.scrollLeft = scrollStart - dx;
+        }
+      };
+      const onEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        this.columnsContainer.style.cursor = '';
+        // Momentum: continue scrolling based on release velocity
+        if (Math.abs(velocity) > 0.3) {
+          let v = -velocity * 12; // px per frame, inverted for scroll direction
+          const decel = 0.95;
+          const step = () => {
+            if (Math.abs(v) < 0.5) { momentumId = null; return; }
+            this.columnsContainer.scrollLeft += v;
+            v *= decel;
+            momentumId = requestAnimationFrame(step);
+          };
+          momentumId = requestAnimationFrame(step);
+        }
+      };
+
+      this.columnsContainer.addEventListener('mousedown', (e) => startDrag(e, false));
+      this.columnsContainer.addEventListener('touchstart', (e) => startDrag(e, true), { passive: true });
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('touchmove', onMove, { passive: true });
+      document.addEventListener('mouseup', onEnd);
+      document.addEventListener('touchend', onEnd);
+    }
+
     // Column close buttons (delegated)
     this.columnsContainer.addEventListener('click', (e) => {
       const closeBtn = e.target.closest('[data-action="close-column"]');
