@@ -249,18 +249,17 @@ export class MisskeyClient {
 
     const emojiMap = this.buildEmojiMap(actualNote);
 
-    // Extract first external URL for link card
+    // Extract first external URL for link card (markdown links or bare URLs)
     let linkCard = null;
-    const textUrls = (actualNote.text || '').match(/https?:\/\/[^\s]+/g);
-    if (textUrls) {
-      for (const rawUrl of textUrls) {
-        const cleanUrl = rawUrl.replace(/[).,;:!?]+$/, '');
-        try {
-          const parsed = new URL(cleanUrl);
-          linkCard = { url: cleanUrl, title: null, description: null, image: null, siteName: parsed.hostname };
-          break;
-        } catch { continue; }
-      }
+    const noteText = actualNote.text || '';
+    const urlMatch = noteText.match(/\[[^\]]+\]\((https?:\/\/[^)]+)\)|(https?:\/\/[^\s]+)/);
+    if (urlMatch) {
+      const rawUrl = urlMatch[1] || urlMatch[2];
+      const cleanUrl = rawUrl.replace(/[).,;:!?]+$/, '');
+      try {
+        const parsed = new URL(cleanUrl);
+        linkCard = { url: cleanUrl, title: null, description: null, image: null, siteName: parsed.hostname };
+      } catch { /* skip */ }
     }
 
     return {
@@ -386,14 +385,36 @@ export class MisskeyClient {
     if (!text) return '';
     let html = this.escapeHtml(text);
 
-    // Extract URLs first to protect them from mention/hashtag parsing
+    // 1. Extract code blocks ```lang\ncode``` as placeholders
+    const codeBlocks = [];
+    html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+      const idx = codeBlocks.length;
+      codeBlocks.push({ lang, code: code.replace(/\n$/, '') });
+      return `\x00CB${idx}\x00`;
+    });
+
+    // 2. Extract inline code `...` as placeholders
+    const inlineCodes = [];
+    html = html.replace(/`([^`\n]+)`/g, (match, code) => {
+      const idx = inlineCodes.length;
+      inlineCodes.push(code);
+      return `\x00IC${idx}\x00`;
+    });
+
+    // 3. Extract markdown links [text](url) as placeholders
+    const mdLinks = [];
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (match, linkText, url) => {
+      const idx = mdLinks.length;
+      mdLinks.push({ text: linkText, url });
+      return `\x00ML${idx}\x00`;
+    });
+
+    // 4. Extract bare URLs as placeholders
     const extractedUrls = [];
     html = html.replace(/(https?:\/\/[^\s<]+)/g, (match) => {
-      // Clean trailing punctuation that's likely not part of the URL
       const cleaned = match.replace(/[).,;:!?&]+$/, '').replace(/&amp;$/, '');
       const idx = extractedUrls.length;
       extractedUrls.push(cleaned);
-      // Keep any stripped trailing chars outside the placeholder
       const trailing = match.slice(cleaned.length);
       return `\x00URL${idx}\x00${trailing}`;
     });
@@ -404,6 +425,9 @@ export class MisskeyClient {
     html = html.replace(/&lt;i&gt;(.+?)&lt;\/i&gt;/g, '<em>$1</em>');
     // Strikethrough
     html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    // MFM <center> and <small>
+    html = html.replace(/&lt;center&gt;([\s\S]*?)&lt;\/center&gt;/g, '<div class="mfm-center">$1</div>');
+    html = html.replace(/&lt;small&gt;([\s\S]*?)&lt;\/small&gt;/g, '<small>$1</small>');
     // Mentions (safe - URLs are placeholders now)
     html = html.replace(/@([\w.-]+)(?:@([\w.-]+))?/g, (match, user, host) => {
       return `<span class="mention">@${user}${host ? '@' + host : ''}</span>`;
@@ -417,18 +441,26 @@ export class MisskeyClient {
       if (url) {
         return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
       }
-      // Fallback: try instance emoji URL for local emojis
       if (!name.includes('@')) {
         return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
       }
       return match;
     });
 
-    // Restore URLs as clickable links
+    // Blockquotes: lines starting with &gt; (before newline conversion)
+    html = html.replace(/^&gt;\s?(.*)/gm, '<blockquote class="mfm-quote">$1</blockquote>');
+    html = html.replace(/<\/blockquote>\n<blockquote class="mfm-quote">/g, '<br>');
+
+    // Restore markdown links
+    html = html.replace(/\x00ML(\d+)\x00/g, (match, idx) => {
+      const link = mdLinks[parseInt(idx)];
+      return `<a href="${link.url}" target="_blank" rel="noopener">${link.text}</a>`;
+    });
+
+    // Restore bare URLs as clickable links
     html = html.replace(/\x00URL(\d+)\x00/g, (match, idx) => {
       const url = extractedUrls[parseInt(idx)];
       let displayUrl = url;
-      // Shorten display text for long URLs
       if (displayUrl.length > 60) {
         try {
           const parsed = new URL(displayUrl.replaceAll('&amp;', '&'));
@@ -443,6 +475,18 @@ export class MisskeyClient {
 
     // Newlines
     html = html.replace(/\n/g, '<br>');
+
+    // Restore inline code (after newline conversion to preserve formatting)
+    html = html.replace(/\x00IC(\d+)\x00/g, (match, idx) => {
+      return `<code class="mfm-inline-code">${inlineCodes[parseInt(idx)]}</code>`;
+    });
+
+    // Restore code blocks (after newline conversion to preserve whitespace)
+    html = html.replace(/\x00CB(\d+)\x00/g, (match, idx) => {
+      const block = codeBlocks[parseInt(idx)];
+      return `<pre class="mfm-code-block"><code>${block.code}</code></pre>`;
+    });
+
     return html;
   }
 

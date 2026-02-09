@@ -239,6 +239,22 @@ export function renderNotification(notif) {
     </div>
   `;
 
+  // Parent post context for reply notifications
+  if (['reply', 'mention', 'quote'].includes(notif.type) && notif.post) {
+    if (notif.post.replyTo) {
+      const parentExcerpt = stripHtml(notif.post.replyTo.content);
+      const truncated = parentExcerpt.length > 120 ? parentExcerpt.substring(0, 120) + '…' : parentExcerpt;
+      html += `<div class="notif-parent-context">
+        <span class="notif-parent-label">↩ ${notif.post.replyTo.author.displayNameHtml || escapeHtml(notif.post.replyTo.author.displayName)}의 글에 답글</span>
+        <div class="notif-parent-excerpt">${escapeHtml(truncated)}</div>
+      </div>`;
+    } else if (notif.post.replyToAcct) {
+      html += `<div class="notif-parent-context">
+        <span class="notif-parent-label">↩ @${escapeHtml(notif.post.replyToAcct)}의 글에 답글</span>
+      </div>`;
+    }
+  }
+
   if (notif.post && notif.post.content) {
     const notifText = stripHtml(notif.post.content);
     const isLongNotif = notifText.length > 200;
