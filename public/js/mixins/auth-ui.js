@@ -19,7 +19,7 @@ export const AuthUIMixin = {
 
   async fetchSiteInfo() {
     try {
-      const res = await fetch('/api/site-info');
+      const res = await fetch('/api/site-info', { cache: 'no-store' });
       this._siteInfo = await res.json();
     } catch {}
   },

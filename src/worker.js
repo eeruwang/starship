@@ -333,6 +333,7 @@ function sessionCookie(token) {
 function jsonResponse(data, status = 200, setCookie = null) {
   const headers = {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
     ...corsHeaders(),
   };
   if (setCookie) headers['Set-Cookie'] = setCookie;
