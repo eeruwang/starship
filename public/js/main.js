@@ -1190,9 +1190,27 @@ class StarShipApp {
       // Name with emoji
       const isMisskey = platform !== 'mastodon';
       if (isMisskey) {
-        nameEl.textContent = user.name || user.username;
+        // Resolve custom emojis in Misskey display name
+        const userEmojis = {};
+        if (user.emojis && typeof user.emojis === 'object' && !Array.isArray(user.emojis)) {
+          Object.assign(userEmojis, user.emojis);
+        }
+        if (Array.isArray(user.emojis)) {
+          for (const e of user.emojis) {
+            if (e.name && e.url) userEmojis[e.name] = e.url;
+          }
+        }
+        nameEl.innerHTML = client.resolveNameEmojis(user.name || user.username, userEmojis);
       } else {
-        nameEl.textContent = user.display_name || user.username;
+        // Resolve custom emojis in Mastodon display name
+        let nameHtml = this.escapeHtml(user.display_name || user.username);
+        if (user.emojis && user.emojis.length > 0) {
+          for (const emoji of user.emojis) {
+            nameHtml = nameHtml.replaceAll(`:${emoji.shortcode}:`,
+              `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+          }
+        }
+        nameEl.innerHTML = nameHtml;
       }
 
       // Handle
@@ -1200,10 +1218,26 @@ class StarShipApp {
       const acct = user.acct || (host ? `${user.username}@${host}` : user.username);
       handleEl.textContent = `@${acct}`;
 
-      // Bio
-      const bio = isMisskey ? (user.description || '') : (user.note || '');
-      if (bio) {
-        bioEl.innerHTML = isMisskey ? this.escapeHtml(bio).replace(/\n/g, '<br>') : bio;
+      // Bio - render with MFM (Misskey) or HTML (Mastodon)
+      if (isMisskey) {
+        const bio = user.description || '';
+        if (bio) {
+          const userEmojis = {};
+          if (user.emojis && typeof user.emojis === 'object' && !Array.isArray(user.emojis)) {
+            Object.assign(userEmojis, user.emojis);
+          }
+          if (Array.isArray(user.emojis)) {
+            for (const e of user.emojis) {
+              if (e.name && e.url) userEmojis[e.name] = e.url;
+            }
+          }
+          bioEl.innerHTML = client.mfmToHtml(bio, userEmojis);
+        }
+      } else {
+        const bio = user.note || '';
+        if (bio) {
+          bioEl.innerHTML = bio;
+        }
       }
 
       // Stats
