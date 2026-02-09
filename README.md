@@ -92,6 +92,10 @@ npm run deploy
 3. [Turnstile](https://www.cloudflare.com/products/turnstile/) 사이트 키 발급 후 `wrangler.toml`에 설정
 4. Turnstile secret 설정: `wrangler secret put TURNSTILE_SECRET`
 
+## Note
+
+이 프로젝트는 AI를 활용하여 제작되었습니다.
+
 ## License
 
 MIT &copy; 2025-2026 [eeruwang](https://github.com/eeruwang)
