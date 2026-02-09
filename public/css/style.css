@@ -1366,7 +1366,7 @@ h4.mfm-heading { font-size: 1em; }
   inset: 0;
   background: rgba(0,0,0,0);
   backdrop-filter: blur(0px);
-  z-index: 200;
+  z-index: 600;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1812,7 +1812,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  z-index: 300;
+  z-index: 650;
   padding: 0.4rem;
   opacity: 0;
   transform: translateY(-8px) scale(0.95);
@@ -2332,7 +2332,7 @@ textarea.input {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.9);
-  z-index: 300;
+  z-index: 700;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2386,7 +2386,7 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 301;
+  z-index: 701;
 }
 .lightbox-close:hover {
   background: rgba(255,255,255,0.25);
@@ -2777,7 +2777,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 350;
+  z-index: 650;
   width: 320px;
   max-height: 420px;
   display: flex;
@@ -3039,7 +3039,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 250;
+  z-index: 650;
   width: 320px;
   max-height: 420px;
   display: flex;
@@ -3384,7 +3384,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  z-index: 250;
+  z-index: 650;
   min-width: 180px;
   max-width: 260px;
   max-height: 200px;
