@@ -232,30 +232,42 @@ class StarShipApp {
     // Manual token add
     this.btnConfirmAdd.addEventListener('click', () => this.handleAddAccount());
 
-    // Toggle bar: drag to scroll
+    // Toggle bar: drag to scroll (mouse + touch)
     {
       let isDragging = false, startX = 0, scrollStart = 0, moved = false;
-      this.toggleBar.addEventListener('mousedown', (e) => {
+      const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
+
+      const onStart = (e) => {
         isDragging = true;
-        startX = e.pageX;
+        startX = getX(e);
         scrollStart = this.toggleBar.scrollLeft;
         moved = false;
         this.toggleBar.style.cursor = 'grabbing';
-      });
-      document.addEventListener('mousemove', (e) => {
+        // Prevent text selection while dragging
+        e.preventDefault();
+      };
+      const onMove = (e) => {
         if (!isDragging) return;
-        const dx = e.pageX - startX;
+        const dx = getX(e) - startX;
         if (Math.abs(dx) > 5) {
           moved = true;
           this.toggleBar.scrollLeft = scrollStart - dx;
         }
-      });
-      document.addEventListener('mouseup', () => {
+      };
+      const onEnd = () => {
         if (isDragging) {
           isDragging = false;
           this.toggleBar.style.cursor = '';
         }
-      });
+      };
+
+      this.toggleBar.addEventListener('mousedown', onStart);
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      this.toggleBar.addEventListener('touchstart', onStart, { passive: false });
+      document.addEventListener('touchmove', onMove, { passive: true });
+      document.addEventListener('touchend', onEnd);
+
       // Prevent toggle click when dragging
       this.toggleBar.addEventListener('click', (e) => {
         if (moved) {
