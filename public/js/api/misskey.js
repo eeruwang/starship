@@ -47,6 +47,17 @@ export class MisskeyClient {
     return this.request('i');
   }
 
+  async getUser(userId) {
+    return this.request('users/show', { userId });
+  }
+
+  async updateProfile({ name, description }) {
+    const body = {};
+    if (name !== undefined) body.name = name;
+    if (description !== undefined) body.description = description;
+    return this.request('i/update', body);
+  }
+
   async getHomeTimeline(limit = 30, untilId = null) {
     const body = { limit };
     if (untilId) body.untilId = untilId;

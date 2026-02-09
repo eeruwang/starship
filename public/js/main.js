@@ -397,6 +397,22 @@ class StarShipApp {
       }
     });
 
+    // Avatar click: open profile modal
+    document.addEventListener('click', (e) => {
+      const avatar = e.target.closest('.post-avatar');
+      if (!avatar) return;
+      const card = avatar.closest('.post-card, .notif-card');
+      if (!card) return;
+      const postId = card.dataset.postId;
+      const platform = card.dataset.platform;
+      const accountId = card.dataset.accountId;
+      if (!postId || !accountId) return;
+      const post = this.postCache.get(`${platform}:${postId}`);
+      if (post) {
+        this.openProfileModal(post.author, platform, accountId);
+      }
+    });
+
     // Reaction badge hover/click: show who reacted
     document.addEventListener('click', (e) => {
       const badge = e.target.closest('.reaction-badge');
@@ -1100,6 +1116,160 @@ class StarShipApp {
     overlay.addEventListener('transitionend', () => {
       if (!overlay.classList.contains('visible')) overlay.style.display = 'none';
     }, { once: true });
+  }
+
+  async openProfileModal(author, platform, accountId) {
+    const modal = document.getElementById('modal-profile');
+    const banner = document.getElementById('profile-banner');
+    const avatar = document.getElementById('profile-avatar');
+    const nameEl = document.getElementById('profile-name');
+    const handleEl = document.getElementById('profile-handle');
+    const bioEl = document.getElementById('profile-bio');
+    const statsEl = document.getElementById('profile-stats');
+    const fieldsEl = document.getElementById('profile-fields');
+    const actionsEl = document.getElementById('profile-actions');
+    const editSection = document.getElementById('profile-edit');
+
+    // Reset
+    banner.style.backgroundImage = '';
+    banner.style.background = 'linear-gradient(135deg, var(--accent-primary), #a78bfa)';
+    avatar.src = author.avatarUrl || '';
+    nameEl.innerHTML = author.displayNameHtml || this.escapeHtml(author.displayName);
+    handleEl.textContent = `@${author.acct}`;
+    bioEl.innerHTML = '';
+    statsEl.innerHTML = '';
+    fieldsEl.innerHTML = '';
+    actionsEl.innerHTML = '';
+    editSection.style.display = 'none';
+
+    this.openModal(modal);
+
+    // Fetch full profile
+    const client = this.store.getClient(accountId);
+    if (!client) return;
+
+    try {
+      const user = await client.getUser(author.id);
+      if (!user) return;
+
+      // Banner
+      const bannerUrl = user.bannerUrl || user.header;
+      if (bannerUrl) {
+        banner.style.backgroundImage = `url(${bannerUrl})`;
+        banner.style.background = `url(${bannerUrl}) center/cover`;
+      }
+
+      // Avatar
+      avatar.src = user.avatarUrl || user.avatar || author.avatarUrl;
+
+      // Name with emoji
+      const isMisskey = platform !== 'mastodon';
+      if (isMisskey) {
+        nameEl.textContent = user.name || user.username;
+      } else {
+        nameEl.textContent = user.display_name || user.username;
+      }
+
+      // Handle
+      const host = user.host || '';
+      const acct = user.acct || (host ? `${user.username}@${host}` : user.username);
+      handleEl.textContent = `@${acct}`;
+
+      // Bio
+      const bio = isMisskey ? (user.description || '') : (user.note || '');
+      if (bio) {
+        bioEl.innerHTML = isMisskey ? this.escapeHtml(bio).replace(/\n/g, '<br>') : bio;
+      }
+
+      // Stats
+      const followers = user.followersCount ?? user.followers_count ?? 0;
+      const following = user.followingCount ?? user.following_count ?? 0;
+      const posts = user.notesCount ?? user.statuses_count ?? 0;
+      statsEl.innerHTML = `
+        <span class="profile-stat"><strong>${followers}</strong> 팔로워</span>
+        <span class="profile-stat"><strong>${following}</strong> 팔로잉</span>
+        <span class="profile-stat"><strong>${posts}</strong> ${isMisskey ? '노트' : '게시물'}</span>
+      `;
+
+      // Fields
+      const fields = user.fields || [];
+      if (fields.length > 0) {
+        fieldsEl.innerHTML = fields.map(f => `
+          <div class="profile-field">
+            <span class="profile-field-name">${this.escapeHtml(f.name)}</span>
+            <span class="profile-field-value">${f.value || this.escapeHtml(f.value)}</span>
+          </div>
+        `).join('');
+      }
+
+      // Check if this is my account
+      const myAccount = this.store.getAll().find(a =>
+        String(a.profile?.id) === String(user.id) && a.platform === platform
+      );
+      const account = this.store.getById(accountId);
+      const instanceUrl = account?.instanceUrl || '';
+
+      // Actions
+      let actionsHtml = `<a class="btn btn-secondary btn-small" href="${instanceUrl}/@${user.username}" target="_blank" rel="noopener">인스턴스에서 보기</a>`;
+      if (myAccount) {
+        actionsHtml += `<button class="btn btn-primary btn-small" id="btn-profile-edit">프로필 수정</button>`;
+      }
+      actionsEl.innerHTML = actionsHtml;
+
+      // Edit handlers
+      if (myAccount) {
+        const editBtn = document.getElementById('btn-profile-edit');
+        const editName = document.getElementById('profile-edit-name');
+        const editBio = document.getElementById('profile-edit-bio');
+        const cancelBtn = document.getElementById('btn-profile-edit-cancel');
+        const saveBtn = document.getElementById('btn-profile-edit-save');
+
+        editBtn.addEventListener('click', () => {
+          editName.value = isMisskey ? (user.name || '') : (user.display_name || '');
+          editBio.value = isMisskey ? (user.description || '') : (user.source?.note || user.note?.replace(/<[^>]*>/g, '') || '');
+          editSection.style.display = 'block';
+          editBtn.style.display = 'none';
+        });
+
+        const newCancel = cancelBtn.cloneNode(true);
+        cancelBtn.replaceWith(newCancel);
+        newCancel.addEventListener('click', () => {
+          editSection.style.display = 'none';
+          editBtn.style.display = '';
+        });
+
+        const newSave = saveBtn.cloneNode(true);
+        saveBtn.replaceWith(newSave);
+        newSave.addEventListener('click', async () => {
+          newSave.disabled = true;
+          newSave.textContent = '저장 중...';
+          try {
+            const myClient = this.store.getClient(myAccount.id);
+            if (isMisskey) {
+              await myClient.updateProfile({ name: editName.value, description: editBio.value });
+            } else {
+              await myClient.updateProfile({ displayName: editName.value, note: editBio.value });
+            }
+            // Update local profile
+            myAccount.profile.displayName = editName.value || myAccount.profile.username;
+            this.store.save();
+            this.debouncedSaveToCloud();
+            // Refresh modal
+            editSection.style.display = 'none';
+            nameEl.textContent = editName.value || myAccount.profile.username;
+            bioEl.innerHTML = this.escapeHtml(editBio.value).replace(/\n/g, '<br>');
+            editBtn.style.display = '';
+          } catch (err) {
+            alert('프로필 수정 실패: ' + err.message);
+          } finally {
+            newSave.disabled = false;
+            newSave.textContent = '저장';
+          }
+        });
+      }
+    } catch (err) {
+      bioEl.innerHTML = `<span style="color:var(--text-muted)">프로필을 불러올 수 없습니다</span>`;
+    }
   }
 
   escapeHtml(text) {

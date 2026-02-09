@@ -42,6 +42,17 @@ export class MastodonClient {
     return this.request('GET', '/api/v1/accounts/verify_credentials');
   }
 
+  async getUser(userId) {
+    return this.request('GET', `/api/v1/accounts/${encodeURIComponent(userId)}`);
+  }
+
+  async updateProfile({ displayName, note }) {
+    const body = {};
+    if (displayName !== undefined) body.display_name = displayName;
+    if (note !== undefined) body.note = note;
+    return this.request('PATCH', '/api/v1/accounts/update_credentials', body);
+  }
+
   async getHomeTimeline(limit = 30, maxId = null) {
     let path = `/api/v1/timelines/home?limit=${limit}`;
     if (maxId) path += `&max_id=${maxId}`;
