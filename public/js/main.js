@@ -332,19 +332,22 @@ class StarShipApp {
       }, true);
     }
 
-    // CW toggle (delegated)
+    // CW toggle (delegated) — use relative DOM instead of getElementById to avoid duplicate-id issues
     document.addEventListener('click', (e) => {
       if (e.target.matches('.cw-toggle')) {
-        const target = document.getElementById(e.target.dataset.cwTarget);
-        if (target) target.classList.toggle('visible');
-        e.target.textContent = target?.classList.contains('visible') ? '숨기기' : '내용 보기';
+        const cwWarning = e.target.closest('.cw-warning, .reply-context-cw');
+        const target = cwWarning?.nextElementSibling;
+        if (target && (target.classList.contains('cw-content') || target.id?.startsWith('reply-ctx-'))) {
+          target.classList.toggle('visible');
+          e.target.textContent = target.classList.contains('visible') ? '숨기기' : '내용 보기';
+        }
       }
     });
 
-    // Expand toggle for long content (reply context, notification content)
+    // Expand toggle for long content — use relative DOM
     document.addEventListener('click', (e) => {
       if (e.target.matches('.expand-toggle')) {
-        const target = document.getElementById(e.target.dataset.expandTarget);
+        const target = e.target.previousElementSibling;
         if (target) {
           target.classList.toggle('collapsed');
           e.target.textContent = target.classList.contains('collapsed') ? '더보기' : '접기';
