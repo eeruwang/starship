@@ -98,4 +98,4 @@ npm run deploy
 
 ## License
 
-MIT &copy; 2025-2026 [eeruwang](https://github.com/eeruwang)
+MIT &copy; 2025-2026 [eeruwang](https://eeruwang.me)
