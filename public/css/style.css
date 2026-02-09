@@ -21,6 +21,56 @@
   --column-width: 380px;
 }
 
+/* Light Theme */
+:root[data-theme="light"] {
+  --bg-primary: #f0f1f5;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-hover: #e8e9f0;
+  --bg-input: #f5f5f8;
+  --text-primary: #1a1b2e;
+  --text-secondary: #5a5a78;
+  --text-muted: #8a8aa8;
+  --accent-primary: #6364ff;
+  --accent-danger: #e53935;
+  --border-color: #d8d9e5;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+[data-theme="light"] .post-card,
+[data-theme="light"] .notif-card {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  border: 1px solid var(--border-color);
+}
+
+[data-theme="light"] .modal {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+[data-theme="light"] .column {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+[data-theme="light"] .logo {
+  background: linear-gradient(135deg, #5a9a20, #4a4aff);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+[data-theme="light"] .settings-about-name {
+  background: linear-gradient(135deg, #5a9a20, #4a4aff);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(100, 100, 180, 0.2);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 100, 180, 0.4);
+}
+
 *, *::before, *::after {
   margin: 0;
   padding: 0;

@@ -304,6 +304,16 @@ export const AccountSetupMixin = {
       this.saveSettings();
     });
 
+    const themeSelect = document.getElementById('setting-theme');
+    const newTheme = themeSelect.cloneNode(true);
+    themeSelect.replaceWith(newTheme);
+    newTheme.value = this.settings.theme || 'dark';
+    newTheme.addEventListener('change', () => {
+      this.settings.theme = newTheme.value;
+      this.saveSettings();
+      this.applySettings();
+    });
+
     const newResetBtn = resetBtn.cloneNode(true);
     resetBtn.replaceWith(newResetBtn);
     newResetBtn.addEventListener('click', () => {

@@ -59,10 +59,11 @@ class StarShipApp {
           columnWidth: parsed.columnWidth ?? 380,
           fontSize: parsed.fontSize ?? 14,
           postsCount: parsed.postsCount ?? 30,
+          theme: parsed.theme ?? 'dark',
         };
       }
     } catch {}
-    return { refreshInterval: 60000, columnWidth: 380, fontSize: 14, postsCount: 30 };
+    return { refreshInterval: 60000, columnWidth: 380, fontSize: 14, postsCount: 30, theme: 'dark' };
   }
 
   saveSettings() {
@@ -73,6 +74,7 @@ class StarShipApp {
   applySettings() {
     document.documentElement.style.setProperty('--column-width', `${this.settings.columnWidth}px`);
     document.documentElement.style.fontSize = `${this.settings.fontSize}px`;
+    document.documentElement.setAttribute('data-theme', this.settings.theme || 'dark');
     this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
   }
 
