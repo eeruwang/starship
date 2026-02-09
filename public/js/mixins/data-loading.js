@@ -392,6 +392,31 @@ export const DataLoadingMixin = {
         }
       }
 
+      // Deduplicate notifications across accounts (same actor + type + target post)
+      if (accounts.length > 1) {
+        const seen = new Map();
+        const deduped = [];
+        for (const notif of allNotifs) {
+          const actorKey = notif.actor?.acct || notif.actor?.id || '';
+          const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+          const reactionKey = notif.reactionEmoji || '';
+          const key = `${notif.type}:${actorKey}:${postKey}:${reactionKey}`;
+          if (!seen.has(key)) {
+            notif.mergedAccounts = [{ id: notif.accountId, platform: notif.platform, themeColor: notif.themeColor }];
+            seen.set(key, deduped.length);
+            deduped.push(notif);
+          } else {
+            const idx = seen.get(key);
+            const existing = deduped[idx];
+            if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === notif.accountId)) {
+              existing.mergedAccounts.push({ id: notif.accountId, platform: notif.platform, themeColor: notif.themeColor });
+            }
+          }
+        }
+        allNotifs.length = 0;
+        allNotifs.push(...deduped);
+      }
+
       allNotifs.sort((a, b) => b.createdAt - a.createdAt);
 
       // Cache notification posts for reply functionality
@@ -414,13 +439,23 @@ export const DataLoadingMixin = {
           container.appendChild(renderNotification(notif));
         }
       } else {
-        // Smooth incremental update: prepend new notifications
-        const existingIds = new Set();
+        // Smooth incremental update: prepend new notifications (use dedup key)
+        const existingKeys = new Set();
         for (const card of existingCards) {
-          existingIds.add(`${card.dataset.platform}:${card.dataset.notifId}`);
+          if (card.dataset.dedupKey) {
+            existingKeys.add(card.dataset.dedupKey);
+          } else {
+            existingKeys.add(`${card.dataset.platform}:${card.dataset.notifId}`);
+          }
         }
 
-        const newNotifs = allNotifs.filter(n => !existingIds.has(`${n.platform}:${n.id}`));
+        const newNotifs = allNotifs.filter(n => {
+          const actorKey = n.actor?.acct || n.actor?.id || '';
+          const postKey = n.post?.canonicalUri || n.post?.id || '';
+          const reactionKey = n.reactionEmoji || '';
+          const dedupKey = `${n.type}:${actorKey}:${postKey}:${reactionKey}`;
+          return !existingKeys.has(dedupKey) && !existingKeys.has(`${n.platform}:${n.id}`);
+        });
 
         if (newNotifs.length > 0) {
           const scrollTop = container.scrollTop;

@@ -204,10 +204,26 @@ export function renderNotification(notif) {
   card.className = `notif-card platform-${notif.platform}${isReplyable ? ' notif-clickable' : ''}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
+  // Dedup key for incremental updates
+  const actorKey = notif.actor?.acct || notif.actor?.id || '';
+  const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+  const reactionKey = notif.reactionEmoji || '';
+  card.dataset.dedupKey = `${notif.type}:${actorKey}:${postKey}:${reactionKey}`;
   if (notif.accountId) card.dataset.accountId = notif.accountId;
   if (notif.post?.id) card.dataset.postId = notif.post.id;
   if (notif.actor?.id) card.dataset.actorId = notif.actor.id;
-  if (notif.themeColor) card.style.borderLeftColor = notif.themeColor;
+  // Per-account or merged theme color
+  if (notif.mergedAccounts && notif.mergedAccounts.length > 1) {
+    const colors = notif.mergedAccounts.map(a => a.themeColor || PLATFORM_COLORS[a.platform] || '#7c7dff');
+    const segmentSize = 100 / colors.length;
+    const stops = colors.map((c, i) =>
+      `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
+    ).join(', ');
+    card.style.setProperty('--merged-gradient', `linear-gradient(to bottom, ${stops})`);
+    card.classList.add('merged-border');
+  } else if (notif.themeColor) {
+    card.style.borderLeftColor = notif.themeColor;
+  }
 
   let iconHtml;
   const notifTypeClass = `notif-type-${notif.type}`;
