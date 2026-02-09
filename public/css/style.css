@@ -1682,7 +1682,8 @@ textarea.input {
   padding: 2rem;
   color: var(--text-muted);
 }
-.post-avatar {
+.post-avatar,
+.notif-avatar {
   cursor: pointer;
 }
 

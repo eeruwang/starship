@@ -21,6 +21,10 @@ export const AuthUIMixin = {
     try {
       const res = await fetch('/api/site-info', { cache: 'no-store' });
       this._siteInfo = await res.json();
+      // Update admin UI if already logged in as admin (race condition fix)
+      if (this._currentUser?.role === 'admin') {
+        this.updateAdminUI();
+      }
     } catch {}
   },
 

@@ -206,6 +206,7 @@ export function renderNotification(notif) {
   card.dataset.platform = notif.platform;
   if (notif.accountId) card.dataset.accountId = notif.accountId;
   if (notif.post?.id) card.dataset.postId = notif.post.id;
+  if (notif.actor?.id) card.dataset.actorId = notif.actor.id;
   if (notif.themeColor) card.style.borderLeftColor = notif.themeColor;
 
   let iconHtml;

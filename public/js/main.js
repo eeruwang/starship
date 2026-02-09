@@ -399,17 +399,32 @@ class StarShipApp {
 
     // Avatar click: open profile modal
     document.addEventListener('click', (e) => {
-      const avatar = e.target.closest('.post-avatar');
+      const avatar = e.target.closest('.post-avatar, .notif-avatar');
       if (!avatar) return;
+      e.stopPropagation();
+      e.preventDefault();
       const card = avatar.closest('.post-card, .notif-card');
       if (!card) return;
-      const postId = card.dataset.postId;
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
-      if (!postId || !accountId) return;
-      const post = this.postCache.get(`${platform}:${postId}`);
-      if (post) {
-        this.openProfileModal(post.author, platform, accountId);
+      if (!platform || !accountId) return;
+
+      const postId = card.dataset.postId;
+      if (postId) {
+        const post = this.postCache.get(`${platform}:${postId}`);
+        if (post) {
+          // Use displayPost author (correct for reblogs/renotes)
+          const displayPost = post.reblog || post;
+          this.openProfileModal(displayPost.author, platform, accountId);
+          return;
+        }
+      }
+      // Notification actor fallback: use actorId to open profile with minimal info
+      const actorId = card.dataset.actorId;
+      if (actorId) {
+        const avatarUrl = avatar.src || '';
+        const minimalAuthor = { id: actorId, avatarUrl, displayName: '', displayNameHtml: '', acct: '', username: '' };
+        this.openProfileModal(minimalAuthor, platform, accountId);
       }
     });
 
