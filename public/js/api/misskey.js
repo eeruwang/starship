@@ -140,6 +140,10 @@ export class MisskeyClient {
     return this.request('notes/create', { renoteId: noteId });
   }
 
+  async updateFile(fileId, params = {}) {
+    return this.request('drive/files/update', { fileId, ...params });
+  }
+
   async createNote(text, options = {}) {
     const body = { text };
     if (options.cw) body.cw = options.cw;

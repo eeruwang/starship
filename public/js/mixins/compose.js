@@ -50,6 +50,8 @@ export const ComposeMixin = {
     this.composeText.value = '';
     this.composeFiles = [];
     this.composeImagePreview.innerHTML = '';
+    this.composeSensitive = false;
+    this.btnComposeSensitive.classList.remove('active');
     this.composeError.style.display = 'none';
     this.btnComposeSubmit.disabled = false;
     this.btnComposeSubmit.textContent = '게시';
@@ -434,11 +436,18 @@ export const ComposeMixin = {
           }
           await client.createStatus(statusText, {
             spoilerText: cw || undefined,
+            sensitive: this.composeSensitive || undefined,
             mediaIds: fileIds.length > 0 ? fileIds : undefined,
             inReplyToId: replyToId || undefined,
             quoteId: quoteId || undefined,
           });
         } else {
+          // Misskey: mark uploaded files as sensitive
+          if (this.composeSensitive && fileIds.length > 0) {
+            for (const fid of fileIds) {
+              await client.updateFile(fid, { isSensitive: true }).catch(() => {});
+            }
+          }
           await client.createNote(text, {
             cw: cw || undefined,
             fileIds: fileIds.length > 0 ? fileIds : undefined,

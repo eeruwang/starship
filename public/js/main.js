@@ -137,9 +137,11 @@ class StarShipApp {
     this.composeEditor = document.querySelector('.compose-editor');
     this.composeImagePreview = document.getElementById('compose-image-preview');
     this.btnComposeAttach = document.getElementById('btn-compose-attach');
+    this.btnComposeSensitive = document.getElementById('btn-compose-sensitive');
     this.btnComposeEmoji = document.getElementById('btn-compose-emoji');
     this.btnComposeSubmit = document.getElementById('btn-compose-submit');
     this.composeError = document.getElementById('compose-error');
+    this.composeSensitive = false;
 
     // Auth modal
     this.btnAuth = document.getElementById('btn-auth');
@@ -594,6 +596,10 @@ class StarShipApp {
 
     // Compose modal
     this.btnComposeAttach.addEventListener('click', () => this.composeFilesInput.click());
+    this.btnComposeSensitive.addEventListener('click', () => {
+      this.composeSensitive = !this.composeSensitive;
+      this.btnComposeSensitive.classList.toggle('active', this.composeSensitive);
+    });
     this.btnComposeEmoji.addEventListener('click', () => this.showComposeEmojiPicker());
     this.composeFilesInput.addEventListener('change', () => this.handleComposeFileSelect());
     this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());

@@ -3420,6 +3420,13 @@ textarea.input {
   color: var(--accent-primary);
   background: rgba(124, 125, 255, 0.1);
 }
+.compose-tool-btn.active {
+  color: var(--accent-danger);
+  background: rgba(255, 85, 85, 0.12);
+}
+.compose-tool-btn.active:hover {
+  background: rgba(255, 85, 85, 0.2);
+}
 
 /* Compose Emoji Picker */
 .compose-emoji-picker {

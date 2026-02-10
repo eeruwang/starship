@@ -188,6 +188,7 @@ export class MastodonClient {
   async createStatus(text, options = {}) {
     const body = { status: text };
     if (options.spoilerText) body.spoiler_text = options.spoilerText;
+    if (options.sensitive) body.sensitive = true;
     if (options.mediaIds && options.mediaIds.length > 0) body.media_ids = options.mediaIds;
     if (options.inReplyToId) body.in_reply_to_id = options.inReplyToId;
     if (options.quoteId) body.quote_id = options.quoteId;
