@@ -271,6 +271,9 @@ export function renderNotification(notif) {
   if (notif.accountId) card.dataset.accountId = notif.accountId;
   if (notif.post?.id) card.dataset.postId = notif.post.id;
   if (notif.actor?.id) card.dataset.actorId = notif.actor.id;
+  if (notif.actor?.acct) card.dataset.actorAcct = notif.actor.acct;
+  if (notif.actor?.displayName) card.dataset.actorName = notif.actor.displayName;
+  if (notif.actor?.username) card.dataset.actorUsername = notif.actor.username;
   // Per-account or merged theme color
   if (notif.mergedAccounts && notif.mergedAccounts.length > 1) {
     const colors = notif.mergedAccounts.map(a => a.themeColor || PLATFORM_COLORS[a.platform] || '#7c7dff');

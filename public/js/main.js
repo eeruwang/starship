@@ -414,8 +414,8 @@ class StarShipApp {
     document.addEventListener('click', (e) => {
       const card = e.target.closest('.notif-clickable');
       if (!card) return;
-      // Don't trigger on lightbox images, expand toggles, or action buttons
-      if (e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn')) return;
+      // Don't trigger on avatars, lightbox images, expand toggles, or action buttons
+      if (e.target.closest('.notif-avatar') || e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn')) return;
       const postId = card.dataset.postId;
       const accountId = card.dataset.accountId;
       const platform = card.dataset.platform;
@@ -436,22 +436,31 @@ class StarShipApp {
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;
 
+      // Notification avatar → always open the actor's profile
+      if (avatar.classList.contains('notif-avatar')) {
+        const actorId = card.dataset.actorId;
+        if (actorId) {
+          const minimalAuthor = {
+            id: actorId,
+            avatarUrl: avatar.src || '',
+            displayName: card.dataset.actorName || '',
+            acct: card.dataset.actorAcct || card.dataset.actorUsername || '',
+            username: card.dataset.actorUsername || '',
+          };
+          this.openProfileModal(minimalAuthor, platform, accountId);
+        }
+        return;
+      }
+
+      // Post avatar → open post author's profile
       const postId = card.dataset.postId;
       if (postId) {
         const post = this.postCache.get(`${platform}:${postId}`);
         if (post) {
-          // Use displayPost author (correct for reblogs/renotes)
           const displayPost = post.reblog || post;
           this.openProfileModal(displayPost.author, platform, accountId);
           return;
         }
-      }
-      // Notification actor fallback: use actorId to open profile with minimal info
-      const actorId = card.dataset.actorId;
-      if (actorId) {
-        const avatarUrl = avatar.src || '';
-        const minimalAuthor = { id: actorId, avatarUrl, displayName: '', displayNameHtml: '', acct: '', username: '' };
-        this.openProfileModal(minimalAuthor, platform, accountId);
       }
     });
 
