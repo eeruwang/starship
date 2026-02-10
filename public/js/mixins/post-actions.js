@@ -553,10 +553,7 @@ export const PostActionsMixin = {
     this.composeTitle.textContent = '인용';
     this.composeText.dataset.quoteId = postId;
     this.composeText.dataset.quotePlatform = platform;
-    if (quoteUrl) {
-      this.composeText.value = '\n\n' + quoteUrl;
-      this.composeText.setSelectionRange(0, 0);
-    }
+    this.composeText.dataset.quoteUrl = quoteUrl;
     this.composeText.placeholder = '인용 내용을 작성하세요...';
   },
 

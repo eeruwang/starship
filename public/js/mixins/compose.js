@@ -92,6 +92,8 @@ export const ComposeMixin = {
     } else {
       delete this.composeText.dataset.replyTo;
       delete this.composeText.dataset.quoteId;
+      delete this.composeText.dataset.quotePlatform;
+      delete this.composeText.dataset.quoteUrl;
       this.composeText.placeholder = '무슨 일이 일어나고 있나요?';
       this.composeTitle.textContent = '새 글 작성';
       replyCtx.style.display = 'none';
@@ -286,7 +288,7 @@ export const ComposeMixin = {
     const cw = this.composeCw.value.trim();
     const replyToId = this.composeText.dataset.replyTo;
     const quoteId = this.composeText.dataset.quoteId;
-    const quotePlatform = this.composeText.dataset.quotePlatform;
+    const quoteUrl = this.composeText.dataset.quoteUrl;
 
     if (selectedIds.length === 0) {
       this.composeError.textContent = '게시할 계정을 하나 이상 선택하세요.';
@@ -328,10 +330,16 @@ export const ComposeMixin = {
 
         // Create post
         if (account.platform === 'mastodon') {
-          await client.createStatus(text, {
+          // For Mastodon: append quote URL to text + try quote_id (supported by some servers)
+          let statusText = text;
+          if (quoteId && quoteUrl && !text.includes(quoteUrl)) {
+            statusText = text + '\n\n' + quoteUrl;
+          }
+          await client.createStatus(statusText, {
             spoilerText: cw || undefined,
             mediaIds: fileIds.length > 0 ? fileIds : undefined,
             inReplyToId: replyToId || undefined,
+            quoteId: quoteId || undefined,
           });
         } else {
           await client.createNote(text, {

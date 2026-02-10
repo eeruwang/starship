@@ -270,11 +270,34 @@ export class MisskeyClient {
   normalizePost(note) {
     const author = this.normalizeUser(note.user);
     const isRenote = note.renote && !note.text && !note.cw && (!note.files || note.files.length === 0);
+    const isQuote = note.renote && !isRenote;
 
     const actualNote = isRenote ? note.renote : note;
     const actualAuthor = isRenote ? this.normalizeUser(note.renote.user) : author;
 
     const emojiMap = this.buildEmojiMap(actualNote);
+
+    // Build quote post (note with own text + renote = quote)
+    let quotePost = null;
+    if (isQuote) {
+      const qn = note.renote;
+      const qAuthor = this.normalizeUser(qn.user);
+      const qEmojiMap = this.buildEmojiMap(qn);
+      quotePost = {
+        id: qn.id,
+        platform: this.platformType,
+        content: this.mfmToHtml(qn.text || '', qEmojiMap),
+        contentWarning: qn.cw || null,
+        author: qAuthor,
+        media: (qn.files || []).map(f => ({
+          type: f.type?.startsWith('video') ? 'video' : 'image',
+          url: f.url,
+          previewUrl: f.thumbnailUrl || f.url,
+          description: f.comment || f.name,
+        })),
+        url: qn.uri || `${this.instanceUrl}/notes/${qn.id}`,
+      };
+    }
 
     // Extract first external URL for link card (markdown links or bare URLs)
     let linkCard = null;
@@ -287,6 +310,18 @@ export class MisskeyClient {
         const parsed = new URL(cleanUrl);
         linkCard = { url: cleanUrl, title: null, description: null, image: null, siteName: parsed.hostname };
       } catch { /* skip */ }
+    }
+
+    // Suppress link card if it points to the quoted post's URL
+    if (linkCard && quotePost) {
+      const quoteUrls = [
+        quotePost.url,
+        `${this.instanceUrl}/notes/${note.renote.id}`,
+        note.renote.uri,
+      ].filter(Boolean);
+      if (quoteUrls.some(u => linkCard.url.includes(u) || u.includes(linkCard.url))) {
+        linkCard = null;
+      }
     }
 
     return {
@@ -309,6 +344,7 @@ export class MisskeyClient {
       },
       reblog: isRenote ? this.normalizePost(note.renote) : null,
       rebloggedBy: isRenote ? author : null,
+      quotePost,
       favourited: !!actualNote.myReaction,
       reblogged: false,
       myReaction: actualNote.myReaction || null,

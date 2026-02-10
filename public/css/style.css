@@ -841,6 +841,97 @@ h4.mfm-heading { font-size: 1em; }
   white-space: nowrap;
 }
 
+/* Quote post (embedded) */
+.quote-post {
+  display: block;
+  margin-top: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-secondary);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.2s;
+  overflow: hidden;
+}
+.quote-post:hover {
+  background: var(--bg-hover);
+}
+.quote-post-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.3rem;
+}
+.quote-post-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.quote-post-author {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quote-post-author .inline-emoji {
+  height: 1em;
+  vertical-align: -0.1em;
+}
+.quote-post-handle {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.quote-post-content {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.quote-post-content .inline-emoji {
+  height: 1.2em;
+  vertical-align: -0.2em;
+}
+.quote-post-content a {
+  color: var(--accent-primary);
+  pointer-events: none;
+}
+.quote-post-cw {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.quote-post-cw .cw-icon {
+  width: 14px;
+  height: 14px;
+}
+.quote-post-media {
+  display: flex;
+  gap: 4px;
+  margin-top: 0.4rem;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.quote-post-media img {
+  width: 100%;
+  max-height: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
 .post-media img:hover {
   opacity: 0.85;
 }
