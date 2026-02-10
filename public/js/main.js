@@ -716,6 +716,28 @@ class StarShipApp {
       });
     }
 
+    // Column header avatar click: open profile modal
+    this.columnsContainer.addEventListener('click', (e) => {
+      const avatar = e.target.closest('.column-header-avatar');
+      if (!avatar) return;
+      e.stopPropagation();
+      const accountId = avatar.dataset.profileAccountId;
+      const userId = avatar.dataset.profileUserId;
+      const platform = avatar.dataset.platform;
+      if (!accountId || !userId) return;
+      const account = this.store.getById(accountId);
+      if (!account?.profile) return;
+      const author = {
+        id: account.profile.id,
+        displayName: account.profile.displayName,
+        displayNameHtml: this.escapeHtml(account.profile.displayName),
+        username: account.profile.username,
+        acct: account.profile.acct || account.profile.username,
+        avatarUrl: account.profile.avatarUrl,
+      };
+      this.openProfileModal(author, platform, accountId);
+    });
+
     // Column close buttons (delegated)
     this.columnsContainer.addEventListener('click', (e) => {
       const closeBtn = e.target.closest('[data-action="close-column"]');
@@ -1066,7 +1088,17 @@ class StarShipApp {
     if (type === 'account' && accountId) {
       const account = this.store.getById(accountId);
       if (account?.profile?.avatarUrl) {
-        avatarHtml = `<img class="column-header-avatar" src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
+        avatarHtml = `<img class="column-header-avatar" src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
+      }
+    } else if (type === 'all' || type === 'notifications') {
+      // Show all account avatars stacked horizontally
+      const accounts = this.store.getAll();
+      if (accounts.length > 0) {
+        const avatars = accounts.map(a => {
+          if (!a.profile?.avatarUrl) return '';
+          return `<img class="column-header-avatar stacked" src="${this.escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
+        }).filter(Boolean).join('');
+        avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
       }
     }
 

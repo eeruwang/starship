@@ -495,6 +495,24 @@ body {
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  border: 1.5px solid var(--bg-secondary);
+}
+.column-header-avatar:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+.column-header-avatars {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.column-header-avatars .column-header-avatar.stacked {
+  margin-right: -6px;
+}
+.column-header-avatars .column-header-avatar.stacked:last-child {
+  margin-right: 0;
 }
 
 .column-header-actions {
@@ -2166,6 +2184,102 @@ textarea.input {
   background: rgba(255,85,85,0.1);
 }
 
+/* ===== Reauth Account Picker ===== */
+.reauth-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.reauth-picker-overlay.visible {
+  opacity: 1;
+}
+.reauth-picker-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  width: 340px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.reauth-picker-header {
+  padding: 1rem 1rem 0.5rem;
+}
+.reauth-picker-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.reauth-picker-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+.reauth-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  overflow-y: auto;
+}
+.reauth-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+}
+.reauth-picker-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+}
+.reauth-picker-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.reauth-picker-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.reauth-picker-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reauth-picker-instance {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reauth-picker-footer {
+  padding: 0.5rem 1rem 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* ===== User Menu Dropdown ===== */
 .user-menu-wrap {
   position: relative;
@@ -3112,18 +3226,33 @@ textarea.input {
   opacity: 0.7;
 }
 
-.compose-emoji-preview {
-  padding: 0.4rem 0.75rem 0.5rem;
-  border-top: 1px solid var(--border-color);
-  font-size: 0.88rem;
+/* Compose text overlay for inline emoji preview */
+.compose-text-wrap {
+  position: relative;
+}
+.compose-text-overlay {
+  position: absolute;
+  inset: 0;
+  padding: 0.75rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  font-size: 0.9rem;
   line-height: 1.6;
   color: var(--text-primary);
-  max-height: 100px;
-  overflow-y: auto;
+  white-space: pre-wrap;
   word-break: break-word;
+  overflow-y: auto;
+  pointer-events: none;
   display: none;
+  border: 1px solid transparent;
 }
-.compose-emoji-preview .inline-emoji {
+.compose-text-wrap.emoji-active .compose-text-input {
+  color: transparent;
+  caret-color: var(--text-primary);
+}
+.compose-text-wrap.emoji-active .compose-text-overlay {
+  display: block;
+}
+.compose-text-overlay .inline-emoji {
   height: 1.4em;
   vertical-align: -0.3em;
 }
@@ -3161,7 +3290,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 650;
+  z-index: 695;
   width: 320px;
   max-height: 420px;
   display: flex;

@@ -102,17 +102,20 @@ export const ComposeMixin = {
       replyCtx.innerHTML = '';
     }
 
-    // Reset emoji preview
-    const emojiPreview = document.getElementById('compose-emoji-preview');
-    if (emojiPreview) {
-      emojiPreview.innerHTML = '';
-      emojiPreview.style.display = 'none';
-    }
+    // Reset emoji overlay
+    const textWrap = document.querySelector('.compose-text-wrap');
+    const overlay = document.getElementById('compose-text-overlay');
+    if (textWrap) textWrap.classList.remove('emoji-active');
+    if (overlay) overlay.innerHTML = '';
 
-    // Setup live emoji preview on input
+    // Setup live emoji preview on input + scroll sync
     if (!this._composeEmojiInputHandler) {
       this._composeEmojiInputHandler = () => this._updateComposeEmojiPreview();
       this.composeText.addEventListener('input', this._composeEmojiInputHandler);
+      this.composeText.addEventListener('scroll', () => {
+        const ov = document.getElementById('compose-text-overlay');
+        if (ov) ov.scrollTop = this.composeText.scrollTop;
+      });
     }
 
     this.openModal(this.modalCompose);
@@ -121,21 +124,22 @@ export const ComposeMixin = {
 
   async _updateComposeEmojiPreview() {
     const text = this.composeText.value;
-    const preview = document.getElementById('compose-emoji-preview');
-    if (!preview) return;
+    const textWrap = document.querySelector('.compose-text-wrap');
+    const overlay = document.getElementById('compose-text-overlay');
+    if (!overlay || !textWrap) return;
 
     // Check if text contains custom emoji patterns :name:
     const emojiPattern = /:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g;
     if (!emojiPattern.test(text)) {
-      preview.style.display = 'none';
-      preview.innerHTML = '';
+      textWrap.classList.remove('emoji-active');
+      overlay.innerHTML = '';
       return;
     }
 
     // Get emoji maps from selected accounts
     const emojiMap = await this._getComposeEmojiMap();
     if (Object.keys(emojiMap).length === 0) {
-      preview.style.display = 'none';
+      textWrap.classList.remove('emoji-active');
       return;
     }
 
@@ -152,11 +156,12 @@ export const ComposeMixin = {
     });
 
     if (hasCustomEmoji) {
-      preview.innerHTML = html.replace(/\n/g, '<br>');
-      preview.style.display = 'block';
+      overlay.innerHTML = html;
+      textWrap.classList.add('emoji-active');
+      overlay.scrollTop = this.composeText.scrollTop;
     } else {
-      preview.style.display = 'none';
-      preview.innerHTML = '';
+      textWrap.classList.remove('emoji-active');
+      overlay.innerHTML = '';
     }
   },
 
@@ -206,13 +211,16 @@ export const ComposeMixin = {
       '🔥', '⭐', '💯', '✨', '😂', '🙏', '💕', '😊',
     ];
 
-    // Determine first selected Misskey account for instance emojis
-    let misskeyAccountId = null;
+    // Determine first selected account with instance emojis
+    let emojiAccountId = null;
     for (const id of this.composeSelectedAccounts) {
       const acct = this.store.getById(id);
-      if (acct && acct.platform !== 'mastodon') {
-        misskeyAccountId = id;
-        break;
+      if (acct) {
+        const client = this.store.getClient(id);
+        if (client?.getInstanceEmojis) {
+          emojiAccountId = id;
+          break;
+        }
       }
     }
 
@@ -221,7 +229,7 @@ export const ComposeMixin = {
       <div class="reaction-picker-grid reaction-picker-unicode">
         ${commonReactions.map(r => `<button class="reaction-picker-item" data-emoji="${r}">${r}</button>`).join('')}
       </div>
-      ${misskeyAccountId ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
+      ${emojiAccountId ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
     `;
 
     // Position above the emoji button
@@ -264,8 +272,8 @@ export const ComposeMixin = {
     }, 0);
 
     // Fetch instance emojis async
-    if (misskeyAccountId) {
-      const client = this.store.getClient(misskeyAccountId);
+    if (emojiAccountId) {
+      const client = this.store.getClient(emojiAccountId);
       client?.getInstanceEmojis?.().then(emojis => {
         if (!document.getElementById('compose-emoji-picker-popup')) return;
         const loadingEl = picker.querySelector('.reaction-picker-loading');

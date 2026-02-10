@@ -2,6 +2,7 @@
  * Auth UI Mixin
  * Handles authentication, user menu, admin UI, and cloud sync
  */
+import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from '../auth.js';
 
 export const AuthUIMixin = {
 
@@ -121,6 +122,9 @@ export const AuthUIMixin = {
       }
       case 'import-data':
         document.getElementById('import-file-input').click();
+        break;
+      case 'reauth-account':
+        this.openReauthAccountPicker();
         break;
       case 'manage-invite-codes':
         this.openInviteCodeModal();
@@ -468,6 +472,121 @@ export const AuthUIMixin = {
       });
     } catch {
       list.innerHTML = '<div class="invite-empty">불러오기 실패</div>';
+    }
+  },
+
+  openReauthAccountPicker() {
+    const accounts = this.store.getAll();
+    if (accounts.length === 0) {
+      alert('연결된 계정이 없습니다.');
+      return;
+    }
+
+    // Create a simple picker popup
+    const existing = document.getElementById('reauth-picker');
+    if (existing) existing.remove();
+
+    const picker = document.createElement('div');
+    picker.id = 'reauth-picker';
+    picker.className = 'reauth-picker-overlay';
+    picker.innerHTML = `
+      <div class="reauth-picker-modal">
+        <div class="reauth-picker-header">
+          <h3>재인증할 계정 선택</h3>
+          <p class="reauth-picker-desc">권한이 부족한 계정을 선택하면 다시 인증하여 권한을 갱신합니다.</p>
+        </div>
+        <div class="reauth-picker-list">
+          ${accounts.map(a => `
+            <button class="reauth-picker-item" data-account-id="${a.id}">
+              <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+              <div class="reauth-picker-info">
+                <span class="reauth-picker-name">${this.escapeHtml(a.profile?.displayName || a.label || '')}</span>
+                <span class="reauth-picker-instance">${this.escapeHtml(a.instanceUrl.replace('https://', ''))}</span>
+              </div>
+              <span class="platform-dot ${a.platform}"></span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="reauth-picker-footer">
+          <button class="btn btn-secondary btn-small reauth-picker-cancel">취소</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(picker);
+    requestAnimationFrame(() => picker.classList.add('visible'));
+
+    // Close
+    const close = () => {
+      picker.classList.remove('visible');
+      setTimeout(() => picker.remove(), 200);
+    };
+
+    picker.querySelector('.reauth-picker-cancel').addEventListener('click', close);
+    picker.addEventListener('click', (e) => {
+      if (e.target === picker) close();
+    });
+
+    // Account click
+    picker.querySelectorAll('.reauth-picker-item').forEach(item => {
+      item.addEventListener('click', async () => {
+        const accountId = item.dataset.accountId;
+        const account = this.store.getById(accountId);
+        if (!account) return;
+        close();
+        await this.reauthAccount(account);
+      });
+    });
+  },
+
+  async reauthAccount(account) {
+    try {
+      let popup;
+      if (account.platform === 'mastodon') {
+        popup = await startMastodonOAuth(account.instanceUrl);
+      } else {
+        popup = await startMiAuth(account.instanceUrl, account.platform);
+      }
+
+      if (!popup) return;
+
+      const result = await waitForAuthCallback();
+
+      // Update the existing account's token instead of adding new
+      account.accessToken = result.accessToken;
+      this.store.save();
+      // Recreate the client with new token
+      const newClient = this.store.createClient(account);
+      this.store.clients.set(account.id, newClient);
+      this.debouncedSaveToCloud();
+
+      // Re-verify credentials to update profile
+      const client = this.store.getClient(account.id);
+      if (client) {
+        try {
+          if (account.platform === 'mastodon') {
+            const profile = await client.verifyCredentials();
+            account.profile = client.normalizeUser(profile);
+          } else {
+            const me = await client.request('i');
+            account.profile = {
+              id: me.id,
+              displayName: me.name || me.username,
+              username: me.username,
+              acct: me.host ? `${me.username}@${me.host}` : me.username,
+              avatarUrl: me.avatarUrl,
+            };
+          }
+          this.store.save();
+          this.debouncedSaveToCloud();
+        } catch {}
+      }
+
+      alert(`${account.profile?.displayName || account.label} 계정이 재인증되었습니다.`);
+      this.render();
+    } catch (err) {
+      clearPendingAuth();
+      alert(`재인증 실패: ${err.message}`);
     }
   },
 

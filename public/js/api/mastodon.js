@@ -154,6 +154,14 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/bookmark`);
   }
 
+  async getInstanceEmojis() {
+    try {
+      const emojis = await this.request('GET', '/api/v1/custom_emojis');
+      if (!Array.isArray(emojis)) return [];
+      return emojis.map(e => ({ name: e.shortcode, url: e.static_url || e.url, category: e.category || null }));
+    } catch { return []; }
+  }
+
   async fetchThemeColor() {
     try {
       const targetUrl = this.instanceUrl;
