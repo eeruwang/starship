@@ -109,15 +109,19 @@ export function renderPost(post) {
   // Quote post (embedded)
   if (displayPost.quotePost) {
     const qp = displayPost.quotePost;
+    const hasQpMedia = !qp.contentWarning && qp.media && qp.media.length > 0;
+    const qpImages = hasQpMedia ? qp.media.filter(m => m.type !== 'video').slice(0, 3) : [];
     html += `
-      <a class="quote-post" href="${escapeHtml(qp.url || '#')}" target="_blank" rel="noopener">
-        <div class="quote-post-header">
-          <img class="quote-post-avatar" src="${qp.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-          <span class="quote-post-author">${qp.author.displayNameHtml || escapeHtml(qp.author.displayName)}</span>
-          <span class="quote-post-handle">@${escapeHtml(qp.author.acct)}</span>
+      <a class="quote-post${qpImages.length > 0 ? ' quote-post-has-media' : ''}" href="${escapeHtml(qp.url || '#')}" target="_blank" rel="noopener">
+        <div class="quote-post-inner">
+          <div class="quote-post-header">
+            <img class="quote-post-avatar" src="${qp.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+            <span class="quote-post-author">${qp.author.displayNameHtml || escapeHtml(qp.author.displayName)}</span>
+            <span class="quote-post-handle">@${escapeHtml(qp.author.acct)}</span>
+          </div>
+          ${qp.contentWarning ? `<div class="quote-post-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(qp.contentWarning)}</div>` : `<div class="quote-post-content">${qp.content}</div>`}
         </div>
-        ${qp.contentWarning ? `<div class="quote-post-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(qp.contentWarning)}</div>` : `<div class="quote-post-content">${qp.content}</div>`}
-        ${!qp.contentWarning && qp.media && qp.media.length > 0 ? `<div class="quote-post-media">${qp.media.slice(0, 2).map(m => m.type !== 'video' ? `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : '').join('')}</div>` : ''}
+        ${qpImages.length > 0 ? `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>` : ''}
       </a>
     `;
   }
