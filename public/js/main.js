@@ -1170,12 +1170,20 @@ class StarShipApp {
     const editSection = document.getElementById('profile-edit');
     const tabsEl = document.getElementById('profile-tabs');
     const postsEl = document.getElementById('profile-posts');
+    const stickyHeader = document.getElementById('profile-sticky-header');
+    const stickyAvatar = document.getElementById('profile-sticky-avatar');
+    const stickyName = document.getElementById('profile-sticky-name');
+    const stickyHandle = document.getElementById('profile-sticky-handle');
 
-    // Cleanup previous scroll listener
+    // Cleanup previous scroll listeners
     const scrollEl = modal.querySelector('.profile-scroll');
     if (this._profileScrollHandler && scrollEl) {
       scrollEl.removeEventListener('scroll', this._profileScrollHandler);
       this._profileScrollHandler = null;
+    }
+    if (this._profileStickyScrollHandler && scrollEl) {
+      scrollEl.removeEventListener('scroll', this._profileStickyScrollHandler);
+      this._profileStickyScrollHandler = null;
     }
     this._profileState = null;
 
@@ -1195,6 +1203,29 @@ class StarShipApp {
     tabsEl.style.display = 'none';
     postsEl.style.display = 'none';
     postsEl.innerHTML = '';
+
+    // Reset sticky header
+    stickyHeader.classList.remove('visible');
+    stickyAvatar.src = author.avatarUrl || '';
+    stickyName.innerHTML = author.displayNameHtml || this.escapeHtml(author.displayName);
+    stickyHandle.textContent = `@${author.acct}`;
+
+    // Scroll listener for sticky header
+    const bannerHeight = 160; // matches CSS .profile-banner height
+    const threshold = bannerHeight - 44; // show sticky when banner mostly scrolled away
+    const onScroll = () => {
+      const scrollTop = scrollEl.scrollTop;
+      if (scrollTop >= threshold) {
+        stickyHeader.classList.add('visible');
+      } else {
+        stickyHeader.classList.remove('visible');
+      }
+    };
+    scrollEl.addEventListener('scroll', onScroll);
+    this._profileStickyScrollHandler = onScroll;
+
+    // Reset scroll position
+    scrollEl.scrollTop = 0;
 
     this.openModal(modal);
 
@@ -1249,6 +1280,11 @@ class StarShipApp {
       const host = user.host || '';
       const acct = user.acct || (host ? `${user.username}@${host}` : user.username);
       handleEl.textContent = `@${acct}`;
+
+      // Sync sticky header with full data
+      stickyAvatar.src = avatar.src;
+      stickyName.innerHTML = nameEl.innerHTML;
+      stickyHandle.textContent = handleEl.textContent;
 
       // Bio - render with MFM (Misskey) or HTML (Mastodon)
       if (isMisskey) {

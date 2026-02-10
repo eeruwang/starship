@@ -314,13 +314,18 @@
   <!-- 프로필 모달 -->
   <div class="modal-overlay" id="modal-profile" style="display:none;">
     <div class="modal modal-profile">
-      <div class="profile-header">
-        <button class="btn btn-icon profile-close" data-close-modal="modal-profile">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-        <div class="profile-banner" id="profile-banner"></div>
+      <button class="btn btn-icon profile-close" data-close-modal="modal-profile">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="profile-sticky-header" id="profile-sticky-header">
+        <img class="profile-sticky-avatar" id="profile-sticky-avatar" src="" alt="">
+        <div class="profile-sticky-info">
+          <div class="profile-sticky-name" id="profile-sticky-name"></div>
+          <div class="profile-sticky-handle" id="profile-sticky-handle"></div>
+        </div>
       </div>
       <div class="profile-scroll">
+        <div class="profile-banner" id="profile-banner"></div>
         <div class="profile-main">
           <img class="profile-avatar" id="profile-avatar" src="" alt="">
           <div class="profile-info">

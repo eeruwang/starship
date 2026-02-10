@@ -1676,6 +1676,7 @@ textarea.input {
   padding: 0;
   overflow: hidden;
   display: flex;
+  position: relative;
   flex-direction: column;
   border: none;
 }
@@ -1683,7 +1684,7 @@ textarea.input {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
-  z-index: 10;
+  z-index: 12;
   background: rgba(0,0,0,0.45);
   backdrop-filter: blur(8px);
   border-radius: 50%;
@@ -1698,9 +1699,58 @@ textarea.input {
 .profile-close:hover {
   background: rgba(0,0,0,0.7);
 }
-.profile-header {
-  position: relative;
+.profile-sticky-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 1rem;
+  padding-right: 3rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+.profile-sticky-header.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.profile-sticky-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
   flex-shrink: 0;
+}
+.profile-sticky-info {
+  min-width: 0;
+  flex: 1;
+}
+.profile-sticky-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profile-sticky-name .inline-emoji {
+  height: 1.1em;
+  vertical-align: -0.2em;
+}
+.profile-sticky-handle {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .profile-banner {
   width: 100%;
@@ -1708,17 +1758,17 @@ textarea.input {
   background: linear-gradient(135deg, var(--accent-primary), #a78bfa);
   background-size: cover;
   background-position: center;
+  flex-shrink: 0;
 }
 .profile-scroll {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  margin-top: -44px;
   position: relative;
-  z-index: 1;
 }
 .profile-main {
   padding: 0 1.4rem 1.4rem;
+  margin-top: -44px;
 }
 .profile-avatar {
   width: 86px;
@@ -1728,6 +1778,8 @@ textarea.input {
   object-fit: cover;
   background: var(--bg-primary);
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  position: relative;
+  z-index: 2;
 }
 .profile-info {
   margin-top: 0.6rem;
