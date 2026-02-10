@@ -498,6 +498,7 @@ body {
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
   border: 2px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 .column-header-avatar:hover {
   transform: scale(1.15);
