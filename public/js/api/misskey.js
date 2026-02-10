@@ -74,7 +74,7 @@ export class MisskeyClient {
   async updateProfile({ name, description, avatarId, bannerId }) {
     const body = {};
     if (name !== undefined) body.name = name;
-    if (description !== undefined) body.description = description;
+    if (description !== undefined) body.description = description || null;
     if (avatarId !== undefined) body.avatarId = avatarId;
     if (bannerId !== undefined) body.bannerId = bannerId;
     return this.request('i/update', body);
