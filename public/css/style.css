@@ -1477,12 +1477,12 @@ h4.mfm-heading { font-size: 1em; }
   padding: 1rem;
   transition: background 0.25s ease, backdrop-filter 0.25s ease;
 }
-/* Thread modal above profile, compose above everything */
+/* Modal stacking: profile(600) < thread(680) < compose(690) < lightbox(700) */
 #modal-thread {
-  z-index: 620;
+  z-index: 680;
 }
 #modal-compose {
-  z-index: 650;
+  z-index: 690;
 }
 .modal-overlay.visible {
   background: rgba(0,0,0,0.6);
