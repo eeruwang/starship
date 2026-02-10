@@ -1088,7 +1088,8 @@ class StarShipApp {
     if (type === 'account' && accountId) {
       const account = this.store.getById(accountId);
       if (account?.profile?.avatarUrl) {
-        avatarHtml = `<img class="column-header-avatar" src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
+        const borderStyle = account.themeColor ? `style="border-color:${account.themeColor}"` : '';
+        avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
       }
     } else if (type === 'all' || type === 'notifications') {
       // Show all account avatars stacked horizontally
@@ -1096,7 +1097,8 @@ class StarShipApp {
       if (accounts.length > 0) {
         const avatars = accounts.map(a => {
           if (!a.profile?.avatarUrl) return '';
-          return `<img class="column-header-avatar stacked" src="${this.escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
+          const borderStyle = a.themeColor ? `style="border-color:${a.themeColor}"` : '';
+          return `<img class="column-header-avatar stacked" ${borderStyle} src="${this.escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
         }).filter(Boolean).join('');
         avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
       }
@@ -1133,7 +1135,8 @@ class StarShipApp {
           const name = this.escapeHtml(account.label || account.profile.displayName);
           let avatarHtml = '';
           if (account.profile?.avatarUrl) {
-            avatarHtml = `<img class="column-header-avatar" src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
+            const borderStyle = account.themeColor ? `style="border-color:${account.themeColor}"` : '';
+            avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
           }
           h2.innerHTML = `${avatarHtml}${name}`;
         }
@@ -1144,7 +1147,8 @@ class StarShipApp {
         if (accounts.length > 0) {
           const avatars = accounts.map(a => {
             if (!a.profile?.avatarUrl) return '';
-            return `<img class="column-header-avatar stacked" src="${this.escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
+            const borderStyle = a.themeColor ? `style="border-color:${a.themeColor}"` : '';
+            return `<img class="column-header-avatar stacked" ${borderStyle} src="${this.escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
           }).filter(Boolean).join('');
           avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
         }

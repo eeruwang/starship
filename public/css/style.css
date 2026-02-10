@@ -497,11 +497,12 @@ body {
   flex-shrink: 0;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
-  border: 1.5px solid var(--bg-secondary);
+  border: 2px solid var(--border-color);
 }
 .column-header-avatar:hover {
   transform: scale(1.15);
   box-shadow: 0 0 0 2px var(--accent-primary);
+  opacity: 0.9;
 }
 .column-header-avatars {
   display: inline-flex;
