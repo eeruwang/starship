@@ -95,9 +95,6 @@ export const AuthUIMixin = {
   async handleUserMenuAction(action) {
     this.closeUserMenu();
     switch (action) {
-      case 'add-account':
-        this.openAddAccountModal();
-        break;
       case 'sync-now':
         await this.saveToCloud();
         break;
@@ -477,10 +474,6 @@ export const AuthUIMixin = {
 
   openReauthAccountPicker() {
     const accounts = this.store.getAll();
-    if (accounts.length === 0) {
-      alert('연결된 계정이 없습니다.');
-      return;
-    }
 
     // Create a simple picker popup
     const existing = document.getElementById('reauth-picker');
@@ -493,7 +486,7 @@ export const AuthUIMixin = {
       <div class="reauth-picker-modal">
         <div class="reauth-picker-header">
           <h3>계정 관리</h3>
-          <p class="reauth-picker-desc">재인증하려면 계정을 선택하세요. 삭제하려면 X 버튼을 누르세요.</p>
+          <p class="reauth-picker-desc">${accounts.length > 0 ? '재인증하려면 계정을 선택하세요. 삭제하려면 X 버튼을 누르세요.' : '연결된 계정이 없습니다. 아래에서 추가하세요.'}</p>
         </div>
         <div class="reauth-picker-list">
           ${accounts.map(a => `
@@ -513,6 +506,10 @@ export const AuthUIMixin = {
           `).join('')}
         </div>
         <div class="reauth-picker-footer">
+          <button class="btn btn-primary btn-small reauth-picker-add">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            계정 추가
+          </button>
           <button class="btn btn-secondary btn-small reauth-picker-cancel">닫기</button>
         </div>
       </div>
@@ -528,6 +525,10 @@ export const AuthUIMixin = {
     };
 
     picker.querySelector('.reauth-picker-cancel').addEventListener('click', close);
+    picker.querySelector('.reauth-picker-add').addEventListener('click', () => {
+      close();
+      this.openAddAccountModal();
+    });
     picker.addEventListener('click', (e) => {
       if (e.target === picker) close();
     });
