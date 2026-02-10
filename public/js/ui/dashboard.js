@@ -17,6 +17,16 @@ const PLATFORM_COLORS = {
   mastodon: '#6364ff',
 };
 
+function isFediPostUrl(url) {
+  try {
+    const u = new URL(url);
+    if (/^\/notes\/[a-zA-Z0-9]+$/.test(u.pathname)) return true;
+    if (/^\/@[^/]+\/\d+$/.test(u.pathname)) return true;
+    if (/^\/(notice|objects)\/[a-zA-Z0-9\-]+$/.test(u.pathname)) return true;
+    return false;
+  } catch { return false; }
+}
+
 export function renderPost(post) {
   const card = document.createElement('div');
   card.className = `post-card platform-${post.platform}`;
@@ -150,10 +160,17 @@ export function renderPost(post) {
     const hasImage = lc.image;
     const hasTitle = lc.title;
     const needsOg = !hasTitle && !hasImage;
+    // Detect fediverse post URLs
+    const isFediUrl = isFediPostUrl(lc.url);
     const cardClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
-    const ogAttrs = needsOg ? ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"` : '';
+    let extraAttrs = '';
+    if (isFediUrl) {
+      extraAttrs = ` data-fedi-url="${escapeHtml(lc.url)}" data-fedi-pending="true"`;
+    } else if (needsOg) {
+      extraAttrs = ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"`;
+    }
     html += `
-      <a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${ogAttrs}>
+      <a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${extraAttrs}>
         ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
         <div class="link-card-info">
           <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>

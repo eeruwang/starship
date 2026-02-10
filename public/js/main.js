@@ -1895,8 +1895,16 @@ class StarShipApp {
 
   /** Fetch OG metadata for link cards that lack title/image and update DOM */
   enrichLinkCards(container) {
+    // Resolve fediverse post links first
+    const fediCards = container.querySelectorAll('.link-card[data-fedi-pending]');
+    for (const card of fediCards) {
+      const url = card.dataset.fediUrl;
+      if (!url) continue;
+      card.removeAttribute('data-fedi-pending');
+      this._enrichSingleCard(card, url);
+    }
+    // Then handle regular OG cards
     const cards = container.querySelectorAll('.link-card[data-og-pending]');
-    if (cards.length === 0) return;
     for (const card of cards) {
       const url = card.dataset.ogUrl;
       if (!url) continue;
@@ -1905,7 +1913,103 @@ class StarShipApp {
     }
   }
 
+  _isFediPostUrl(url) {
+    try {
+      const u = new URL(url);
+      // Misskey: /notes/xxxx
+      if (/^\/notes\/[a-zA-Z0-9]+$/.test(u.pathname)) return true;
+      // Mastodon: /@user/123456 or /@user@host/123456
+      if (/^\/@[^/]+\/\d+$/.test(u.pathname)) return true;
+      // Pleroma/Akkoma: /notice/xxxx or /objects/xxxx
+      if (/^\/(notice|objects)\/[a-zA-Z0-9\-]+$/.test(u.pathname)) return true;
+      return false;
+    } catch { return false; }
+  }
+
+  async _resolveAsFediPost(url) {
+    // Try resolving via any available account
+    const accounts = this.store.getAll();
+    for (const account of accounts) {
+      const client = this.store.getClient(account.id);
+      if (!client?.resolveUrl) continue;
+      try {
+        const post = await client.resolveUrl(url);
+        if (post) return { post, accountId: account.id };
+      } catch { /* try next */ }
+    }
+    return null;
+  }
+
+  _buildFediEmbedHtml(post) {
+    const dp = post.reblog || post;
+    const author = dp.author || {};
+    const avatarUrl = this.escapeHtml(author.avatarUrl || '');
+    const displayName = author.displayNameHtml || this.escapeHtml(author.displayName || '');
+    const acct = this.escapeHtml(author.acct || '');
+    const content = dp.content || '';
+    const media = dp.media || [];
+    const images = media.filter(m => m.type !== 'video').slice(0, 4);
+
+    let html = `
+      <div class="quote-post fedi-embed" data-fedi-url="${this.escapeHtml(dp.url || '')}" data-post-id="${this.escapeHtml(dp.id || '')}" data-platform="${dp.platform || ''}">
+        <div class="quote-post-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.6"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg> 연합 글</div>
+        <div class="quote-post-body">
+          <div class="quote-post-text-area">
+            <div class="quote-post-header">
+              <img class="quote-post-avatar" src="${avatarUrl}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+              <span class="quote-post-author">${displayName}</span>
+              <span class="quote-post-handle">@${acct}</span>
+            </div>`;
+
+    if (dp.contentWarning) {
+      html += `<div class="quote-post-cw"><span class="icon-inline cw-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> ${this.escapeHtml(dp.contentWarning)}</div>`;
+    } else {
+      html += `<div class="quote-post-content">${content}</div>`;
+    }
+
+    html += `</div>`;
+
+    if (images.length === 1) {
+      html += `<div class="quote-post-thumb"><img src="${images[0].previewUrl || images[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></div>`;
+    }
+    html += `</div>`;
+
+    if (images.length > 1) {
+      html += `<div class="quote-post-media media-${images.length}">${images.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
   async _enrichSingleCard(card, url) {
+    // Try to resolve as fediverse post first
+    if (this._isFediPostUrl(url)) {
+      try {
+        const result = await this._resolveAsFediPost(url);
+        if (result) {
+          const { post, accountId: resolvedAccountId } = result;
+          const embedHtml = this._buildFediEmbedHtml(post);
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = embedHtml;
+          const embed = wrapper.firstElementChild;
+          // Make clickable to open thread
+          embed.style.cursor = 'pointer';
+          embed.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (post.id && resolvedAccountId) {
+              this.openThreadView(post.id, post.platform, resolvedAccountId);
+            } else {
+              window.open(url, '_blank', 'noopener');
+            }
+          });
+          card.replaceWith(embed);
+          return;
+        }
+      } catch { /* fall through to OG */ }
+    }
+
     let og = this._ogCache.get(url);
     if (!og) {
       try {

@@ -52,6 +52,14 @@ export class MastodonClient {
     return this.request('GET', path);
   }
 
+  async resolveUrl(url) {
+    const results = await this.request('GET', `/api/v2/search?q=${encodeURIComponent(url)}&resolve=true&type=statuses&limit=1`);
+    if (results.statuses && results.statuses.length > 0) {
+      return this.normalizePost(results.statuses[0]);
+    }
+    return null;
+  }
+
   async getRelationships(userIds) {
     const params = userIds.map(id => `id[]=${encodeURIComponent(id)}`).join('&');
     return this.request('GET', `/api/v1/accounts/relationships?${params}`);

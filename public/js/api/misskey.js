@@ -92,6 +92,14 @@ export class MisskeyClient {
     return this.request('i/notifications', body);
   }
 
+  async resolveUrl(url) {
+    const result = await this.request('ap/show', { uri: url });
+    if (result.type === 'Note' && result.object) {
+      return this.normalizePost(result.object);
+    }
+    return null;
+  }
+
   async getNote(noteId) {
     return this.request('notes/show', { noteId });
   }
