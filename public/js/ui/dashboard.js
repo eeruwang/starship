@@ -112,16 +112,20 @@ export function renderPost(post) {
     const hasQpMedia = !qp.contentWarning && qp.media && qp.media.length > 0;
     const qpImages = hasQpMedia ? qp.media.filter(m => m.type !== 'video').slice(0, 3) : [];
     html += `
-      <a class="quote-post${qpImages.length > 0 ? ' quote-post-has-media' : ''}" href="${escapeHtml(qp.url || '#')}" target="_blank" rel="noopener">
-        <div class="quote-post-inner">
-          <div class="quote-post-header">
-            <img class="quote-post-avatar" src="${qp.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-            <span class="quote-post-author">${qp.author.displayNameHtml || escapeHtml(qp.author.displayName)}</span>
-            <span class="quote-post-handle">@${escapeHtml(qp.author.acct)}</span>
+      <a class="quote-post" href="${escapeHtml(qp.url || '#')}" target="_blank" rel="noopener">
+        <div class="quote-post-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.6"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg> 인용</div>
+        <div class="quote-post-body">
+          <div class="quote-post-text-area">
+            <div class="quote-post-header">
+              <img class="quote-post-avatar" src="${qp.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+              <span class="quote-post-author">${qp.author.displayNameHtml || escapeHtml(qp.author.displayName)}</span>
+              <span class="quote-post-handle">@${escapeHtml(qp.author.acct)}</span>
+            </div>
+            ${qp.contentWarning ? `<div class="quote-post-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(qp.contentWarning)}</div>` : `<div class="quote-post-content">${qp.content}</div>`}
           </div>
-          ${qp.contentWarning ? `<div class="quote-post-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(qp.contentWarning)}</div>` : `<div class="quote-post-content">${qp.content}</div>`}
+          ${qpImages.length === 1 ? `<div class="quote-post-thumb"><img src="${qpImages[0].previewUrl || qpImages[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></div>` : ''}
         </div>
-        ${qpImages.length > 0 ? `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>` : ''}
+        ${qpImages.length > 1 ? `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>` : ''}
       </a>
     `;
   }
