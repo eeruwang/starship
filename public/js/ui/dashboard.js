@@ -366,12 +366,11 @@ export function renderNotification(notif) {
     if (hasPost) {
       const isMisskey = notif.platform !== 'mastodon';
       const favIcon = isMisskey ? iconHeart : iconStar;
-      const favAction = isMisskey ? 'reaction' : 'favourite';
       html += `<div class="notif-actions">
         <button class="notif-action-btn" data-action="reply" title="답글">${iconReply}</button>
-        <button class="notif-action-btn" data-action="reblog" title="부스트/리노트">${iconBoost}</button>
-        <button class="notif-action-btn" data-action="${favAction}" title="좋아요/리액션">${favIcon}</button>
-        ${isMisskey ? `<button class="notif-action-btn" data-action="reaction-picker" title="리액션 선택">${iconSmile}</button>` : ''}
+        <button class="notif-action-btn" data-action="boost" title="부스트/리노트">${iconBoost}</button>
+        <button class="notif-action-btn" data-action="fav" title="좋아요/리액션">${favIcon}</button>
+        ${isMisskey ? `<button class="notif-action-btn" data-action="reaction" title="리액션 선택">${iconSmile}</button>` : ''}
       </div>`;
     }
   }
