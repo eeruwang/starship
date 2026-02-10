@@ -388,16 +388,39 @@ class StarShipApp {
       }
     });
 
-    // Notification reply: click whole card
+    // Notification action buttons (reply, boost, react)
+    document.addEventListener('click', (e) => {
+      const actionBtn = e.target.closest('.notif-action-btn');
+      if (actionBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        const card = actionBtn.closest('.notif-card');
+        if (!card) return;
+        const postId = card.dataset.postId;
+        const accountId = card.dataset.accountId;
+        const platform = card.dataset.platform;
+        const action = actionBtn.dataset.action;
+        if (!postId || !accountId || !action) return;
+        if (action === 'reply') {
+          this.openComposeModal(postId, accountId);
+        } else {
+          this.handlePostAction(action, postId, platform, accountId, actionBtn);
+        }
+        return;
+      }
+    });
+
+    // Notification card click: open thread view
     document.addEventListener('click', (e) => {
       const card = e.target.closest('.notif-clickable');
       if (!card) return;
-      // Don't trigger on lightbox images or expand toggles
-      if (e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle')) return;
+      // Don't trigger on lightbox images, expand toggles, or action buttons
+      if (e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn')) return;
       const postId = card.dataset.postId;
       const accountId = card.dataset.accountId;
-      if (postId && accountId) {
-        this.openComposeModal(postId, accountId);
+      const platform = card.dataset.platform;
+      if (postId && accountId && platform) {
+        this.openThreadView(postId, platform, accountId);
       }
     });
 

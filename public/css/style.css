@@ -3049,6 +3049,39 @@ textarea.input {
 .notif-clickable:hover .notif-reply-hint {
   opacity: 1;
 }
+.notif-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  flex-basis: 100%;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.notif-clickable:hover .notif-actions {
+  opacity: 1;
+}
+.notif-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.notif-action-btn:hover {
+  color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+.notif-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
 
 /* ===== Compose Modal Redesign ===== */
 .compose-modal {

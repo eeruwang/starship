@@ -242,9 +242,8 @@ export function renderPost(post) {
 
 export function renderNotification(notif) {
   const card = document.createElement('div');
-  const replyTypes = ['reply', 'mention', 'quote'];
-  const isReplyable = replyTypes.includes(notif.type) && notif.post?.id;
-  card.className = `notif-card platform-${notif.platform}${isReplyable ? ' notif-clickable' : ''}`;
+  const hasPost = !!notif.post?.id;
+  card.className = `notif-card platform-${notif.platform}${hasPost ? ' notif-clickable' : ''}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
   // Dedup key for incremental updates
@@ -337,8 +336,16 @@ export function renderNotification(notif) {
       }
       html += `</div>`;
     }
-    if (isReplyable) {
-      html += `<div class="notif-reply-hint">${iconReply} 클릭하여 답글</div>`;
+    if (hasPost) {
+      const isMisskey = notif.platform !== 'mastodon';
+      const favIcon = isMisskey ? iconHeart : iconStar;
+      const favAction = isMisskey ? 'reaction' : 'favourite';
+      html += `<div class="notif-actions">
+        <button class="notif-action-btn" data-action="reply" title="답글">${iconReply}</button>
+        <button class="notif-action-btn" data-action="reblog" title="부스트/리노트">${iconBoost}</button>
+        <button class="notif-action-btn" data-action="${favAction}" title="좋아요/리액션">${favIcon}</button>
+        ${isMisskey ? `<button class="notif-action-btn" data-action="reaction-picker" title="리액션 선택">${iconSmile}</button>` : ''}
+      </div>`;
     }
   }
   card.innerHTML = html;
