@@ -1204,6 +1204,12 @@ class StarShipApp {
     }
     this._profileState = null;
 
+    // Clean up previous follow badges
+    const oldBadges = document.getElementById('profile-follow-badges');
+    if (oldBadges) oldBadges.remove();
+    const oldFollowBtn = document.getElementById('btn-profile-follow');
+    if (oldFollowBtn) oldFollowBtn.remove();
+
     // Reset
     banner.style.backgroundImage = '';
     banner.style.backgroundPosition = '';
@@ -1325,8 +1331,15 @@ class StarShipApp {
           bioEl.innerHTML = client.mfmToHtml(bio, userEmojis);
         }
       } else {
-        const bio = user.note || '';
+        let bio = user.note || '';
         if (bio) {
+          // Resolve custom emojis in Mastodon bio
+          if (user.emojis && user.emojis.length > 0) {
+            for (const emoji of user.emojis) {
+              bio = bio.replaceAll(`:${emoji.shortcode}:`,
+                `<img class="inline-emoji" src="${this.escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+            }
+          }
           bioEl.innerHTML = bio;
         }
       }
@@ -1344,10 +1357,20 @@ class StarShipApp {
       // Fields
       const fields = user.fields || [];
       if (fields.length > 0) {
+        // Build emoji resolver for field values (Mastodon emojis)
+        const resolveFieldEmojis = (html) => {
+          if (!isMisskey && user.emojis && user.emojis.length > 0) {
+            for (const emoji of user.emojis) {
+              html = html.replaceAll(`:${emoji.shortcode}:`,
+                `<img class="inline-emoji" src="${this.escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+            }
+          }
+          return html;
+        };
         fieldsEl.innerHTML = fields.map(f => `
           <div class="profile-field">
-            <span class="profile-field-name">${this.escapeHtml(f.name)}</span>
-            <span class="profile-field-value">${f.value || this.escapeHtml(f.value)}</span>
+            <span class="profile-field-name">${resolveFieldEmojis(this.escapeHtml(f.name))}</span>
+            <span class="profile-field-value">${resolveFieldEmojis(f.value || this.escapeHtml(f.value))}</span>
           </div>
         `).join('');
       }
@@ -1700,7 +1723,7 @@ class StarShipApp {
         }
       }
 
-      // Build relation badges
+      // Build relation badges (inside banner-wrap for overlay)
       const badgesEl = document.getElementById('profile-follow-badges');
       if (badgesEl) badgesEl.remove();
       const badges = document.createElement('div');
@@ -1714,8 +1737,11 @@ class StarShipApp {
         badges.innerHTML += `<span class="follow-badge follow-badge-following">팔로우 중</span>`;
       }
 
-      // Insert badges before actions
-      actionsEl.parentElement.insertBefore(badges, actionsEl);
+      // Insert badges into banner area
+      const bannerWrap = document.querySelector('#modal-profile .profile-banner-wrap');
+      if (bannerWrap) {
+        bannerWrap.appendChild(badges);
+      }
 
       // Add follow/unfollow button
       const existingFollowBtn = document.getElementById('btn-profile-follow');

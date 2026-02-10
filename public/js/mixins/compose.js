@@ -59,6 +59,8 @@ export const ComposeMixin = {
     delete this.composeText.dataset.quoteId;
     delete this.composeText.dataset.quotePlatform;
     delete this.composeText.dataset.quoteUrl;
+    this._composeEmojiMap = {};
+    this._composeEmojiMapAccountIds = new Set();
 
     const replyCtx = document.getElementById('compose-reply-context');
     if (replyToId) {
@@ -100,8 +102,95 @@ export const ComposeMixin = {
       replyCtx.innerHTML = '';
     }
 
+    // Reset emoji preview
+    const emojiPreview = document.getElementById('compose-emoji-preview');
+    if (emojiPreview) {
+      emojiPreview.innerHTML = '';
+      emojiPreview.style.display = 'none';
+    }
+
+    // Setup live emoji preview on input
+    if (!this._composeEmojiInputHandler) {
+      this._composeEmojiInputHandler = () => this._updateComposeEmojiPreview();
+      this.composeText.addEventListener('input', this._composeEmojiInputHandler);
+    }
+
     this.openModal(this.modalCompose);
     this.composeText.focus();
+  },
+
+  async _updateComposeEmojiPreview() {
+    const text = this.composeText.value;
+    const preview = document.getElementById('compose-emoji-preview');
+    if (!preview) return;
+
+    // Check if text contains custom emoji patterns :name:
+    const emojiPattern = /:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g;
+    if (!emojiPattern.test(text)) {
+      preview.style.display = 'none';
+      preview.innerHTML = '';
+      return;
+    }
+
+    // Get emoji maps from selected accounts
+    const emojiMap = await this._getComposeEmojiMap();
+    if (Object.keys(emojiMap).length === 0) {
+      preview.style.display = 'none';
+      return;
+    }
+
+    // Resolve emojis in text
+    let html = this.escapeHtml(text);
+    let hasCustomEmoji = false;
+    html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
+      const url = emojiMap[name];
+      if (url) {
+        hasCustomEmoji = true;
+        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
+      }
+      return match;
+    });
+
+    if (hasCustomEmoji) {
+      preview.innerHTML = html.replace(/\n/g, '<br>');
+      preview.style.display = 'block';
+    } else {
+      preview.style.display = 'none';
+      preview.innerHTML = '';
+    }
+  },
+
+  async _getComposeEmojiMap() {
+    if (!this._composeEmojiMap) this._composeEmojiMap = {};
+    if (!this._composeEmojiMapAccountIds) this._composeEmojiMapAccountIds = new Set();
+
+    // Check if we need to refresh the emoji map (new accounts selected)
+    let needsFetch = false;
+    for (const id of this.composeSelectedAccounts) {
+      if (!this._composeEmojiMapAccountIds.has(id)) {
+        needsFetch = true;
+        break;
+      }
+    }
+
+    if (needsFetch) {
+      for (const id of this.composeSelectedAccounts) {
+        if (this._composeEmojiMapAccountIds.has(id)) continue;
+        this._composeEmojiMapAccountIds.add(id);
+        const client = this.store.getClient(id);
+        if (!client?.getInstanceEmojis) continue;
+        try {
+          const emojis = await client.getInstanceEmojis();
+          for (const e of emojis) {
+            if (e.name && e.url) {
+              this._composeEmojiMap[e.name] = e.url;
+            }
+          }
+        } catch {}
+      }
+    }
+
+    return this._composeEmojiMap;
   },
 
   showComposeEmojiPicker() {
