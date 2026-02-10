@@ -57,6 +57,20 @@ export class MisskeyClient {
     return this.request('users/notes', body);
   }
 
+  async getRelation(userId) {
+    const result = await this.request('users/relation', { userId });
+    // Can return array or single object depending on version
+    return Array.isArray(result) ? result[0] : result;
+  }
+
+  async followUser(userId) {
+    return this.request('following/create', { userId });
+  }
+
+  async unfollowUser(userId) {
+    return this.request('following/delete', { userId });
+  }
+
   async updateProfile({ name, description, avatarId, bannerId }) {
     const body = {};
     if (name !== undefined) body.name = name;

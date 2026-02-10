@@ -1937,10 +1937,43 @@ textarea.input {
 .profile-field-value a {
   color: var(--accent-primary);
 }
+.profile-follow-badges {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+  flex-wrap: wrap;
+}
+.follow-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  line-height: 1.3;
+}
+.follow-badge-follower {
+  background: rgba(124, 125, 255, 0.15);
+  color: var(--accent-primary);
+}
+.follow-badge-following {
+  background: rgba(150, 208, 74, 0.15);
+  color: var(--accent-misskey);
+}
+.profile-follow-btn.following {
+  border-color: var(--border-color);
+}
+.profile-follow-btn.following.unfollow-hover {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+  background: rgba(255, 85, 85, 0.1);
+}
 .profile-actions {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.9rem;
+  align-items: center;
+  flex-wrap: wrap;
 }
 /* Inline profile edit */
 .profile-edit-inline {

@@ -443,7 +443,10 @@ class StarShipApp {
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       const reaction = badge.dataset.reaction;
-      this.showReactionUsers(badge, postId, platform, accountId, reaction);
+      // For renotes/reblogs, reactions are on the inner post, not the renote wrapper
+      const cached = this.postCache.get(`${platform}:${postId}`);
+      const reactionPostId = cached?.reblog?.id || postId;
+      this.showReactionUsers(badge, reactionPostId, platform, accountId, reaction);
     });
 
     // Post card click: open thread view
@@ -1370,6 +1373,11 @@ class StarShipApp {
         this._loadProfileNotes(user.id, platform, accountId, client, isMisskey, account);
       }
 
+      // Follow relationship for other users
+      if (!myAccount) {
+        this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl);
+      }
+
       // Edit handlers
       if (myAccount) {
         const editBtn = document.getElementById('btn-profile-edit');
@@ -1673,6 +1681,85 @@ class StarShipApp {
       container.appendChild(renderPost(post));
     }
     this.enrichLinkCards(container);
+  }
+
+  async _loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl) {
+    try {
+      let isFollowing = false;
+      let isFollowedBy = false;
+
+      if (isMisskey) {
+        const rel = await client.getRelation(user.id);
+        isFollowing = !!rel?.isFollowing;
+        isFollowedBy = !!rel?.isFollowed;
+      } else {
+        const rels = await client.getRelationships([user.id]);
+        if (rels && rels.length > 0) {
+          isFollowing = !!rels[0].following;
+          isFollowedBy = !!rels[0].followed_by;
+        }
+      }
+
+      // Build relation badges
+      const badgesEl = document.getElementById('profile-follow-badges');
+      if (badgesEl) badgesEl.remove();
+      const badges = document.createElement('div');
+      badges.id = 'profile-follow-badges';
+      badges.className = 'profile-follow-badges';
+
+      if (isFollowedBy) {
+        badges.innerHTML += `<span class="follow-badge follow-badge-follower">나를 팔로우 중</span>`;
+      }
+      if (isFollowing) {
+        badges.innerHTML += `<span class="follow-badge follow-badge-following">팔로우 중</span>`;
+      }
+
+      // Insert badges before actions
+      actionsEl.parentElement.insertBefore(badges, actionsEl);
+
+      // Add follow/unfollow button
+      const existingFollowBtn = document.getElementById('btn-profile-follow');
+      if (existingFollowBtn) existingFollowBtn.remove();
+
+      const followBtn = document.createElement('button');
+      followBtn.id = 'btn-profile-follow';
+      followBtn.className = isFollowing
+        ? 'btn btn-secondary btn-small profile-follow-btn following'
+        : 'btn btn-primary btn-small profile-follow-btn';
+      followBtn.textContent = isFollowing ? '팔로우 해제' : '팔로우';
+
+      // Hover state for unfollow
+      if (isFollowing) {
+        followBtn.addEventListener('mouseenter', () => { followBtn.textContent = '팔로우 해제'; followBtn.classList.add('unfollow-hover'); });
+        followBtn.addEventListener('mouseleave', () => { followBtn.textContent = '팔로우 중'; followBtn.classList.remove('unfollow-hover'); });
+        followBtn.textContent = '팔로우 중';
+      }
+
+      followBtn.addEventListener('click', async () => {
+        followBtn.disabled = true;
+        try {
+          if (isFollowing) {
+            if (isMisskey) await client.unfollowUser(user.id);
+            else await client.unfollowUser(user.id);
+            isFollowing = false;
+          } else {
+            if (isMisskey) await client.followUser(user.id);
+            else await client.followUser(user.id);
+            isFollowing = true;
+          }
+          // Refresh the UI
+          this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl);
+        } catch (err) {
+          alert('팔로우 처리 실패: ' + err.message);
+        } finally {
+          followBtn.disabled = false;
+        }
+      });
+
+      actionsEl.appendChild(followBtn);
+    } catch (err) {
+      console.error('Failed to load follow relation:', err);
+    }
   }
 
   /** Fetch OG metadata for link cards that lack title/image and update DOM */

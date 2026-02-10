@@ -52,6 +52,19 @@ export class MastodonClient {
     return this.request('GET', path);
   }
 
+  async getRelationships(userIds) {
+    const params = userIds.map(id => `id[]=${encodeURIComponent(id)}`).join('&');
+    return this.request('GET', `/api/v1/accounts/relationships?${params}`);
+  }
+
+  async followUser(userId) {
+    return this.request('POST', `/api/v1/accounts/${encodeURIComponent(userId)}/follow`);
+  }
+
+  async unfollowUser(userId) {
+    return this.request('POST', `/api/v1/accounts/${encodeURIComponent(userId)}/unfollow`);
+  }
+
   async updateProfile({ displayName, note, avatar, header }) {
     if (avatar || header) {
       const formData = new FormData();
