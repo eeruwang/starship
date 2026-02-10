@@ -460,10 +460,12 @@ async function handleOgFetch(url) {
   try {
     const hostname = parsed.hostname.replace(/^(?:www\.|m\.|mobile\.)/, '');
 
-    // YouTube: use oEmbed API (bypasses consent page reliably)
+    // YouTube: direct thumbnail + oEmbed title (never fall through to generic fetch)
     if (hostname === 'youtube.com' || hostname === 'youtu.be') {
       const og = await fetchYoutubeOg(targetUrl);
-      if (og && og.title) return ogResponse(og);
+      if (og) return ogResponse(og);
+      // Even if extraction failed, don't fall through (YouTube consent page blocks generic fetch)
+      return ogResponse({ title: null, description: null, image: null, siteName: 'YouTube' });
     }
 
     // X/Twitter: use oEmbed + crawl-friendly fetch
@@ -479,30 +481,33 @@ async function handleOgFetch(url) {
   }
 }
 
-// YouTube: oEmbed returns title + thumbnail reliably
+// YouTube: extract video ID for thumbnail, oEmbed for title (optional)
 async function fetchYoutubeOg(url) {
+  // Always extract video ID for a reliable thumbnail (no API needed)
+  const vidMatch = url.match(/(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w\-]+)/);
+  const videoId = vidMatch ? vidMatch[1] : null;
+  const image = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
+
+  // Try oEmbed for title/description (may fail from Workers)
+  let title = null;
+  let description = null;
   try {
     const res = await fetch(
       `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
       { headers: { 'User-Agent': 'Mozilla/5.0' } }
     );
-    if (!res.ok) return null;
-    const data = await res.json();
-
-    // Extract video ID for high-quality thumbnail
-    let image = data.thumbnail_url || null;
-    const vidMatch = url.match(/(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w\-]+)/);
-    if (vidMatch) {
-      image = `https://i.ytimg.com/vi/${vidMatch[1]}/hqdefault.jpg`;
+    if (res.ok) {
+      const data = await res.json();
+      title = data.title || null;
+      description = data.author_name || null;
     }
+  } catch { /* oEmbed unavailable, continue with thumbnail only */ }
 
-    return {
-      title: data.title || null,
-      description: data.author_name || null,
-      image,
-      siteName: 'YouTube',
-    };
-  } catch { return null; }
+  // Return if we have at least an image or title
+  if (title || image) {
+    return { title, description, image, siteName: 'YouTube' };
+  }
+  return null;
 }
 
 // X/Twitter: oEmbed for text + attempt HTML fetch for image
