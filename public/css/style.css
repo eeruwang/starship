@@ -849,6 +849,7 @@ h4.mfm-heading { font-size: 1em; }
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background: var(--bg-input);
+  cursor: pointer;
   text-decoration: none;
   color: inherit;
   overflow: hidden;
@@ -1801,6 +1802,9 @@ textarea.input {
 .profile-avatar-wrap {
   position: relative;
   width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  overflow: hidden;
   z-index: 2;
 }
 .profile-avatar {
@@ -1830,7 +1834,7 @@ textarea.input {
 }
 .profile-img-overlay-avatar {
   border-radius: 50%;
-  inset: 4px;
+  inset: 0;
 }
 .profile-info {
   margin-top: 0.6rem;

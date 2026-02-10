@@ -454,10 +454,20 @@ class StarShipApp {
       if (!card) return;
       // Don't open thread from inside the thread modal itself
       if (card.closest('.thread-content')) return;
-      const postId = card.dataset.postId;
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
-      if (postId && platform && accountId) {
+      if (!platform || !accountId) return;
+
+      // If clicking inside a quote-post, open thread for the quoted post
+      const quotePart = e.target.closest('.quote-post');
+      if (quotePart && quotePart.dataset.quoteId) {
+        this.openThreadView(quotePart.dataset.quoteId, platform, accountId);
+        return;
+      }
+
+      // Otherwise open thread for the parent post
+      const postId = card.dataset.postId;
+      if (postId) {
         this.openThreadView(postId, platform, accountId);
       }
     });
@@ -1457,7 +1467,11 @@ class StarShipApp {
             actionsEl.innerHTML = html;
             document.getElementById('btn-profile-edit').addEventListener('click', enterEditMode);
           } catch (err) {
-            alert('프로필 수정 실패: ' + err.message);
+            if (err.message.includes('PERMISSION_DENIED')) {
+              alert('프로필 수정 권한이 없습니다.\n\nMisskey 설정 → API → 액세스 토큰에서 다음 권한을 포함한 토큰을 새로 발급하세요:\n• 계정 정보 수정 (write:account)\n• 드라이브 조작 (write:drive)');
+            } else {
+              alert('프로필 수정 실패: ' + err.message);
+            }
           } finally {
             const btn = document.getElementById('btn-profile-edit-save');
             if (btn) { btn.disabled = false; btn.textContent = '저장'; }

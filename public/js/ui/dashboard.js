@@ -112,7 +112,7 @@ export function renderPost(post) {
     const hasQpMedia = !qp.contentWarning && qp.media && qp.media.length > 0;
     const qpImages = hasQpMedia ? qp.media.filter(m => m.type !== 'video').slice(0, 3) : [];
     html += `
-      <a class="quote-post" href="${escapeHtml(qp.url || '#')}" target="_blank" rel="noopener">
+      <div class="quote-post" data-quote-id="${escapeHtml(qp.id)}">
         <div class="quote-post-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.6"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg> 인용</div>
         <div class="quote-post-body">
           <div class="quote-post-text-area">
@@ -126,7 +126,7 @@ export function renderPost(post) {
           ${qpImages.length === 1 ? `<div class="quote-post-thumb"><img src="${qpImages[0].previewUrl || qpImages[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></div>` : ''}
         </div>
         ${qpImages.length > 1 ? `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>` : ''}
-      </a>
+      </div>
     `;
   }
 
