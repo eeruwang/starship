@@ -56,6 +56,9 @@ export const ComposeMixin = {
     delete this.composeText.dataset.editPostId;
     delete this.composeText.dataset.editPlatform;
     delete this.composeText.dataset.editAccountId;
+    delete this.composeText.dataset.quoteId;
+    delete this.composeText.dataset.quotePlatform;
+    delete this.composeText.dataset.quoteUrl;
 
     const replyCtx = document.getElementById('compose-reply-context');
     if (replyToId) {
@@ -91,9 +94,6 @@ export const ComposeMixin = {
       }
     } else {
       delete this.composeText.dataset.replyTo;
-      delete this.composeText.dataset.quoteId;
-      delete this.composeText.dataset.quotePlatform;
-      delete this.composeText.dataset.quoteUrl;
       this.composeText.placeholder = '무슨 일이 일어나고 있나요?';
       this.composeTitle.textContent = '새 글 작성';
       replyCtx.style.display = 'none';
