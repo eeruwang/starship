@@ -492,23 +492,28 @@ export const AuthUIMixin = {
     picker.innerHTML = `
       <div class="reauth-picker-modal">
         <div class="reauth-picker-header">
-          <h3>재인증할 계정 선택</h3>
-          <p class="reauth-picker-desc">권한이 부족한 계정을 선택하면 다시 인증하여 권한을 갱신합니다.</p>
+          <h3>계정 관리</h3>
+          <p class="reauth-picker-desc">재인증하려면 계정을 선택하세요. 삭제하려면 X 버튼을 누르세요.</p>
         </div>
         <div class="reauth-picker-list">
           ${accounts.map(a => `
-            <button class="reauth-picker-item" data-account-id="${a.id}">
-              <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-              <div class="reauth-picker-info">
-                <span class="reauth-picker-name">${this.escapeHtml(a.profile?.displayName || a.label || '')}</span>
-                <span class="reauth-picker-instance">${this.escapeHtml(a.instanceUrl.replace('https://', ''))}</span>
-              </div>
-              <span class="platform-dot ${a.platform}"></span>
-            </button>
+            <div class="reauth-picker-row" data-account-id="${a.id}">
+              <button class="reauth-picker-item" data-account-id="${a.id}">
+                <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+                <div class="reauth-picker-info">
+                  <span class="reauth-picker-name">${this.escapeHtml(a.profile?.displayName || a.label || '')}</span>
+                  <span class="reauth-picker-instance">${this.escapeHtml(a.instanceUrl.replace('https://', ''))}</span>
+                </div>
+                <span class="platform-dot ${a.platform}"></span>
+              </button>
+              <button class="reauth-picker-delete" data-account-id="${a.id}" title="계정 삭제">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
           `).join('')}
         </div>
         <div class="reauth-picker-footer">
-          <button class="btn btn-secondary btn-small reauth-picker-cancel">취소</button>
+          <button class="btn btn-secondary btn-small reauth-picker-cancel">닫기</button>
         </div>
       </div>
     `;
@@ -527,7 +532,7 @@ export const AuthUIMixin = {
       if (e.target === picker) close();
     });
 
-    // Account click
+    // Account click → re-auth
     picker.querySelectorAll('.reauth-picker-item').forEach(item => {
       item.addEventListener('click', async () => {
         const accountId = item.dataset.accountId;
@@ -535,6 +540,28 @@ export const AuthUIMixin = {
         if (!account) return;
         close();
         await this.reauthAccount(account);
+      });
+    });
+
+    // Delete click → remove account
+    picker.querySelectorAll('.reauth-picker-delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const accountId = btn.dataset.accountId;
+        const account = this.store.getById(accountId);
+        if (!account) return;
+        const name = account.profile?.displayName || account.label || accountId;
+        if (!confirm(`"${name}" 계정을 삭제하시겠습니까?\n이 계정의 연결이 해제됩니다.`)) return;
+        this.store.removeAccount(accountId);
+        this.debouncedSaveToCloud();
+        // Remove the row from the picker
+        const row = btn.closest('.reauth-picker-row');
+        if (row) row.remove();
+        // If no accounts left, close picker and re-render
+        if (this.store.isEmpty()) {
+          close();
+        }
+        this.render();
       });
     });
   },

@@ -31,20 +31,11 @@ export const PostActionsMixin = {
       return;
     }
 
-    // For the All column, only show accounts that actually loaded this post
-    const cachedPost = this.postCache.get(`${platform}:${postId}`);
-    let relevantAccounts;
-    if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 0) {
-      const mergedIds = new Set(cachedPost.mergedAccounts.map(a => a.id));
-      relevantAccounts = allAccounts.filter(a => mergedIds.has(a.id));
-    } else if (accountId) {
-      relevantAccounts = allAccounts.filter(a => a.id === accountId);
-    } else {
-      relevantAccounts = allAccounts;
-    }
-    if (relevantAccounts.length === 0) relevantAccounts = allAccounts;
+    // For multi-account columns (all/notifications): always show all accounts
+    // so the user can pick which account to perform the action with
+    const relevantAccounts = allAccounts;
 
-    // Single relevant account: use it directly
+    // Single account total: use it directly
     if (relevantAccounts.length === 1) {
       await this.executePostAction(action, postId, platform, relevantAccounts[0].id, btnElement);
       return;

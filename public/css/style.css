@@ -2274,6 +2274,32 @@ textarea.input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.reauth-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.reauth-picker-row .reauth-picker-item {
+  flex: 1;
+  min-width: 0;
+}
+.reauth-picker-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.4rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.reauth-picker-delete:hover {
+  color: var(--accent-danger);
+  background: rgba(255,85,85,0.1);
+}
 .reauth-picker-footer {
   padding: 0.5rem 1rem 0.75rem;
   display: flex;
@@ -3488,7 +3514,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  z-index: 150;
+  z-index: 695;
   min-width: 200px;
   max-width: 280px;
   overflow: hidden;

@@ -627,7 +627,7 @@ class StarShipApp {
 
       const startDrag = (e, isTouch) => {
         const header = e.target.closest('.column-header');
-        if (!header || e.target.closest('button')) return;
+        if (!header || e.target.closest('button') || e.target.closest('.column-header-avatar')) return;
         if (momentumId) { cancelAnimationFrame(momentumId); momentumId = null; }
         isDragging = true;
         directionLocked = false;
@@ -1171,6 +1171,15 @@ class StarShipApp {
   // ===== Helpers =====
 
   openModal(overlay) {
+    // Dynamically set z-index above all currently visible modals
+    const visibleModals = [...document.querySelectorAll('.modal-overlay')]
+      .filter(m => m.style.display !== 'none' && m.classList.contains('visible'));
+    if (visibleModals.length > 0) {
+      const maxZ = Math.max(...visibleModals.map(m => parseInt(getComputedStyle(m).zIndex) || 600));
+      overlay.style.zIndex = String(maxZ + 1);
+    } else {
+      overlay.style.zIndex = '';
+    }
     overlay.style.display = 'flex';
     requestAnimationFrame(() => overlay.classList.add('visible'));
   }
@@ -1179,7 +1188,10 @@ class StarShipApp {
     if (!overlay || overlay.style.display === 'none') return;
     overlay.classList.remove('visible');
     overlay.addEventListener('transitionend', () => {
-      if (!overlay.classList.contains('visible')) overlay.style.display = 'none';
+      if (!overlay.classList.contains('visible')) {
+        overlay.style.display = 'none';
+        overlay.style.zIndex = '';
+      }
     }, { once: true });
   }
 
@@ -1531,7 +1543,7 @@ class StarShipApp {
             document.getElementById('btn-profile-edit').addEventListener('click', enterEditMode);
           } catch (err) {
             if (err.message.includes('PERMISSION_DENIED')) {
-              alert('프로필 수정 권한이 없습니다.\n\nMisskey 설정 → API → 액세스 토큰에서 다음 권한을 포함한 토큰을 새로 발급하세요:\n• 계정 정보 수정 (write:account)\n• 드라이브 조작 (write:drive)');
+              alert('프로필 수정 권한이 없습니다.\n\n사용자 메뉴 → 계정 재인증으로 권한을 갱신하세요.');
             } else {
               alert('프로필 수정 실패: ' + err.message);
             }
