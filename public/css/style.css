@@ -1056,11 +1056,23 @@ h4.mfm-heading { font-size: 1em; }
 /* Sensitive media blur */
 .post-media.media-sensitive {
   position: relative;
+  overflow: hidden;
 }
 .post-media.media-sensitive img,
 .post-media.media-sensitive video {
-  filter: blur(20px);
+  filter: blur(30px) saturate(0.8);
+  transform: scale(1.15);
   pointer-events: none;
+  transition: filter 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.post-media.media-sensitive::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.45) 100%);
+  z-index: 2;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
 }
 .sensitive-reveal {
   position: absolute;
@@ -1071,28 +1083,78 @@ h4.mfm-heading { font-size: 1em; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  background: rgba(0, 0, 0, 0.6);
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: var(--radius-lg);
-  padding: 0.8rem 1.2rem;
+  padding: 0.9rem 1.4rem;
   cursor: pointer;
   font-family: inherit;
   font-size: 0.75rem;
-  backdrop-filter: blur(4px);
-  transition: background 0.2s;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.25s, transform 0.25s, opacity 0.35s;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 .sensitive-reveal:hover {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.75);
+  transform: translate(-50%, -50%) scale(1.05);
+}
+.sensitive-reveal svg {
+  opacity: 0.9;
 }
 .post-media.media-revealed img,
 .post-media.media-revealed video {
   filter: none;
+  transform: scale(1);
   pointer-events: auto;
 }
+.post-media.media-revealed::after {
+  opacity: 0;
+  pointer-events: none;
+}
 .post-media.media-revealed .sensitive-reveal {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.9);
+}
+/* Re-hide button for revealed sensitive media */
+.sensitive-hide {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 5;
   display: none;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.65rem;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.2s, opacity 0.2s;
+  opacity: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.sensitive-hide svg {
+  opacity: 0.85;
+}
+.sensitive-hide:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+.post-media.media-revealed .sensitive-hide {
+  display: flex;
+  opacity: 1;
+}
+.post-media.media-sensitive:not(.media-revealed) .sensitive-hide {
+  display: none;
+  opacity: 0;
 }
 
 .post-actions {
