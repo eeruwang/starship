@@ -270,6 +270,23 @@ export class MastodonClient {
     if (quoteSource && quoteSource.account) {
       const qContent = quoteSource.content || '';
       const qAuthor = this.normalizeUser(quoteSource.account);
+      // Nested quote
+      let nestedQuote = null;
+      const nqs = quoteSource.quote || quoteSource.reblog_quote;
+      if (nqs && nqs.account) {
+        nestedQuote = {
+          id: nqs.id,
+          platform: 'mastodon',
+          content: nqs.content || '',
+          contentWarning: nqs.spoiler_text || null,
+          author: this.normalizeUser(nqs.account),
+          media: (nqs.media_attachments || []).map(m => ({
+            type: m.type, url: m.url, previewUrl: m.preview_url, description: m.description,
+          })),
+          url: nqs.url,
+          quotePost: null,
+        };
+      }
       quotePost = {
         id: quoteSource.id,
         platform: 'mastodon',
@@ -283,6 +300,7 @@ export class MastodonClient {
           description: m.description,
         })),
         url: quoteSource.url,
+        quotePost: nestedQuote,
       };
       // Suppress link card if it points to the quoted post
       if (linkCard && quotePost.url && linkCard.url.includes(quotePost.url)) {

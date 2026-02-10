@@ -307,6 +307,28 @@ export class MisskeyClient {
       const qn = note.renote;
       const qAuthor = this.normalizeUser(qn.user);
       const qEmojiMap = this.buildEmojiMap(qn);
+      // Nested quote: if the quoted note itself is a quote
+      let nestedQuote = null;
+      if (qn.renote && qn.text) {
+        const nqn = qn.renote;
+        const nqAuthor = this.normalizeUser(nqn.user);
+        const nqEmojiMap = this.buildEmojiMap(nqn);
+        nestedQuote = {
+          id: nqn.id,
+          platform: this.platformType,
+          content: this.mfmToHtml(nqn.text || '', nqEmojiMap),
+          contentWarning: nqn.cw || null,
+          author: nqAuthor,
+          media: (nqn.files || []).map(f => ({
+            type: f.type?.startsWith('video') ? 'video' : 'image',
+            url: f.url,
+            previewUrl: f.thumbnailUrl || f.url,
+            description: f.comment || f.name,
+          })),
+          url: nqn.uri || `${this.instanceUrl}/notes/${nqn.id}`,
+          quotePost: null, // cap at 2 levels
+        };
+      }
       quotePost = {
         id: qn.id,
         platform: this.platformType,
@@ -320,6 +342,7 @@ export class MisskeyClient {
           description: f.comment || f.name,
         })),
         url: qn.uri || `${this.instanceUrl}/notes/${qn.id}`,
+        quotePost: nestedQuote,
       };
     }
 

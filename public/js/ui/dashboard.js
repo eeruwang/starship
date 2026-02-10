@@ -27,6 +27,42 @@ function isFediPostUrl(url) {
   } catch { return false; }
 }
 
+function renderQuotePost(qp, depth = 0) {
+  const maxDepth = 2;
+  const depthClass = depth > 0 ? ` quote-depth-${Math.min(depth, maxDepth)}` : '';
+  const hasQpMedia = !qp.contentWarning && qp.media && qp.media.length > 0;
+  const qpImages = hasQpMedia ? qp.media.filter(m => m.type !== 'video').slice(0, depth > 0 ? 2 : 3) : [];
+
+  let html = `<div class="quote-post${depthClass}" data-quote-id="${escapeHtml(qp.id)}">`;
+  html += `<div class="quote-post-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.6"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg> 인용</div>`;
+  html += `<div class="quote-post-body">`;
+  html += `<div class="quote-post-text-area">`;
+  html += `<div class="quote-post-header">`;
+  html += `<img class="quote-post-avatar" src="${qp.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
+  html += `<span class="quote-post-author">${qp.author.displayNameHtml || escapeHtml(qp.author.displayName)}</span>`;
+  html += `<span class="quote-post-handle">@${escapeHtml(qp.author.acct)}</span>`;
+  html += `</div>`;
+  if (qp.contentWarning) {
+    html += `<div class="quote-post-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(qp.contentWarning)}</div>`;
+  } else {
+    html += `<div class="quote-post-content">${qp.content}</div>`;
+  }
+  // Nested quote (recursive)
+  if (qp.quotePost && depth < maxDepth) {
+    html += renderQuotePost(qp.quotePost, depth + 1);
+  }
+  html += `</div>`; // quote-post-text-area
+  if (qpImages.length === 1) {
+    html += `<div class="quote-post-thumb"><img src="${qpImages[0].previewUrl || qpImages[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></div>`;
+  }
+  html += `</div>`; // quote-post-body
+  if (qpImages.length > 1) {
+    html += `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>`;
+  }
+  html += `</div>`; // quote-post
+  return html;
+}
+
 export function renderPost(post) {
   const card = document.createElement('div');
   card.className = `post-card platform-${post.platform}`;
@@ -116,28 +152,9 @@ export function renderPost(post) {
   // Content
   html += `<div class="post-content">${displayPost.content}</div>`;
 
-  // Quote post (embedded)
+  // Quote post (embedded) — supports nested quotes
   if (displayPost.quotePost) {
-    const qp = displayPost.quotePost;
-    const hasQpMedia = !qp.contentWarning && qp.media && qp.media.length > 0;
-    const qpImages = hasQpMedia ? qp.media.filter(m => m.type !== 'video').slice(0, 3) : [];
-    html += `
-      <div class="quote-post" data-quote-id="${escapeHtml(qp.id)}">
-        <div class="quote-post-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.6"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg> 인용</div>
-        <div class="quote-post-body">
-          <div class="quote-post-text-area">
-            <div class="quote-post-header">
-              <img class="quote-post-avatar" src="${qp.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-              <span class="quote-post-author">${qp.author.displayNameHtml || escapeHtml(qp.author.displayName)}</span>
-              <span class="quote-post-handle">@${escapeHtml(qp.author.acct)}</span>
-            </div>
-            ${qp.contentWarning ? `<div class="quote-post-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(qp.contentWarning)}</div>` : `<div class="quote-post-content">${qp.content}</div>`}
-          </div>
-          ${qpImages.length === 1 ? `<div class="quote-post-thumb"><img src="${qpImages[0].previewUrl || qpImages[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></div>` : ''}
-        </div>
-        ${qpImages.length > 1 ? `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>` : ''}
-      </div>
-    `;
+    html += renderQuotePost(displayPost.quotePost, 0);
   }
 
   // Media
