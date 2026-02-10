@@ -1167,9 +1167,13 @@ class StarShipApp {
     const statsEl = document.getElementById('profile-stats');
     const fieldsEl = document.getElementById('profile-fields');
     const actionsEl = document.getElementById('profile-actions');
-    const editSection = document.getElementById('profile-edit');
+    const editInline = document.getElementById('profile-edit-inline');
     const tabsEl = document.getElementById('profile-tabs');
     const postsEl = document.getElementById('profile-posts');
+    const editBannerBtn = document.getElementById('profile-edit-banner-btn');
+    const editBannerInput = document.getElementById('profile-edit-banner-input');
+    const editAvatarBtn = document.getElementById('profile-edit-avatar-btn');
+    const editAvatarInput = document.getElementById('profile-edit-avatar-input');
     const stickyHeader = document.getElementById('profile-sticky-header');
     const stickyAvatar = document.getElementById('profile-sticky-avatar');
     const stickyName = document.getElementById('profile-sticky-name');
@@ -1199,7 +1203,13 @@ class StarShipApp {
     statsEl.innerHTML = '';
     fieldsEl.innerHTML = '';
     actionsEl.innerHTML = '';
-    editSection.style.display = 'none';
+    editInline.style.display = 'none';
+    editBannerBtn.style.display = 'none';
+    editAvatarBtn.style.display = 'none';
+    editBannerInput.value = '';
+    editAvatarInput.value = '';
+    this._profileEditAvatarFile = null;
+    this._profileEditBannerFile = null;
     tabsEl.style.display = 'none';
     postsEl.style.display = 'none';
     postsEl.innerHTML = '';
@@ -1355,51 +1365,130 @@ class StarShipApp {
         const editBtn = document.getElementById('btn-profile-edit');
         const editName = document.getElementById('profile-edit-name');
         const editBio = document.getElementById('profile-edit-bio');
-        const cancelBtn = document.getElementById('btn-profile-edit-cancel');
-        const saveBtn = document.getElementById('btn-profile-edit-save');
 
-        editBtn.addEventListener('click', () => {
+        const enterEditMode = () => {
           editName.value = isMisskey ? (user.name || '') : (user.display_name || '');
           editBio.value = isMisskey ? (user.description || '') : (user.source?.note || user.note?.replace(/<[^>]*>/g, '') || '');
-          editSection.style.display = 'block';
-          editBtn.style.display = 'none';
-        });
+          this._profileEditAvatarFile = null;
+          this._profileEditBannerFile = null;
+          editAvatarInput.value = '';
+          editBannerInput.value = '';
+          // Show inline edit fields, hide display fields
+          editInline.style.display = 'block';
+          nameEl.style.display = 'none';
+          bioEl.style.display = 'none';
+          // Show image overlays
+          editBannerBtn.style.display = 'flex';
+          editAvatarBtn.style.display = 'flex';
+          // Swap action buttons
+          actionsEl.innerHTML = `
+            <button class="btn btn-secondary btn-small" id="btn-profile-edit-cancel">취소</button>
+            <button class="btn btn-primary btn-small" id="btn-profile-edit-save">저장</button>
+          `;
+          document.getElementById('btn-profile-edit-cancel').addEventListener('click', exitEditMode);
+          document.getElementById('btn-profile-edit-save').addEventListener('click', saveProfile);
+        };
 
-        const newCancel = cancelBtn.cloneNode(true);
-        cancelBtn.replaceWith(newCancel);
-        newCancel.addEventListener('click', () => {
-          editSection.style.display = 'none';
-          editBtn.style.display = '';
-        });
+        const exitEditMode = () => {
+          editInline.style.display = 'none';
+          nameEl.style.display = '';
+          bioEl.style.display = '';
+          editBannerBtn.style.display = 'none';
+          editAvatarBtn.style.display = 'none';
+          // Restore original avatar/banner if changed but not saved
+          if (this._profileEditAvatarFile) {
+            avatar.src = this._profileOriginalAvatar || '';
+          }
+          if (this._profileEditBannerFile) {
+            banner.style.cssText = this._profileOriginalBannerStyle || '';
+          }
+          // Restore action buttons
+          let html = `<a class="btn btn-secondary btn-small" href="${instanceUrl}/@${user.username}" target="_blank" rel="noopener">인스턴스에서 보기</a>`;
+          html += `<button class="btn btn-primary btn-small" id="btn-profile-edit">프로필 수정</button>`;
+          actionsEl.innerHTML = html;
+          document.getElementById('btn-profile-edit').addEventListener('click', enterEditMode);
+        };
 
-        const newSave = saveBtn.cloneNode(true);
-        saveBtn.replaceWith(newSave);
-        newSave.addEventListener('click', async () => {
-          newSave.disabled = true;
-          newSave.textContent = '저장 중...';
+        const saveProfile = async () => {
+          const saveBtn = document.getElementById('btn-profile-edit-save');
+          saveBtn.disabled = true;
+          saveBtn.textContent = '저장 중...';
           try {
             const myClient = this.store.getClient(myAccount.id);
             if (isMisskey) {
-              await myClient.updateProfile({ name: editName.value, description: editBio.value });
+              const params = { name: editName.value, description: editBio.value };
+              // Upload avatar/banner to drive first
+              if (this._profileEditAvatarFile) {
+                const file = await myClient.uploadFile(this._profileEditAvatarFile);
+                params.avatarId = file.id;
+              }
+              if (this._profileEditBannerFile) {
+                const file = await myClient.uploadFile(this._profileEditBannerFile);
+                params.bannerId = file.id;
+              }
+              await myClient.updateProfile(params);
             } else {
-              await myClient.updateProfile({ displayName: editName.value, note: editBio.value });
+              await myClient.updateProfile({
+                displayName: editName.value,
+                note: editBio.value,
+                avatar: this._profileEditAvatarFile || undefined,
+                header: this._profileEditBannerFile || undefined,
+              });
             }
             // Update local profile
             myAccount.profile.displayName = editName.value || myAccount.profile.username;
             this.store.save();
             this.debouncedSaveToCloud();
-            // Refresh modal
-            editSection.style.display = 'none';
+            // Update display
             nameEl.textContent = editName.value || myAccount.profile.username;
             bioEl.innerHTML = this.escapeHtml(editBio.value).replace(/\n/g, '<br>');
-            editBtn.style.display = '';
+            stickyName.textContent = editName.value || myAccount.profile.username;
+            // Save new originals for next edit
+            this._profileOriginalAvatar = avatar.src;
+            this._profileOriginalBannerStyle = banner.style.cssText;
+            // Exit edit mode
+            editInline.style.display = 'none';
+            nameEl.style.display = '';
+            bioEl.style.display = '';
+            editBannerBtn.style.display = 'none';
+            editAvatarBtn.style.display = 'none';
+            let html = `<a class="btn btn-secondary btn-small" href="${instanceUrl}/@${user.username}" target="_blank" rel="noopener">인스턴스에서 보기</a>`;
+            html += `<button class="btn btn-primary btn-small" id="btn-profile-edit">프로필 수정</button>`;
+            actionsEl.innerHTML = html;
+            document.getElementById('btn-profile-edit').addEventListener('click', enterEditMode);
           } catch (err) {
             alert('프로필 수정 실패: ' + err.message);
           } finally {
-            newSave.disabled = false;
-            newSave.textContent = '저장';
+            const btn = document.getElementById('btn-profile-edit-save');
+            if (btn) { btn.disabled = false; btn.textContent = '저장'; }
           }
-        });
+        };
+
+        // Image upload handlers
+        editBannerBtn.onclick = () => editBannerInput.click();
+        editBannerInput.onchange = () => {
+          const file = editBannerInput.files[0];
+          if (!file) return;
+          this._profileEditBannerFile = file;
+          const url = URL.createObjectURL(file);
+          banner.style.background = 'none';
+          banner.style.backgroundImage = `url(${url})`;
+          banner.style.backgroundSize = 'cover';
+          banner.style.backgroundPosition = 'center';
+        };
+        editAvatarBtn.onclick = () => editAvatarInput.click();
+        editAvatarInput.onchange = () => {
+          const file = editAvatarInput.files[0];
+          if (!file) return;
+          this._profileEditAvatarFile = file;
+          avatar.src = URL.createObjectURL(file);
+        };
+
+        // Store originals for cancel
+        this._profileOriginalAvatar = avatar.src;
+        this._profileOriginalBannerStyle = banner.style.cssText;
+
+        editBtn.addEventListener('click', enterEditMode);
       }
     } catch (err) {
       bioEl.innerHTML = `<span style="color:var(--text-muted)">프로필을 불러올 수 없습니다</span>`;

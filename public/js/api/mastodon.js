@@ -52,11 +52,38 @@ export class MastodonClient {
     return this.request('GET', path);
   }
 
-  async updateProfile({ displayName, note }) {
+  async updateProfile({ displayName, note, avatar, header }) {
+    if (avatar || header) {
+      const formData = new FormData();
+      if (displayName !== undefined) formData.append('display_name', displayName);
+      if (note !== undefined) formData.append('note', note);
+      if (avatar) formData.append('avatar', avatar);
+      if (header) formData.append('header', header);
+      return this.requestFormData('PATCH', '/api/v1/accounts/update_credentials', formData);
+    }
     const body = {};
     if (displayName !== undefined) body.display_name = displayName;
     if (note !== undefined) body.note = note;
     return this.request('PATCH', '/api/v1/accounts/update_credentials', body);
+  }
+
+  async requestFormData(method, path, formData) {
+    const targetUrl = `${this.instanceUrl}${path}`;
+    const fetchUrl = this.useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
+      method,
+      headers: { 'Authorization': `Bearer ${this.accessToken}` },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Mastodon API error ${res.status}: ${errText}`);
+    }
+    return res.json();
   }
 
   async getHomeTimeline(limit = 30, maxId = null) {

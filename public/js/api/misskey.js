@@ -57,10 +57,12 @@ export class MisskeyClient {
     return this.request('users/notes', body);
   }
 
-  async updateProfile({ name, description }) {
+  async updateProfile({ name, description, avatarId, bannerId }) {
     const body = {};
     if (name !== undefined) body.name = name;
     if (description !== undefined) body.description = description;
+    if (avatarId !== undefined) body.avatarId = avatarId;
+    if (bannerId !== undefined) body.bannerId = bannerId;
     return this.request('i/update', body);
   }
 

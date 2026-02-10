@@ -1777,13 +1777,16 @@ textarea.input {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.profile-banner-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
 .profile-banner {
   width: 100%;
   height: 160px;
   background: linear-gradient(135deg, var(--accent-primary), #a78bfa);
   background-size: cover;
   background-position: center;
-  flex-shrink: 0;
 }
 .profile-scroll {
   overflow-y: auto;
@@ -1795,6 +1798,11 @@ textarea.input {
   padding: 0 1.4rem 1.4rem;
   margin-top: -44px;
 }
+.profile-avatar-wrap {
+  position: relative;
+  width: 86px;
+  z-index: 2;
+}
 .profile-avatar {
   width: 86px;
   height: 86px;
@@ -1803,8 +1811,26 @@ textarea.input {
   object-fit: cover;
   background: var(--bg-primary);
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  position: relative;
-  z-index: 2;
+}
+/* Image edit overlays (banner & avatar) */
+.profile-img-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.profile-img-overlay:hover {
+  background: rgba(0,0,0,0.6);
+}
+.profile-img-overlay-avatar {
+  border-radius: 50%;
+  inset: 4px;
 }
 .profile-info {
   margin-top: 0.6rem;
@@ -1912,19 +1938,29 @@ textarea.input {
   gap: 0.5rem;
   margin-top: 0.9rem;
 }
-.profile-edit {
-  margin-top: 0.8rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid var(--border-color);
-}
-.profile-edit textarea {
-  resize: vertical;
-}
-.profile-edit-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
+/* Inline profile edit */
+.profile-edit-inline {
   margin-top: 0.5rem;
+}
+.profile-edit-inline .form-group {
+  margin-bottom: 0.5rem;
+}
+.profile-edit-inline label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.2rem;
+  display: block;
+}
+.profile-edit-inline .input {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+}
+.profile-edit-inline textarea.input {
+  resize: vertical;
+  min-height: 60px;
 }
 .profile-tabs {
   display: flex;
