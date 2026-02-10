@@ -125,8 +125,8 @@ export const DataLoadingMixin = {
         for (const post of allPosts) {
           const displayPost = post.reblog || post;
           const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
-          // Renotes/reblogs get a unique key so they don't merge with the original
-          const key = post.rebloggedBy ? `reblog:${post.id}:${baseKey}` : baseKey;
+          // Renotes/reblogs: use reblogger's acct so the same renote seen from different accounts deduplicates
+          const key = post.rebloggedBy ? `reblog:${post.rebloggedBy.acct}:${baseKey}` : baseKey;
           if (!seen.has(key)) {
             post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
             seen.set(key, deduped.length);
@@ -300,7 +300,7 @@ export const DataLoadingMixin = {
         for (const post of allPosts) {
           const displayPost = post.reblog || post;
           const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
-          const key = post.rebloggedBy ? `reblog:${post.id}:${baseKey}` : baseKey;
+          const key = post.rebloggedBy ? `reblog:${post.rebloggedBy.acct}:${baseKey}` : baseKey;
           if (!seen.has(key)) {
             post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
             seen.set(key, deduped.length);
