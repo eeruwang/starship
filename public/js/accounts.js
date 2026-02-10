@@ -55,6 +55,16 @@ export class AccountStore {
       client.fetchThemeColor().catch(() => null),
     ]);
 
+    // 중복 계정 확인: 같은 인스턴스 + 같은 유저 ID
+    const normalizedUrl = instanceUrl.replace(/\/+$/, '');
+    const existing = this.accounts.find(a =>
+      a.instanceUrl === normalizedUrl && a.profile?.id === profile.id
+    );
+    if (existing) {
+      const name = existing.profile?.displayName || existing.label || existing.profile?.username;
+      throw new Error(`이미 연결된 계정입니다: ${name}`);
+    }
+
     let account;
     if (platform === 'mastodon') {
       account = {
