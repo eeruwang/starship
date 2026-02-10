@@ -527,7 +527,8 @@ class StarShipApp {
       }
 
       if (e.key === 'Escape') {
-        document.querySelectorAll('.modal-overlay').forEach(m => this.closeModal(m));
+        // Close one layer at a time: topmost modal first
+        if (this.closeTopmostModal()) return;
         this.closeLightbox();
         this.closeAccountPicker();
         this.closeReactionPopup();
@@ -1135,6 +1136,25 @@ class StarShipApp {
     overlay.addEventListener('transitionend', () => {
       if (!overlay.classList.contains('visible')) overlay.style.display = 'none';
     }, { once: true });
+  }
+
+  /** Close only the topmost visible modal (highest z-index). Returns true if a modal was closed. */
+  closeTopmostModal() {
+    const visibleModals = [...document.querySelectorAll('.modal-overlay')]
+      .filter(m => m.style.display !== 'none' && m.classList.contains('visible'));
+    if (visibleModals.length === 0) return false;
+    // Sort by computed z-index descending → close the topmost
+    visibleModals.sort((a, b) => {
+      const zA = parseInt(getComputedStyle(a).zIndex) || 0;
+      const zB = parseInt(getComputedStyle(b).zIndex) || 0;
+      if (zB !== zA) return zB - zA;
+      // Same z-index: later in DOM = visually on top
+      return Array.from(a.parentNode.children).indexOf(b) - Array.from(a.parentNode.children).indexOf(a);
+    });
+    const top = visibleModals[0];
+    this.closeModal(top);
+    if (top.id === 'modal-compose') this.closeComposeEmojiPicker();
+    return true;
   }
 
   async openProfileModal(author, platform, accountId) {
