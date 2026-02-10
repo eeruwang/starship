@@ -405,9 +405,6 @@ class StarShipApp {
         if (!postId || !accountId || !action) return;
         if (action === 'reply') {
           this.openComposeModal(postId, accountId);
-        } else if (action === 'fav') {
-          // 좋아요는 알림의 계정으로 바로 실행 (계정 선택 불필요)
-          this.executePostAction(action, postId, platform, accountId, actionBtn);
         } else {
           this.handlePostAction(action, postId, platform, accountId, actionBtn);
         }
