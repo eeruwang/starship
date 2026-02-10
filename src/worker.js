@@ -458,94 +458,197 @@ async function handleOgFetch(url) {
   }
 
   try {
-    const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; StarShip/1.0; +https://github.com)',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-      redirect: 'follow',
-    });
+    const hostname = parsed.hostname.replace(/^(?:www\.|m\.|mobile\.)/, '');
 
-    if (!res.ok) {
-      return jsonResponse({ error: `Fetch failed: ${res.status}` }, 502);
+    // YouTube: use oEmbed API (bypasses consent page reliably)
+    if (hostname === 'youtube.com' || hostname === 'youtu.be') {
+      const og = await fetchYoutubeOg(targetUrl);
+      if (og && og.title) return ogResponse(og);
     }
 
-    // Only parse first 64KB to avoid large payloads
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let html = '';
-    while (html.length < 65536) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      html += decoder.decode(value, { stream: true });
-    }
-    reader.cancel();
-
-    const og = {};
-
-    // og:title
-    const titleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
-    og.title = titleMatch ? decodeHtmlEntities(titleMatch[1]) : null;
-
-    // og:description
-    const descMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
-    og.description = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
-
-    // og:image
-    const imgMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-    og.image = imgMatch ? imgMatch[1] : null;
-
-    // og:site_name
-    const siteMatch = html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:site_name["']/i);
-    og.siteName = siteMatch ? decodeHtmlEntities(siteMatch[1]) : null;
-
-    // twitter:title fallback
-    if (!og.title) {
-      const twTitle = html.match(/<meta[^>]*(?:name|property)=["']twitter:title["'][^>]*content=["']([^"']+)["']/i)
-        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*(?:name|property)=["']twitter:title["']/i);
-      og.title = twTitle ? decodeHtmlEntities(twTitle[1]) : null;
+    // X/Twitter: use oEmbed + crawl-friendly fetch
+    if (hostname === 'twitter.com' || hostname === 'x.com') {
+      const og = await fetchTwitterOg(targetUrl);
+      if (og && (og.title || og.description)) return ogResponse(og);
     }
 
-    // twitter:description fallback
-    if (!og.description) {
-      const twDesc = html.match(/<meta[^>]*(?:name|property)=["']twitter:description["'][^>]*content=["']([^"']+)["']/i)
-        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*(?:name|property)=["']twitter:description["']/i);
-      og.description = twDesc ? decodeHtmlEntities(twDesc[1]) : null;
-    }
-
-    // twitter:image fallback
-    if (!og.image) {
-      const twImg = html.match(/<meta[^>]*(?:name|property)=["']twitter:image(?::src)?["'][^>]*content=["']([^"']+)["']/i)
-        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*(?:name|property)=["']twitter:image(?::src)?["']/i);
-      og.image = twImg ? twImg[1] : null;
-    }
-
-    // <title> fallback
-    if (!og.title) {
-      const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      og.title = titleTag ? decodeHtmlEntities(titleTag[1].trim()) : null;
-    }
-
-    // meta description fallback
-    if (!og.description) {
-      const metaDesc = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)
-        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
-      og.description = metaDesc ? decodeHtmlEntities(metaDesc[1]) : null;
-    }
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=86400',
-      ...corsHeaders(),
-    };
-    return new Response(JSON.stringify(og), { status: 200, headers });
+    // Generic: fetch HTML with bot UA (sites serve proper OG to crawlers)
+    return await fetchAndParseOg(targetUrl);
   } catch (err) {
     return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
   }
+}
+
+// YouTube: oEmbed returns title + thumbnail reliably
+async function fetchYoutubeOg(url) {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    // Extract video ID for high-quality thumbnail
+    let image = data.thumbnail_url || null;
+    const vidMatch = url.match(/(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w\-]+)/);
+    if (vidMatch) {
+      image = `https://i.ytimg.com/vi/${vidMatch[1]}/hqdefault.jpg`;
+    }
+
+    return {
+      title: data.title || null,
+      description: data.author_name || null,
+      image,
+      siteName: 'YouTube',
+    };
+  } catch { return null; }
+}
+
+// X/Twitter: oEmbed for text + attempt HTML fetch for image
+async function fetchTwitterOg(url) {
+  try {
+    // Step 1: oEmbed for title/description
+    let title = null, description = null, image = null;
+    try {
+      const oRes = await fetch(
+        `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      );
+      if (oRes.ok) {
+        const data = await oRes.json();
+        const handle = data.author_url ? data.author_url.split('/').pop() : '';
+        title = data.author_name ? `${data.author_name}${handle ? ' (@' + handle + ')' : ''}` : null;
+        if (data.html) {
+          const textMatch = data.html.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+          if (textMatch) {
+            description = textMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+          }
+        }
+      }
+    } catch { /* continue without oembed */ }
+
+    // Step 2: try HTML fetch for og:image (X serves OG to known crawlers)
+    try {
+      const htmlRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+          'Accept': 'text/html',
+        },
+        redirect: 'follow',
+      });
+      if (htmlRes.ok) {
+        const html = await readPartial(htmlRes, 65536);
+        image = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image', true) || null;
+        if (!title) title = extractMeta(html, 'og:title');
+        if (!description) description = extractMeta(html, 'og:description');
+      }
+    } catch { /* use oembed data only */ }
+
+    if (!title && !description) return null;
+    return { title, description, image, siteName: 'X' };
+  } catch { return null; }
+}
+
+// Generic HTML fetch + OG parse
+async function fetchAndParseOg(targetUrl) {
+  const res = await fetch(targetUrl, {
+    headers: {
+      'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+      'Accept': 'text/html,application/xhtml+xml',
+    },
+    redirect: 'follow',
+  });
+
+  if (!res.ok) {
+    return jsonResponse({ error: `Fetch failed: ${res.status}` }, 502);
+  }
+
+  const html = await readPartial(res, 65536);
+  const og = {};
+
+  og.title = extractMeta(html, 'og:title')
+    || extractMeta(html, 'twitter:title', true)
+    || null;
+  og.description = extractMeta(html, 'og:description')
+    || extractMeta(html, 'twitter:description', true)
+    || null;
+  og.image = extractMeta(html, 'og:image')
+    || extractMeta(html, 'twitter:image', true)
+    || extractMeta(html, 'twitter:image:src', true)
+    || null;
+  og.siteName = extractMeta(html, 'og:site_name')
+    || null;
+
+  // <title> fallback
+  if (!og.title) {
+    const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    og.title = titleTag ? decodeHtmlEntities(titleTag[1].trim()) : null;
+  }
+  // meta description fallback
+  if (!og.description) {
+    og.description = extractMeta(html, 'description', true, true);
+  }
+
+  return ogResponse(og);
+}
+
+// Read first N bytes from response
+async function readPartial(res, maxBytes) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  try {
+    while (text.length < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  return text;
+}
+
+// Extract meta tag content by property or name
+function extractMeta(html, property, tryName = false, nameOnly = false) {
+  const attrs = [];
+  if (!nameOnly) attrs.push('property');
+  if (tryName || nameOnly) attrs.push('name');
+
+  for (const attr of attrs) {
+    // pattern: attr="property" ... content="value"
+    const p1 = new RegExp(`<meta[^>]*${attr}=["']${escapeRegex(property)}["'][^>]*content="([^"]*?)"`, 'i');
+    const m1 = html.match(p1);
+    if (m1) return decodeHtmlEntities(m1[1]);
+
+    const p1s = new RegExp(`<meta[^>]*${attr}=["']${escapeRegex(property)}["'][^>]*content='([^']*?)'`, 'i');
+    const m1s = html.match(p1s);
+    if (m1s) return decodeHtmlEntities(m1s[1]);
+
+    // pattern: content="value" ... attr="property"
+    const p2 = new RegExp(`<meta[^>]*content="([^"]*?)"[^>]*${attr}=["']${escapeRegex(property)}["']`, 'i');
+    const m2 = html.match(p2);
+    if (m2) return decodeHtmlEntities(m2[1]);
+
+    const p2s = new RegExp(`<meta[^>]*content='([^']*?)'[^>]*${attr}=["']${escapeRegex(property)}["']`, 'i');
+    const m2s = html.match(p2s);
+    if (m2s) return decodeHtmlEntities(m2s[1]);
+  }
+  return null;
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function ogResponse(og) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, max-age=86400',
+    ...corsHeaders(),
+  };
+  return new Response(JSON.stringify(og), { status: 200, headers });
 }
 
 function decodeHtmlEntities(text) {
