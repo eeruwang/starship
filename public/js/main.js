@@ -1116,6 +1116,43 @@ class StarShipApp {
     return col;
   }
 
+  _refreshColumnHeaders() {
+    // Update toggle bar (account names)
+    this.renderToggleBar();
+    // Update column header titles and avatars in-place (no timeline reload)
+    const columns = this.columnsContainer.querySelectorAll('.column');
+    for (const col of columns) {
+      const type = col.dataset.columnType;
+      const h2 = col.querySelector('.column-header h2');
+      if (!h2) continue;
+
+      if (type === 'account') {
+        const accountId = col.dataset.accountId;
+        const account = this.store.getById(accountId);
+        if (account) {
+          const name = this.escapeHtml(account.label || account.profile.displayName);
+          let avatarHtml = '';
+          if (account.profile?.avatarUrl) {
+            avatarHtml = `<img class="column-header-avatar" src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
+          }
+          h2.innerHTML = `${avatarHtml}${name}`;
+        }
+      } else if (type === 'all' || type === 'notifications') {
+        const title = type === 'all' ? '전체' : '알림';
+        const accounts = this.store.getAll();
+        let avatarHtml = '';
+        if (accounts.length > 0) {
+          const avatars = accounts.map(a => {
+            if (!a.profile?.avatarUrl) return '';
+            return `<img class="column-header-avatar stacked" src="${this.escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
+          }).filter(Boolean).join('');
+          avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
+        }
+        h2.innerHTML = `${avatarHtml}${title}`;
+      }
+    }
+  }
+
   async refreshColumn(colType, accountId) {
     const columns = this.columnsContainer.querySelectorAll('.column');
     for (const col of columns) {
@@ -1520,14 +1557,34 @@ class StarShipApp {
                 header: this._profileEditBannerFile || undefined,
               });
             }
-            // Update local profile
-            myAccount.profile.displayName = editName.value || myAccount.profile.username;
+            // Re-fetch profile from server to get updated avatar/banner URLs
+            const oldDisplayName = myAccount.profile.displayName;
+            try {
+              const freshProfile = await myClient.verifyCredentials();
+              if (isMisskey) {
+                myAccount.profile.displayName = freshProfile.name || freshProfile.username;
+                myAccount.profile.avatarUrl = freshProfile.avatarUrl;
+              } else {
+                myAccount.profile.displayName = freshProfile.display_name || freshProfile.username;
+                myAccount.profile.avatarUrl = freshProfile.avatar;
+              }
+            } catch {
+              // Fallback: use input values
+              myAccount.profile.displayName = editName.value || myAccount.profile.username;
+            }
+            // Update label if it was auto-set from the old display name
+            if (!myAccount.label || myAccount.label === oldDisplayName) {
+              myAccount.label = myAccount.profile.displayName;
+            }
             this.store.save();
             this.debouncedSaveToCloud();
             // Update display
-            nameEl.textContent = editName.value || myAccount.profile.username;
+            nameEl.textContent = myAccount.profile.displayName;
             bioEl.innerHTML = this.escapeHtml(editBio.value).replace(/\n/g, '<br>');
-            stickyName.textContent = editName.value || myAccount.profile.username;
+            stickyName.textContent = myAccount.profile.displayName;
+            if (myAccount.profile.avatarUrl) avatar.src = myAccount.profile.avatarUrl;
+            // Refresh column headers and toggle bar to reflect name/avatar change
+            this._refreshColumnHeaders();
             // Save new originals for next edit
             this._profileOriginalAvatar = avatar.src;
             this._profileOriginalBannerStyle = banner.style.cssText;
