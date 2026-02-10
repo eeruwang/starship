@@ -509,6 +509,16 @@ class StarShipApp {
       }
     });
 
+    // Sensitive media reveal
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.sensitive-reveal');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const media = btn.closest('.post-media');
+      if (media) media.classList.add('media-revealed');
+    });
+
     // Image lightbox (delegated)
     document.addEventListener('click', (e) => {
       const img = e.target.closest('img[data-lightbox="true"]');

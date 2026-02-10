@@ -382,11 +382,13 @@ export class MisskeyClient {
       content: this.mfmToHtml(actualNote.text || '', emojiMap),
       contentWarning: actualNote.cw || null,
       author: actualAuthor,
+      sensitive: (actualNote.files || []).some(f => f.isSensitive),
       media: (actualNote.files || []).map(f => ({
         type: f.type?.startsWith('video') ? 'video' : 'image',
         url: f.url,
         previewUrl: f.thumbnailUrl || f.url,
         description: f.comment || f.name,
+        sensitive: !!f.isSensitive,
       })),
       stats: {
         replies: actualNote.repliesCount || 0,

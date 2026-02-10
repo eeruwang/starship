@@ -160,7 +160,13 @@ export function renderPost(post) {
   // Media
   if (displayPost.media && displayPost.media.length > 0) {
     const count = Math.min(displayPost.media.length, 4);
-    html += `<div class="post-media media-${count}">`;
+    // Sensitive: post-level (Mastodon) or any file-level (Misskey)
+    const hasSensitive = displayPost.sensitive || displayPost.media.some(m => m.sensitive);
+    const sensitiveClass = hasSensitive ? ' media-sensitive' : '';
+    html += `<div class="post-media media-${count}${sensitiveClass}">`;
+    if (hasSensitive) {
+      html += `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
+    }
     for (const m of displayPost.media) {
       if (m.type === 'video') {
         html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;

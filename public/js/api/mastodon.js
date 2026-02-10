@@ -316,6 +316,7 @@ export class MastodonClient {
       content: content,
       contentWarning: status.spoiler_text || null,
       author: this.normalizeUser(acct),
+      sensitive: !!status.sensitive,
       media: (status.media_attachments || []).map(m => ({
         type: m.type,
         url: m.url,
