@@ -15,6 +15,10 @@
 
 ---
 
+여러 Fediverse 계정(Misskey, Mastodon, Iceshrimp, CherryPick 등)을 하나의 대시보드에서 통합 관리하는 웹 클라이언트입니다. 계정별 타임라인을 컬럼 레이아웃으로 한눈에 볼 수 있고, 다중 계정 동시 게시·답글·인용, 대화 스레드 트리 시각화, MFM(Misskey Flavored Markdown) 렌더링, 커스텀 이모지 리액션 등 Fediverse 생태계의 다양한 기능을 프레임워크 없는 바닐라 JS SPA로 구현했으며, Cloudflare Workers + D1 기반으로 배포됩니다.
+
+---
+
 ## Features
 
 - **Multi-Account** - 여러 Fediverse 계정을 한 곳에서 관리
@@ -52,7 +56,7 @@ starship/
 │   ├── css/
 │   │   └── style.css       # All styles
 │   └── js/
-│       ├── main.js         # App core (init, events, rendering)
+│       ├── main.js         # App core (init, events, routing)
 │       ├── accounts.js     # Account store
 │       ├── auth.js         # Auth client
 │       ├── api/
@@ -64,9 +68,11 @@ starship/
 │       │   ├── data-loading.js   # Timeline & notification loading
 │       │   ├── auth-ui.js        # Auth UI (login, register, menu)
 │       │   ├── account-setup.js  # Account add/settings
-│       │   └── thread-view.js    # Conversation thread view
+│       │   ├── thread-view.js    # Conversation thread view
+│       │   └── profile-modal.js  # Profile modal & edit
 │       └── ui/
 │           ├── dashboard.js      # Post/notification/account card rendering
+│           ├── emoji-picker.js   # Emoji picker (common + instance custom)
 │           └── icons.js          # SVG icon exports
 ├── wrangler.toml           # Cloudflare Workers config
 └── package.json
