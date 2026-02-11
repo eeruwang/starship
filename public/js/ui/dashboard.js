@@ -257,7 +257,8 @@ export function renderPost(post) {
 
   const favIcon = iconHeart;
 
-  const isMisskey = post.platform !== 'mastodon';
+  const isMisskey = post.platform !== 'mastodon'
+    || (post.mergedAccounts && post.mergedAccounts.some(a => a.platform !== 'mastodon'));
 
   html += `
     <div class="post-actions">
