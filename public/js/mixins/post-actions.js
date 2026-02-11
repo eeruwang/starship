@@ -634,8 +634,17 @@ export const PostActionsMixin = {
   // ===== Reaction Users =====
 
   async showReactionUsers(badge, postId, platform, accountId, reaction) {
+    // Toggle: if same badge is already showing the popup, just close it
+    if (this._activeReactionBadge === badge && document.getElementById('reaction-users-popup')) {
+      this.closeReactionPopup();
+      return;
+    }
+
     // Close any existing popup
     this.closeReactionPopup();
+
+    // Track which badge is active
+    this._activeReactionBadge = badge;
 
     // Find a usable account for this platform
     const accounts = this.store.getAll();
@@ -676,7 +685,21 @@ export const PostActionsMixin = {
         popup.innerHTML = '<div class="reaction-users-loading">Mastodon은 리액션 사용자 조회를 지원하지 않습니다.</div>';
       } else {
         // Misskey: notes/reactions
-        const reactions = await client.getReactions(postId, reaction || undefined);
+        let reactions = await client.getReactions(postId, reaction || undefined);
+
+        // Fallback: if type-filtered query returned empty, retry without filter
+        // and match client-side (handles custom emoji format mismatches like :emoji@.: vs :emoji:)
+        if (reactions.length === 0 && reaction) {
+          const allReactions = await client.getReactions(postId);
+          // Normalize reaction string for comparison (strip @. suffix for local emoji)
+          const normalize = (r) => r ? r.replace(/@\.:$/, ':').replace(/@\.$/, '') : '';
+          const target = normalize(reaction);
+          reactions = allReactions.filter(r => {
+            const rType = normalize(r.type || '');
+            return rType === target || r.type === reaction;
+          });
+        }
+
         users = reactions.map(r => {
           const normalized = r.user ? client.normalizeUser(r.user) : null;
           return {
@@ -727,6 +750,7 @@ export const PostActionsMixin = {
       document.removeEventListener('click', this._reactionPopupClose);
       this._reactionPopupClose = null;
     }
+    this._activeReactionBadge = null;
     this._removeScrollTracker('reactionPopup');
   },
 
