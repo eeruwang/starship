@@ -163,18 +163,23 @@ export const DataLoadingMixin = {
         this.enrichLinkCards(container);
       } else {
         // Smooth incremental update: prepend new posts with animation
-        // Build a set of both platform:id keys AND canonical URIs for robust matching
+        // Build sets of platform:id keys, canonical URIs, and dedup keys for robust matching
         const existingKeys = new Set();
         for (const card of existingCards) {
           existingKeys.add(`${card.dataset.platform}:${card.dataset.postId}`);
           if (card.dataset.canonicalUri) {
             existingKeys.add(`uri:${card.dataset.canonicalUri}`);
           }
+          if (card.dataset.dedupKey) {
+            existingKeys.add(`dedup:${card.dataset.dedupKey}`);
+          }
         }
 
         const newPosts = allPosts.filter(p => {
           // Check platform:id
           if (existingKeys.has(`${p.platform}:${p.id}`)) return false;
+          // Check dedup key (handles cross-instance renotes/boosts)
+          if (p._dedupKey && existingKeys.has(`dedup:${p._dedupKey}`)) return false;
           // For non-renote posts, also check canonicalUri to avoid duplicates
           if (!p.rebloggedBy) {
             const displayPost = p.reblog || p;
@@ -284,8 +289,13 @@ export const DataLoadingMixin = {
       const existingKeys = new Set();
       for (const card of container.querySelectorAll('.post-card')) {
         existingKeys.add(`${card.dataset.platform}:${card.dataset.postId}`);
+        if (card.dataset.dedupKey) existingKeys.add(`dedup:${card.dataset.dedupKey}`);
       }
-      const newPosts = allPosts.filter(p => !existingKeys.has(`${p.platform}:${p.id}`));
+      const newPosts = allPosts.filter(p => {
+        if (existingKeys.has(`${p.platform}:${p.id}`)) return false;
+        if (p._dedupKey && existingKeys.has(`dedup:${p._dedupKey}`)) return false;
+        return true;
+      });
 
       // Update oldest IDs for next pagination
       for (const result of results) {
@@ -344,6 +354,7 @@ export const DataLoadingMixin = {
               const notif = client.normalizeNotification(n);
               notif.themeColor = account.themeColor || null;
               notif.accountId = account.id;
+              notif.instanceUrl = account.instanceUrl;
               return notif;
             });
           } catch (err) {
@@ -439,13 +450,25 @@ export const DataLoadingMixin = {
     }
   },
 
+  _normalizeAcct(acct, instanceUrl) {
+    if (!acct || acct.includes('@')) return acct || '';
+    try { return `${acct}@${new URL(instanceUrl).hostname}`; } catch { return acct; }
+  },
+
   _deduplicatePosts(posts) {
     const seen = new Map();
     const deduped = [];
     for (const post of posts) {
       const displayPost = post.reblog || post;
       const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
-      const key = post.rebloggedBy ? `reblog:${post.rebloggedBy.acct}:${baseKey}` : baseKey;
+      let key;
+      if (post.rebloggedBy) {
+        const acct = this._normalizeAcct(post.rebloggedBy.acct, post.instanceUrl);
+        key = `reblog:${acct}:${baseKey}`;
+      } else {
+        key = baseKey;
+      }
+      post._dedupKey = key;
       if (!seen.has(key)) {
         post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
         seen.set(key, deduped.length);
@@ -465,10 +488,11 @@ export const DataLoadingMixin = {
     const seen = new Map();
     const deduped = [];
     for (const notif of notifs) {
-      const actorKey = notif.actor?.acct || notif.actor?.id || '';
+      const actorAcct = notif.actor?.acct ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl) : (notif.actor?.id || '');
       const postKey = notif.post?.canonicalUri || notif.post?.id || '';
       const reactionKey = notif.reactionEmoji || '';
-      const key = `${notif.type}:${actorKey}:${postKey}:${reactionKey}`;
+      const key = `${notif.type}:${actorAcct}:${postKey}:${reactionKey}`;
+      notif._dedupKey = key;
       if (!seen.has(key)) {
         notif.mergedAccounts = [{ id: notif.accountId, platform: notif.platform, themeColor: notif.themeColor }];
         seen.set(key, deduped.length);

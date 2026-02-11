@@ -79,6 +79,7 @@ export function renderPost(post) {
   if (post.accountId) card.dataset.accountId = post.accountId;
   const displayPostForUri = post.reblog || post;
   if (displayPostForUri.canonicalUri) card.dataset.canonicalUri = displayPostForUri.canonicalUri;
+  if (post._dedupKey) card.dataset.dedupKey = post._dedupKey;
 
   // Per-account theme color for single-account posts
   if (post.themeColor && (!post.mergedAccounts || post.mergedAccounts.length <= 1)) {
@@ -279,11 +280,15 @@ export function renderNotification(notif) {
   card.className = `notif-card platform-${notif.platform}${hasPost ? ' notif-clickable' : ''}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
-  // Dedup key for incremental updates
-  const actorKey = notif.actor?.acct || notif.actor?.id || '';
-  const postKey = notif.post?.canonicalUri || notif.post?.id || '';
-  const reactionKey = notif.reactionEmoji || '';
-  card.dataset.dedupKey = `${notif.type}:${actorKey}:${postKey}:${reactionKey}`;
+  // Dedup key for incremental updates (prefer normalized key from dedup)
+  if (notif._dedupKey) {
+    card.dataset.dedupKey = notif._dedupKey;
+  } else {
+    const actorKey = notif.actor?.acct || notif.actor?.id || '';
+    const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+    const reactionKey = notif.reactionEmoji || '';
+    card.dataset.dedupKey = `${notif.type}:${actorKey}:${postKey}:${reactionKey}`;
+  }
   if (notif.accountId) card.dataset.accountId = notif.accountId;
   if (notif.post?.id) card.dataset.postId = notif.post.id;
   if (notif.actor?.id) card.dataset.actorId = notif.actor.id;
