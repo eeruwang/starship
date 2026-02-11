@@ -40,6 +40,7 @@ export const ComposeMixin = {
           this.composeSelectedAccounts.add(account.id);
           btn.classList.add('active');
         }
+        this._syncComposeVisibility();
       });
 
       this.composeAccountsContainer.appendChild(btn);
@@ -52,7 +53,7 @@ export const ComposeMixin = {
     this.composeImagePreview.innerHTML = '';
     this.composeSensitive = false;
     this.btnComposeSensitive.classList.remove('active');
-    this.composeVisibility.value = 'public';
+    this._syncComposeVisibility();
     this.composeCharHint.textContent = '';
     this.composeError.style.display = 'none';
     this.btnComposeSubmit.disabled = false;
@@ -124,6 +125,26 @@ export const ComposeMixin = {
 
     this.openModal(this.modalCompose);
     this.composeText.focus();
+  },
+
+  _getAccountVisibility(accountId) {
+    try {
+      const data = JSON.parse(localStorage.getItem('starship_visibility') || '{}');
+      return data[accountId] || 'public';
+    } catch { return 'public'; }
+  },
+
+  _saveAccountVisibility(accountId, visibility) {
+    try {
+      const data = JSON.parse(localStorage.getItem('starship_visibility') || '{}');
+      data[accountId] = visibility;
+      localStorage.setItem('starship_visibility', JSON.stringify(data));
+    } catch {}
+  },
+
+  _syncComposeVisibility() {
+    const firstId = [...this.composeSelectedAccounts][0];
+    this.composeVisibility.value = firstId ? this._getAccountVisibility(firstId) : 'public';
   },
 
   _updateComposeWordCount() {
@@ -484,7 +505,10 @@ export const ComposeMixin = {
     }
 
     if (errors.length < selectedIds.length) {
-      // At least one succeeded
+      // Save visibility per account
+      for (const accountId of selectedIds) {
+        this._saveAccountVisibility(accountId, visibility);
+      }
       this.closeModal(this.modalCompose);
       this.refreshAll();
     }
