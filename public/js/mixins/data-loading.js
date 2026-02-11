@@ -382,10 +382,34 @@ export const DataLoadingMixin = {
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
           const notifs = result.value;
-          newestIds.set(notifs[0].accountId, notifs[0].id);
+          const accountId = notifs[0].accountId;
+          // Find max ID from response (don't assume first element is newest)
+          let maxId = notifs[0].id;
+          for (let i = 1; i < notifs.length; i++) {
+            if (notifs[i].id > maxId) maxId = notifs[i].id;
+          }
+          // Only advance sinceId forward, never backward
+          const prev = newestIds.get(accountId);
+          if (!prev || maxId > prev) {
+            newestIds.set(accountId, maxId);
+          }
         }
       }
       this._notifNewestIds.set(container, newestIds);
+
+      // Deduplicate by platform:id first (catch API-level duplicates / re-fetched notifications)
+      {
+        const seenIds = new Set();
+        let write = 0;
+        for (let read = 0; read < allNotifs.length; read++) {
+          const key = `${allNotifs[read].platform}:${allNotifs[read].id}`;
+          if (!seenIds.has(key)) {
+            seenIds.add(key);
+            allNotifs[write++] = allNotifs[read];
+          }
+        }
+        allNotifs.length = write;
+      }
 
       // Compute normalized dedup keys for all notifications
       for (const notif of allNotifs) {
@@ -397,8 +421,8 @@ export const DataLoadingMixin = {
         notif._dedupKey = `${notif.type}:${actorAcct}:${postKey}:${reactionKey}`;
       }
 
-      // Deduplicate notifications across accounts (same actor + type + target post)
-      if (accounts.length > 1) {
+      // Deduplicate notifications by semantic key (same actor + type + target post)
+      {
         const deduped = this._deduplicateNotifications(allNotifs);
         allNotifs.length = 0;
         allNotifs.push(...deduped);
@@ -427,8 +451,10 @@ export const DataLoadingMixin = {
         }
       } else {
         // Smooth incremental update: prepend new notifications (use dedup key)
+        // Re-query DOM cards for freshness (existingCards was captured before async API calls)
+        const currentCards = container.querySelectorAll('.notif-card');
         const existingKeys = new Set();
-        for (const card of existingCards) {
+        for (const card of currentCards) {
           if (card.dataset.dedupKey) {
             existingKeys.add(card.dataset.dedupKey);
           }
