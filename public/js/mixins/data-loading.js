@@ -430,10 +430,14 @@ export const DataLoadingMixin = {
 
       allNotifs.sort((a, b) => b.createdAt - a.createdAt);
 
-      // Cache notification posts for reply functionality
+      // Cache notification posts for reply functionality (include mergedAccounts for account filtering)
       const notifPosts = allNotifs
         .filter(n => n.post?.id)
-        .map(n => ({ ...n.post, accountId: n.accountId, accountPlatform: n.platform }));
+        .map(n => {
+          const post = { ...n.post, accountId: n.accountId, accountPlatform: n.platform };
+          if (n.mergedAccounts) post.mergedAccounts = n.mergedAccounts;
+          return post;
+        });
       if (notifPosts.length > 0) this.cachePosts(notifPosts);
 
       if (allNotifs.length === 0) {

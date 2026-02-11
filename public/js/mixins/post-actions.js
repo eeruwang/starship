@@ -12,44 +12,60 @@ export const PostActionsMixin = {
 
     if (allAccounts.length === 0) return;
 
-    // Reply/Quote: skip account picker, go directly to compose modal
     // For renotes/reblogs, reply/quote targets the original post
     const originalPostId = this.getOriginalPostId(postId, platform);
+
+    // Determine if we're in a multi-account column (all/notifications)
+    const column = btnElement.closest('.column');
+    const isMultiAccountColumn = column && column.dataset.columnType !== 'account';
+
+    // Reply/Quote: open compose modal
     if (action === 'reply') {
-      this.openComposeModal(originalPostId, accountId);
+      if (isMultiAccountColumn) {
+        const cachedPost = this.postCache.get(`${platform}:${originalPostId}`) || this.postCache.get(`${platform}:${postId}`);
+        const relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
+        this.openComposeModal(originalPostId, null, relevantAccounts);
+      } else {
+        this.openComposeModal(originalPostId, accountId);
+      }
       return;
     }
     if (action === 'quote') {
-      this.openQuoteModal(originalPostId, platform, accountId);
+      if (isMultiAccountColumn) {
+        const cachedPost = this.postCache.get(`${platform}:${originalPostId}`) || this.postCache.get(`${platform}:${postId}`);
+        const relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
+        this.openQuoteModal(originalPostId, platform, null, relevantAccounts);
+      } else {
+        this.openQuoteModal(originalPostId, platform, accountId);
+      }
       return;
     }
 
     // If the card is inside an account-specific column, use that account directly
-    const column = btnElement.closest('.column');
     const columnAccountId = column?.dataset.columnType === 'account' ? column.dataset.accountId : null;
     if (columnAccountId) {
       await this.executePostAction(action, postId, platform, columnAccountId, btnElement);
       return;
     }
 
-    // For multi-account columns (all/notifications): always show all accounts
-    // so the user can pick which account to perform the action with
-    const relevantAccounts = allAccounts;
+    // For multi-account columns (all/notifications): show only accounts that received this post
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    const relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
 
-    // Single account total: use it directly
+    // Single relevant account: use it directly
     if (relevantAccounts.length === 1) {
       await this.executePostAction(action, postId, platform, relevantAccounts[0].id, btnElement);
       return;
     }
 
-    // Multi-account: show picker so user can choose
+    // Multi-account: show picker (no pre-selection)
     this.showAccountPicker(btnElement, relevantAccounts, async (selectedAccountId) => {
       try {
         await this.executePostAction(action, postId, platform, selectedAccountId, btnElement);
       } catch (err) {
         console.error('Post action failed:', err);
       }
-    }, accountId);
+    });
   },
 
   async executePostAction(action, postId, platform, accountId, btnElement) {
@@ -525,23 +541,41 @@ export const PostActionsMixin = {
     }
   },
 
-  openQuoteModal(postId, platform, accountId) {
+  openQuoteModal(postId, platform, accountId, restrictedAccounts = null) {
     // Find the original post URL for the quote
     let quoteUrl = '';
+    let quoteAccountId = accountId;
     for (const [key, post] of this.postCache) {
       const dp = post.reblog || post;
       if (post.id === postId || dp.id === postId) {
         quoteUrl = dp.url || dp.canonicalUri || '';
+        if (!quoteAccountId) quoteAccountId = post.accountId;
         break;
       }
     }
 
-    this.openComposeModal(null, accountId);
+    this.openComposeModal(null, accountId, restrictedAccounts);
     this.composeTitle.textContent = '인용';
     this.composeText.dataset.quoteId = postId;
     this.composeText.dataset.quotePlatform = platform;
     this.composeText.dataset.quoteUrl = quoteUrl;
+    if (quoteAccountId) this.composeText.dataset.quoteAccountId = quoteAccountId;
     this.composeText.placeholder = '인용 내용을 작성하세요...';
+  },
+
+  // Get accounts that received this post (from mergedAccounts or single accountId)
+  _getRelevantAccounts(cachedPost, allAccounts) {
+    if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 0) {
+      const accounts = cachedPost.mergedAccounts
+        .map(a => this.store.getById(a.id))
+        .filter(Boolean);
+      if (accounts.length > 0) return accounts;
+    }
+    if (cachedPost?.accountId) {
+      const account = this.store.getById(cachedPost.accountId);
+      if (account) return [account];
+    }
+    return allAccounts;
   },
 
   // ===== Account Picker =====

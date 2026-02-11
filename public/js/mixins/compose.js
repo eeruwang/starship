@@ -6,8 +6,8 @@ import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
 
 export const ComposeMixin = {
 
-  openComposeModal(replyToId = null, preferredAccountId = null) {
-    const accounts = this.store.getAll();
+  openComposeModal(replyToId = null, preferredAccountId = null, restrictedAccounts = null) {
+    const accounts = restrictedAccounts || this.store.getAll();
     if (accounts.length === 0) return;
 
     // Build account toggle buttons
@@ -26,9 +26,13 @@ export const ComposeMixin = {
         <span class="platform-dot ${account.platform}" ${dotStyle}></span>
       `;
 
-      // Pre-select preferred account, or first account by default
+      // In restricted mode (multi-account column), no pre-selection unless explicitly preferred
+      // In normal mode, pre-select preferred account or first by default
       const isFirst = accounts.indexOf(account) === 0;
-      if (preferredAccountId === account.id || (!preferredAccountId && isFirst)) {
+      const shouldPreSelect = restrictedAccounts
+        ? (preferredAccountId && preferredAccountId === account.id)
+        : (preferredAccountId === account.id || (!preferredAccountId && isFirst));
+      if (shouldPreSelect) {
         btn.classList.add('active');
         this.composeSelectedAccounts.add(account.id);
       }
@@ -65,12 +69,23 @@ export const ComposeMixin = {
     delete this.composeText.dataset.quoteId;
     delete this.composeText.dataset.quotePlatform;
     delete this.composeText.dataset.quoteUrl;
+    delete this.composeText.dataset.quoteAccountId;
+    delete this.composeText.dataset.replyCanonicalUri;
+    delete this.composeText.dataset.replyAccountId;
     this._composeEmojiMap = {};
     this._composeEmojiMapAccountIds = new Set();
 
     const replyCtx = document.getElementById('compose-reply-context');
     if (replyToId) {
       this.composeText.dataset.replyTo = replyToId;
+      // Store canonical URI for cross-instance reply resolution
+      const replySourcePost = this.findCachedPost(replyToId);
+      if (replySourcePost) {
+        const dpReply = replySourcePost.reblog || replySourcePost;
+        const canonicalUri = dpReply.canonicalUri || dpReply.url;
+        if (canonicalUri) this.composeText.dataset.replyCanonicalUri = canonicalUri;
+        if (replySourcePost.accountId) this.composeText.dataset.replyAccountId = replySourcePost.accountId;
+      }
       this.composeText.placeholder = '답글을 작성하세요...';
       this.composeTitle.textContent = '답글 작성';
 
@@ -447,8 +462,11 @@ export const ComposeMixin = {
     const cw = this.composeCw.value.trim();
     const visibility = this.composeVisibilityValue;
     const replyToId = this.composeText.dataset.replyTo;
+    const replyCanonicalUri = this.composeText.dataset.replyCanonicalUri;
+    const replyAccountId = this.composeText.dataset.replyAccountId;
     const quoteId = this.composeText.dataset.quoteId;
     const quoteUrl = this.composeText.dataset.quoteUrl;
+    const quoteAccountId = this.composeText.dataset.quoteAccountId;
 
     if (selectedIds.length === 0) {
       this.composeError.textContent = '게시할 계정을 하나 이상 선택하세요.';
@@ -488,11 +506,43 @@ export const ComposeMixin = {
           }
         }
 
+        // Cross-instance reply resolution: resolve the post on this account's instance
+        let resolvedReplyId = replyToId;
+        if (replyToId && replyCanonicalUri) {
+          const replyAccount = replyAccountId ? this.store.getById(replyAccountId) : null;
+          if (replyAccount && replyAccount.instanceUrl !== account.instanceUrl) {
+            try {
+              const resolved = await client.resolveUrl(replyCanonicalUri);
+              if (resolved) {
+                resolvedReplyId = resolved.id;
+              } else {
+                errors.push(`${account.profile.displayName}: 답글 대상을 찾을 수 없습니다.`);
+                continue;
+              }
+            } catch (err) {
+              errors.push(`${account.profile.displayName}: 답글 대상 조회 실패: ${err.message}`);
+              continue;
+            }
+          }
+        }
+
+        // Cross-instance quote resolution
+        let resolvedQuoteId = quoteId;
+        if (quoteId && quoteUrl) {
+          const qAccount = quoteAccountId ? this.store.getById(quoteAccountId) : null;
+          if (qAccount && qAccount.instanceUrl !== account.instanceUrl) {
+            try {
+              const resolved = await client.resolveUrl(quoteUrl);
+              if (resolved) resolvedQuoteId = resolved.id;
+            } catch { /* fall through, URL will be appended as text */ }
+          }
+        }
+
         // Create post
         if (account.platform === 'mastodon') {
           // For Mastodon: append quote URL to text + try quote_id (supported by some servers)
           let statusText = text;
-          if (quoteId && quoteUrl && !text.includes(quoteUrl)) {
+          if (resolvedQuoteId && quoteUrl && !text.includes(quoteUrl)) {
             statusText = text + '\n\n' + quoteUrl;
           }
           const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || 'public';
@@ -501,8 +551,8 @@ export const ComposeMixin = {
             sensitive: this.composeSensitive || undefined,
             visibility: mastodonVisibility,
             mediaIds: fileIds.length > 0 ? fileIds : undefined,
-            inReplyToId: replyToId || undefined,
-            quoteId: quoteId || undefined,
+            inReplyToId: resolvedReplyId || undefined,
+            quoteId: resolvedQuoteId || undefined,
           });
         } else {
           // Misskey: mark uploaded files as sensitive
@@ -516,8 +566,8 @@ export const ComposeMixin = {
             cw: cw || undefined,
             visibility: misskeyVisibility,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
-            replyId: replyToId || undefined,
-            renoteId: quoteId || undefined,
+            replyId: resolvedReplyId || undefined,
+            renoteId: resolvedQuoteId || undefined,
           });
         }
       } catch (err) {

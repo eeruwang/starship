@@ -401,11 +401,7 @@ class StarShipApp {
         const platform = card.dataset.platform;
         const action = actionBtn.dataset.action;
         if (!postId || !accountId || !action) return;
-        if (action === 'reply') {
-          this.openComposeModal(postId, accountId);
-        } else {
-          this.handlePostAction(action, postId, platform, accountId, actionBtn);
-        }
+        this.handlePostAction(action, postId, platform, accountId, actionBtn);
         return;
       }
     });
