@@ -62,7 +62,35 @@ export const PostActionsMixin = {
     // Look up cached post to check current fav/boost state
     const cachedPost = this.postCache.get(`${platform}:${postId}`);
     // For renotes/reblogs, actions target the deepest original post
-    const actionPostId = this.getOriginalPostId(postId, platform);
+    let actionPostId = this.getOriginalPostId(postId, platform);
+
+    // Cross-instance: resolve the post on the target instance first
+    // (e.g. Misskey note ID → Mastodon local status ID via canonical URI)
+    const postAccount = cachedPost?.accountId ? this.store.getById(cachedPost.accountId) : null;
+    const isCrossInstance = postAccount && postAccount.instanceUrl !== account.instanceUrl;
+    if (isCrossInstance) {
+      const originalCached = this.postCache.get(`${platform}:${actionPostId}`) || cachedPost;
+      const displayPost = originalCached?.reblog || originalCached;
+      const canonicalUri = displayPost?.canonicalUri || displayPost?.url;
+      if (!canonicalUri) {
+        this.showToast('이 게시물의 원본 URL을 찾을 수 없습니다.');
+        return;
+      }
+      try {
+        btnElement.classList.add('processing');
+        const resolved = await client.resolveUrl(canonicalUri);
+        if (!resolved) {
+          this.showToast('이 게시물을 해당 계정에서 찾을 수 없습니다.');
+          btnElement.classList.remove('processing');
+          return;
+        }
+        actionPostId = resolved.id;
+      } catch (err) {
+        this.showToast('게시물 조회 실패: ' + err.message);
+        btnElement.classList.remove('processing');
+        return;
+      }
+    }
 
     try {
       // Immediate visual feedback: add processing state
@@ -92,7 +120,7 @@ export const PostActionsMixin = {
         const alreadyBoosted = cachedPost?.reblogged;
         if (alreadyBoosted) {
           if (accountPlatform === 'mastodon') {
-            await client.unreblog(postId);
+            await client.unreblog(actionPostId);
           }
           btnElement.classList.remove('processing', 'active');
           // Update cache
@@ -126,7 +154,8 @@ export const PostActionsMixin = {
       }
 
       // Re-fetch the note and update the card in-place
-      await this.refreshSinglePost(postId, platform, accountId);
+      // For cross-instance, use the original platform's client for refresh
+      await this.refreshSinglePost(postId, platform, isCrossInstance ? null : accountId);
     } catch (err) {
       console.error(`Action ${action} failed:`, err);
       btnElement.classList.remove('processing');
@@ -135,8 +164,31 @@ export const PostActionsMixin = {
 
   async refreshSinglePost(postId, platform, accountId) {
     try {
-      const client = this.store.getClient(accountId);
-      const account = this.store.getById(accountId);
+      let client = this.store.getClient(accountId);
+      let account = this.store.getById(accountId);
+
+      // If no accountId or platform mismatch, find a client matching the post's platform
+      if (!client || !account || account.platform !== platform) {
+        const cachedPost = this.postCache.get(`${platform}:${postId}`);
+        if (cachedPost?.accountId) {
+          const altClient = this.store.getClient(cachedPost.accountId);
+          const altAccount = this.store.getById(cachedPost.accountId);
+          if (altClient && altAccount) {
+            client = altClient;
+            account = altAccount;
+          }
+        }
+        // Fallback: any account on the same platform
+        if (!client || account?.platform !== platform) {
+          const match = this.store.getAll().find(a =>
+            (a.platform === 'mastodon') === (platform === 'mastodon')
+          );
+          if (match) {
+            client = this.store.getClient(match.id);
+            account = match;
+          }
+        }
+      }
       if (!client || !account) return;
 
       let rawPost;
