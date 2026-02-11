@@ -207,7 +207,7 @@ export const PostActionsMixin = {
     } catch (err) {
       console.error('Delete failed:', err);
       btnElement.classList.remove('processing');
-      alert('삭제에 실패했습니다: ' + err.message);
+      this.showToast('삭제에 실패했습니다: ' + err.message);
     }
   },
 
@@ -232,7 +232,7 @@ export const PostActionsMixin = {
         sourceCw = actualRaw?.cw || '';
       }
     } catch (err) {
-      alert('원문을 가져오는데 실패했습니다: ' + err.message);
+      this.showToast('원문을 가져오는데 실패했습니다: ' + err.message);
       return;
     }
 

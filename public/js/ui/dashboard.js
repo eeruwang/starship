@@ -46,9 +46,9 @@ function renderQuotePost(qp, depth = 0) {
   html += `<div class="quote-post-body">`;
   html += `<div class="quote-post-text-area">`;
   html += `<div class="quote-post-header">`;
-  html += `<img class="quote-post-avatar" src="${qp.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
-  html += `<span class="quote-post-author">${qp.author.displayNameHtml || escapeHtml(qp.author.displayName)}</span>`;
-  html += `<span class="quote-post-handle">@${escapeHtml(qp.author.acct)}</span>`;
+  html += `<img class="quote-post-avatar" src="${qp.author?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
+  html += `<span class="quote-post-author">${qp.author?.displayNameHtml || escapeHtml(qp.author?.displayName || '')}</span>`;
+  html += `<span class="quote-post-handle">@${escapeHtml(qp.author?.acct || '')}</span>`;
   html += `</div>`;
   if (qp.contentWarning) {
     html += `<div class="quote-post-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(qp.contentWarning)}</div>`;
@@ -108,6 +108,7 @@ export function renderPost(post) {
 
   // Reply context
   if (displayPost.replyTo) {
+    const replyAuthor = displayPost.replyTo.author;
     const parentCw = displayPost.replyTo.contentWarning;
     const parentText = stripHtml(displayPost.replyTo.content);
     const isLong = !parentCw && parentText.length > 200;
@@ -115,8 +116,8 @@ export function renderPost(post) {
     html += `
       <div class="reply-context">
         <div class="reply-context-header">
-          <img class="reply-context-avatar" src="${displayPost.replyTo.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-          <span class="reply-context-author">${displayPost.replyTo.author.displayNameHtml || escapeHtml(displayPost.replyTo.author.displayName)}</span>
+          <img class="reply-context-avatar" src="${replyAuthor?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
         </div>
         ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
         <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
@@ -341,10 +342,11 @@ export function renderNotification(notif) {
   // Parent post context for reply notifications
   if (['reply', 'mention', 'quote'].includes(notif.type) && notif.post) {
     if (notif.post.replyTo) {
+      const notifReplyAuthor = notif.post.replyTo.author;
       const parentExcerpt = stripHtml(notif.post.replyTo.content);
       const truncated = parentExcerpt.length > 120 ? parentExcerpt.substring(0, 120) + '…' : parentExcerpt;
       html += `<div class="notif-parent-context">
-        <span class="notif-parent-label">↩ ${notif.post.replyTo.author.displayNameHtml || escapeHtml(notif.post.replyTo.author.displayName)}의 글에 답글</span>
+        <span class="notif-parent-label">↩ ${notifReplyAuthor?.displayNameHtml || escapeHtml(notifReplyAuthor?.displayName || '')}의 글에 답글</span>
         <div class="notif-parent-excerpt">${escapeHtml(truncated)}</div>
       </div>`;
     } else if (notif.post.replyToAcct) {
@@ -474,9 +476,9 @@ function escapeHtml(text) {
 }
 
 function stripHtml(html) {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || '';
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || '';
 }
 
 function timeAgo(date) {

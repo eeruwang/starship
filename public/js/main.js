@@ -63,7 +63,7 @@ class StarShipApp {
           theme: parsed.theme ?? 'dark',
         };
       }
-    } catch {}
+    } catch (err) { console.warn('Settings parse failed:', err); }
     return { refreshInterval: 60000, columnWidth: 380, fontSize: 14, postsCount: 30, theme: 'dark' };
   }
 
@@ -97,7 +97,7 @@ class StarShipApp {
         }
         return state;
       }
-    } catch {}
+    } catch (err) { console.warn('Column state parse failed:', err); }
     return { all: true, notifications: true, accounts: {}, order: ['all', 'notifications'] };
   }
 
@@ -213,7 +213,7 @@ class StarShipApp {
         if (data.columnState) { this.columnState = data.columnState; this.saveColumnState(); }
         this.render();
         this.debouncedSaveToCloud();
-      } catch (err) { console.error('Import failed:', err); alert('파일을 읽을 수 없습니다.'); }
+      } catch (err) { console.error('Import failed:', err); this.showToast('파일을 읽을 수 없습니다.'); }
       e.target.value = '';
     });
 
@@ -602,6 +602,7 @@ class StarShipApp {
         if (this.closeTopmostModal()) return;
         this.closeLightbox();
         this.closeAccountPicker();
+        this.closeReactionPicker();
         this.closeReactionPopup();
         return;
       }
@@ -1670,9 +1671,9 @@ class StarShipApp {
             document.getElementById('btn-profile-edit').addEventListener('click', enterEditMode);
           } catch (err) {
             if (err.message.includes('PERMISSION_DENIED')) {
-              alert('프로필 수정 권한이 없습니다.\n\n사용자 메뉴 → 계정 재인증으로 권한을 갱신하세요.');
+              this.showToast('프로필 수정 권한이 없습니다. 계정 재인증으로 권한을 갱신하세요.');
             } else {
-              alert('프로필 수정 실패: ' + err.message);
+              this.showToast('프로필 수정 실패: ' + err.message);
             }
           } finally {
             const btn = document.getElementById('btn-profile-edit-save');
@@ -1947,7 +1948,7 @@ class StarShipApp {
           // Refresh the UI
           this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl);
         } catch (err) {
-          alert('팔로우 처리 실패: ' + err.message);
+          this.showToast('팔로우 처리 실패: ' + err.message);
         } finally {
           followBtn.disabled = false;
         }
@@ -2131,6 +2132,18 @@ class StarShipApp {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  showToast(message, type = 'error') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('visible'));
+    setTimeout(() => {
+      toast.classList.remove('visible');
+      toast.addEventListener('transitionend', () => toast.remove());
+    }, 3500);
   }
 }
 

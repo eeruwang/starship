@@ -4460,3 +4460,30 @@ textarea.input {
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
   cursor: pointer;
 }
+
+/* ===== Toast Notifications ===== */
+.toast {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.6rem 1.2rem;
+  font-size: 0.85rem;
+  z-index: 2000;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  max-width: 90vw;
+}
+.toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.toast-error { border-left: 3px solid var(--accent-danger); }
+.toast-success { border-left: 3px solid #4caf50; }
+.toast-info { border-left: 3px solid var(--accent-primary); }

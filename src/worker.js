@@ -10,6 +10,7 @@
 
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+let _tablesInitialized = false;
 
 export default {
   async fetch(request, env) {
@@ -32,7 +33,10 @@ export default {
 
     // Auth & sync API
     if (url.pathname.startsWith('/api/')) {
-      await ensureTables(env.FEDI_ACCOUNTS);
+      if (!_tablesInitialized) {
+        await ensureTables(env.FEDI_ACCOUNTS);
+        _tablesInitialized = true;
+      }
       return handleApi(request, url, env);
     }
 
@@ -101,6 +105,14 @@ async function hashPassword(password, salt) {
     keyMaterial, 256
   );
   return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+
+async function parseJsonBody(request) {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
 }
 
 function generateToken() {
@@ -173,7 +185,9 @@ async function handleApi(request, url, env) {
 // ===== Auth Endpoints =====
 
 async function handleRegister(request, db, env) {
-  const { username, password, turnstileToken, inviteCode } = await request.json();
+  const body = await parseJsonBody(request);
+  if (!body) return jsonResponse({ error: '잘못된 요청입니다' }, 400);
+  const { username, password, turnstileToken, inviteCode } = body;
 
   // Check registration mode
   const regMode = await getRegistrationMode(db);
@@ -246,7 +260,9 @@ async function handleRegister(request, db, env) {
 }
 
 async function handleLogin(request, db) {
-  const { username, password } = await request.json();
+  const body = await parseJsonBody(request);
+  if (!body) return jsonResponse({ error: '잘못된 요청입니다' }, 400);
+  const { username, password } = body;
   if (!username || !password) {
     return jsonResponse({ error: '아이디와 비밀번호를 입력해주세요' }, 400);
   }
@@ -261,8 +277,10 @@ async function handleLogin(request, db) {
     return jsonResponse({ error: '아이디 또는 비밀번호가 올바르지 않습니다' }, 401);
   }
 
-  // Clean up old sessions
-  await db.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at < datetime('now')").bind(user.id).run();
+  // Clean up expired sessions (all users, probabilistic to avoid every-login overhead)
+  if (Math.random() < 0.1) {
+    await db.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
+  }
 
   const token = generateToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL * 1000).toISOString();
@@ -296,7 +314,8 @@ async function handleSyncSave(request, db) {
   const user = await getSessionUser(request, db);
   if (!user) return jsonResponse({ error: '로그인이 필요합니다' }, 401);
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
+  if (!body) return jsonResponse({ error: '잘못된 요청입니다' }, 400);
   // body: { accounts, settings, columnState }
   const stmts = [];
   for (const key of ['accounts', 'settings', 'columnState']) {
@@ -340,7 +359,8 @@ async function handleAdminSaveSettings(request, db) {
   const user = await getSessionUser(request, db);
   if (!user || user.role !== 'admin') return jsonResponse({ error: '권한이 없습니다' }, 403);
 
-  const body = await request.json();
+  const body = await parseJsonBody(request);
+  if (!body) return jsonResponse({ error: '잘못된 요청입니다' }, 400);
   const stmts = [];
   for (const [key, value] of Object.entries(body)) {
     stmts.push(
@@ -383,7 +403,9 @@ async function handleCreateInviteCodes(request, db) {
   const user = await getSessionUser(request, db);
   if (!user || user.role !== 'admin') return jsonResponse({ error: '권한이 없습니다' }, 403);
 
-  const { count = 1, maxUses = 1 } = await request.json();
+  const inviteBody = await parseJsonBody(request);
+  if (!inviteBody) return jsonResponse({ error: '잘못된 요청입니다' }, 400);
+  const { count = 1, maxUses = 1 } = inviteBody;
   const num = Math.min(Math.max(1, parseInt(count) || 1), 50);
   const uses = Math.max(1, parseInt(maxUses) || 1);
 

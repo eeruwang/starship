@@ -15,7 +15,7 @@ export const AuthUIMixin = {
         this.updateAuthButton();
         await this.loadCloudData();
       }
-    } catch {}
+    } catch (err) { console.warn('Auth check failed:', err); }
   },
 
   async fetchSiteInfo() {
@@ -26,7 +26,7 @@ export const AuthUIMixin = {
       if (this._currentUser?.role === 'admin') {
         this.updateAdminUI();
       }
-    } catch {}
+    } catch (err) { console.warn('Site info fetch failed:', err); }
   },
 
   updateAuthButton() {
@@ -144,13 +144,13 @@ export const AuthUIMixin = {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || '설정 저장에 실패했습니다');
+        this.showToast(data.error || '설정 저장에 실패했습니다');
         return;
       }
       await this.fetchSiteInfo();
       this.updateAdminUI();
     } catch (err) {
-      alert('서버 연결 오류');
+      this.showToast('서버 연결 오류');
     }
   },
 
@@ -411,12 +411,12 @@ export const AuthUIMixin = {
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          alert(data.error || '생성 실패');
+          this.showToast(data.error || '생성 실패');
           return;
         }
         await this.loadInviteCodes();
       } catch {
-        alert('서버 연결 오류');
+        this.showToast('서버 연결 오류');
       } finally {
         newBtn.disabled = false;
         newBtn.textContent = '생성';
@@ -464,7 +464,7 @@ export const AuthUIMixin = {
               method: 'DELETE', credentials: 'same-origin',
             });
             await this.loadInviteCodes();
-          } catch { alert('삭제 실패'); }
+          } catch { this.showToast('삭제 실패'); }
         });
       });
     } catch {
@@ -610,11 +610,11 @@ export const AuthUIMixin = {
         } catch {}
       }
 
-      alert(`${account.profile?.displayName || account.label} 계정이 재인증되었습니다.`);
+      this.showToast(`${account.profile?.displayName || account.label} 계정이 재인증되었습니다.`, 'success');
       this.render();
     } catch (err) {
       clearPendingAuth();
-      alert(`재인증 실패: ${err.message}`);
+      this.showToast(`재인증 실패: ${err.message}`);
     }
   },
 

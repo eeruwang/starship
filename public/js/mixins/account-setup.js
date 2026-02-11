@@ -262,66 +262,54 @@ export const AccountSetupMixin = {
     const postsCountSelect = document.getElementById('setting-posts-count');
     const resetBtn = document.getElementById('btn-settings-reset');
 
-    // Remove old listeners by cloning first, then set values on the new elements
-    const newRefresh = refreshSelect.cloneNode(true);
-    refreshSelect.replaceWith(newRefresh);
-    newRefresh.value = String(this.settings.refreshInterval);
-    newRefresh.addEventListener('change', () => {
-      this.settings.refreshInterval = parseInt(newRefresh.value);
+    // Set values and assign handlers directly (direct assignment replaces previous handler)
+    refreshSelect.value = String(this.settings.refreshInterval);
+    refreshSelect.onchange = () => {
+      this.settings.refreshInterval = parseInt(refreshSelect.value);
       this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
       this.saveSettings();
       this.startAutoRefresh();
-    });
+    };
 
     const columnWidthValueLabel = document.getElementById('column-width-value');
-    const newColWidth = columnWidthSelect.cloneNode(true);
-    columnWidthSelect.replaceWith(newColWidth);
-    newColWidth.value = String(this.settings.columnWidth);
+    columnWidthSelect.value = String(this.settings.columnWidth);
     if (columnWidthValueLabel) columnWidthValueLabel.textContent = `${this.settings.columnWidth}px`;
     const handleColWidthChange = () => {
-      if (columnWidthValueLabel) columnWidthValueLabel.textContent = `${newColWidth.value}px`;
-      this.settings.columnWidth = parseInt(newColWidth.value);
+      if (columnWidthValueLabel) columnWidthValueLabel.textContent = `${columnWidthSelect.value}px`;
+      this.settings.columnWidth = parseInt(columnWidthSelect.value);
       this.saveSettings();
       this.applySettings();
     };
-    newColWidth.addEventListener('input', handleColWidthChange);
-    newColWidth.addEventListener('change', handleColWidthChange);
+    columnWidthSelect.oninput = handleColWidthChange;
+    columnWidthSelect.onchange = handleColWidthChange;
 
-    const newFontSize = fontSizeSelect.cloneNode(true);
-    fontSizeSelect.replaceWith(newFontSize);
-    newFontSize.value = String(this.settings.fontSize);
-    newFontSize.addEventListener('change', () => {
-      this.settings.fontSize = parseInt(newFontSize.value);
+    fontSizeSelect.value = String(this.settings.fontSize);
+    fontSizeSelect.onchange = () => {
+      this.settings.fontSize = parseInt(fontSizeSelect.value);
       this.saveSettings();
       this.applySettings();
-    });
+    };
 
-    const newPostsCount = postsCountSelect.cloneNode(true);
-    postsCountSelect.replaceWith(newPostsCount);
-    newPostsCount.value = String(this.settings.postsCount);
-    newPostsCount.addEventListener('change', () => {
-      this.settings.postsCount = parseInt(newPostsCount.value);
+    postsCountSelect.value = String(this.settings.postsCount);
+    postsCountSelect.onchange = () => {
+      this.settings.postsCount = parseInt(postsCountSelect.value);
       this.saveSettings();
-    });
+    };
 
     const themeSelect = document.getElementById('setting-theme');
-    const newTheme = themeSelect.cloneNode(true);
-    themeSelect.replaceWith(newTheme);
-    newTheme.value = this.settings.theme || 'dark';
-    newTheme.addEventListener('change', () => {
-      this.settings.theme = newTheme.value;
+    themeSelect.value = this.settings.theme || 'dark';
+    themeSelect.onchange = () => {
+      this.settings.theme = themeSelect.value;
       this.saveSettings();
       this.applySettings();
-    });
+    };
 
-    const newResetBtn = resetBtn.cloneNode(true);
-    resetBtn.replaceWith(newResetBtn);
-    newResetBtn.addEventListener('click', () => {
+    resetBtn.onclick = () => {
       if (confirm('정말로 모든 데이터를 초기화하시겠습니까?\n계정 정보, 설정이 모두 삭제됩니다.')) {
         localStorage.clear();
         location.reload();
       }
-    });
+    };
 
     this.openModal(modal);
   },

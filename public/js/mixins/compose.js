@@ -302,7 +302,7 @@ export const ComposeMixin = {
               this._composeEmojiMap[e.name] = e.url;
             }
           }
-        } catch {}
+        } catch (err) { console.warn('Instance emoji fetch failed:', err); }
       }
     }
 
