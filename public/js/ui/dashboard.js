@@ -234,7 +234,7 @@ export function renderPost(post) {
     `;
   }
 
-  // Reactions (Misskey)
+  // Reactions (Misskey) / Favourites badge (Mastodon)
   if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
     html += '<div class="post-reactions">';
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
@@ -242,6 +242,8 @@ export function renderPost(post) {
       html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
     html += '</div>';
+  } else if (post.platform === 'mastodon' && displayPost.stats?.favourites > 0) {
+    html += `<div class="post-reactions"><span class="reaction-badge${post.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span></div>`;
   }
 
   if (displayPost.contentWarning) {
@@ -253,7 +255,7 @@ export function renderPost(post) {
   const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
   const favCount = displayPost.stats?.favourites || displayPost.stats?.reactions || 0;
 
-  const favIcon = post.platform === 'mastodon' ? iconStar : iconHeart;
+  const favIcon = iconHeart;
 
   const isMisskey = post.platform !== 'mastodon';
 
@@ -270,7 +272,7 @@ export function renderPost(post) {
       <button class="post-action" data-action="quote" title="인용">
         <span class="action-icon">${iconQuote}</span>
       </button>
-      <button class="post-action${(post.favourited || post.myReaction) ? ' active' : ''}" data-action="fav" title="${isMisskey ? '좋아요' : '즐겨찾기'}">
+      <button class="post-action${(post.favourited || post.myReaction) ? ' active' : ''}" data-action="fav" title="좋아요">
         <span class="action-icon">${favIcon}</span>
         ${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}
       </button>
@@ -398,11 +400,10 @@ export function renderNotification(notif) {
     }
     if (hasPost) {
       const isMisskey = notif.platform !== 'mastodon';
-      const favIcon = isMisskey ? iconHeart : iconStar;
       html += `<div class="notif-actions">
         <button class="notif-action-btn" data-action="reply" title="답글">${iconReply}</button>
         <button class="notif-action-btn" data-action="boost" title="부스트/리노트">${iconBoost}</button>
-        <button class="notif-action-btn" data-action="fav" title="좋아요/리액션">${favIcon}</button>
+        <button class="notif-action-btn" data-action="fav" title="좋아요">${iconHeart}</button>
         ${isMisskey ? `<button class="notif-action-btn" data-action="reaction" title="리액션 선택">${iconSmile}</button>` : ''}
       </div>`;
     }

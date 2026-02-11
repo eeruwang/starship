@@ -4449,6 +4449,11 @@ textarea.input {
   box-shadow: 0 2px 8px rgba(124, 125, 255, 0.15);
 }
 
+.reaction-badge.reacted {
+  background: rgba(231, 76, 108, 0.15);
+  border-color: rgba(231, 76, 108, 0.4);
+}
+
 /* ===== Post Action Visual Feedback ===== */
 .post-action.processing {
   opacity: 0.5;

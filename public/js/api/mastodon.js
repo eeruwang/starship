@@ -373,7 +373,7 @@ export class MastodonClient {
     const typeMap = {
       'mention': { icon: '💬', label: '멘션' },
       'reblog': { icon: '🔁', label: '부스트' },
-      'favourite': { icon: '⭐', label: '즐겨찾기' },
+      'favourite': { icon: '❤️', label: '좋아요' },
       'follow': { icon: '👤', label: '팔로우' },
       'follow_request': { icon: '🔔', label: '팔로우 요청' },
       'poll': { icon: '📊', label: '투표 종료' },
