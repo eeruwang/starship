@@ -3581,22 +3581,70 @@ textarea.input {
   object-fit: contain;
 }
 
-.compose-visibility-select {
+.compose-visibility-picker {
+  position: fixed;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1100;
+  min-width: 220px;
+  padding: 0.4rem;
+  animation: fadeInScale 0.15s ease;
+}
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.compose-visibility-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: none;
+  background: none;
   color: var(--text-primary);
-  font-size: 0.75rem;
-  padding: 0.25rem 0.4rem;
-  border-radius: 6px;
   cursor: pointer;
-  outline: none;
+  border-radius: 8px;
+  transition: background 0.15s;
+  text-align: left;
 }
-.compose-visibility-select:hover {
-  border-color: var(--accent-primary);
+.compose-visibility-option:hover {
+  background: rgba(124, 125, 255, 0.1);
 }
-.compose-visibility-select:focus {
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(124, 125, 255, 0.2);
+.compose-visibility-option.active {
+  background: var(--accent-primary);
+  color: #fff;
+}
+.compose-visibility-option.active .compose-visibility-desc {
+  color: rgba(255, 255, 255, 0.8);
+}
+.compose-visibility-option.active svg {
+  color: #fff;
+}
+.compose-visibility-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+.compose-visibility-option.active .compose-visibility-icon {
+  color: #fff;
+}
+.compose-visibility-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.compose-visibility-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.compose-visibility-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
 }
 
 .compose-char-hint {

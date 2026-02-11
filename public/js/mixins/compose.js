@@ -142,9 +142,84 @@ export const ComposeMixin = {
     } catch {}
   },
 
+  _composeVisibilityOptions: [
+    { value: 'public', label: '공개', desc: '모든 유저에게 공개', icon: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>' },
+    { value: 'home', label: '홈', desc: '홈 타임라인에만 공개', icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
+    { value: 'followers', label: '팔로워', desc: '팔로워에게만 공개', icon: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' },
+    { value: 'direct', label: '다이렉트', desc: '지정한 유저에게만 공개', icon: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>' },
+  ],
+
+  _getVisibilitySvg(iconPath, size = 18) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</svg>`;
+  },
+
   _syncComposeVisibility() {
     const firstId = [...this.composeSelectedAccounts][0];
-    this.composeVisibility.value = firstId ? this._getAccountVisibility(firstId) : 'public';
+    const vis = firstId ? this._getAccountVisibility(firstId) : 'public';
+    this.composeVisibilityValue = vis;
+    const opt = this._composeVisibilityOptions.find(o => o.value === vis);
+    if (opt) {
+      this.btnComposeVisibility.innerHTML = this._getVisibilitySvg(opt.icon);
+      this.btnComposeVisibility.title = `공개 범위: ${opt.label}`;
+    }
+  },
+
+  showComposeVisibilityPicker() {
+    this.closeComposeVisibilityPicker();
+
+    const picker = document.createElement('div');
+    picker.className = 'compose-visibility-picker';
+    picker.id = 'compose-visibility-picker-popup';
+
+    picker.innerHTML = this._composeVisibilityOptions.map(opt => `
+      <button class="compose-visibility-option${opt.value === this.composeVisibilityValue ? ' active' : ''}" data-value="${opt.value}">
+        <span class="compose-visibility-icon">${this._getVisibilitySvg(opt.icon)}</span>
+        <span class="compose-visibility-info">
+          <span class="compose-visibility-label">${opt.label}</span>
+          <span class="compose-visibility-desc">${opt.desc}</span>
+        </span>
+      </button>
+    `).join('');
+
+    // Position above the button
+    const btnRect = this.btnComposeVisibility.getBoundingClientRect();
+    picker.style.bottom = `${window.innerHeight - btnRect.top + 4}px`;
+    picker.style.left = `${Math.max(8, Math.min(btnRect.left, window.innerWidth - 240))}px`;
+
+    document.body.appendChild(picker);
+
+    picker.addEventListener('click', (e) => {
+      const item = e.target.closest('.compose-visibility-option');
+      if (!item) return;
+      const val = item.dataset.value;
+      this.composeVisibilityValue = val;
+      const opt = this._composeVisibilityOptions.find(o => o.value === val);
+      if (opt) {
+        this.btnComposeVisibility.innerHTML = this._getVisibilitySvg(opt.icon);
+        this.btnComposeVisibility.title = `공개 범위: ${opt.label}`;
+      }
+      this.closeComposeVisibilityPicker();
+    });
+
+    // Outside click to close
+    setTimeout(() => {
+      const handler = (e) => {
+        if (!picker.contains(e.target) && !this.btnComposeVisibility.contains(e.target)) {
+          this.closeComposeVisibilityPicker();
+        }
+      };
+      document.addEventListener('click', handler);
+      this._composeVisibilityClose = handler;
+    }, 0);
+  },
+
+  closeComposeVisibilityPicker() {
+    const existing = document.getElementById('compose-visibility-picker-popup');
+    if (existing) existing.remove();
+    if (this._composeVisibilityClose) {
+      document.removeEventListener('click', this._composeVisibilityClose);
+      this._composeVisibilityClose = null;
+    }
   },
 
   _updateComposeWordCount() {
@@ -419,7 +494,7 @@ export const ComposeMixin = {
     const selectedIds = [...this.composeSelectedAccounts];
     const text = this.composeText.value.trim();
     const cw = this.composeCw.value.trim();
-    const visibility = this.composeVisibility.value;
+    const visibility = this.composeVisibilityValue;
     const replyToId = this.composeText.dataset.replyTo;
     const quoteId = this.composeText.dataset.quoteId;
     const quoteUrl = this.composeText.dataset.quoteUrl;

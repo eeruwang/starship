@@ -139,11 +139,12 @@ class StarShipApp {
     this.btnComposeAttach = document.getElementById('btn-compose-attach');
     this.btnComposeSensitive = document.getElementById('btn-compose-sensitive');
     this.btnComposeEmoji = document.getElementById('btn-compose-emoji');
-    this.composeVisibility = document.getElementById('compose-visibility');
+    this.btnComposeVisibility = document.getElementById('btn-compose-visibility');
     this.composeCharHint = document.getElementById('compose-char-hint');
     this.btnComposeSubmit = document.getElementById('btn-compose-submit');
     this.composeError = document.getElementById('compose-error');
     this.composeSensitive = false;
+    this.composeVisibilityValue = 'public';
 
     // Auth modal
     this.btnAuth = document.getElementById('btn-auth');
@@ -221,7 +222,7 @@ class StarShipApp {
       btn.addEventListener('click', () => {
         const modalId = btn.dataset.closeModal;
         this.closeModal(document.getElementById(modalId));
-        if (modalId === 'modal-compose') this.closeComposeEmojiPicker();
+        if (modalId === 'modal-compose') { this.closeComposeEmojiPicker(); this.closeComposeVisibilityPicker(); }
       });
     });
 
@@ -231,6 +232,7 @@ class StarShipApp {
         if (e.target === overlay) {
           this.closeModal(overlay);
           this.closeComposeEmojiPicker();
+          this.closeComposeVisibilityPicker();
         }
       });
     });
@@ -623,6 +625,7 @@ class StarShipApp {
       this.btnComposeSensitive.classList.toggle('active', this.composeSensitive);
     });
     this.btnComposeEmoji.addEventListener('click', () => this.showComposeEmojiPicker());
+    this.btnComposeVisibility.addEventListener('click', () => this.showComposeVisibilityPicker());
     this.composeFilesInput.addEventListener('change', () => this.handleComposeFileSelect());
     this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());
 
@@ -1314,7 +1317,7 @@ class StarShipApp {
     });
     const top = visibleModals[0];
     this.closeModal(top);
-    if (top.id === 'modal-compose') this.closeComposeEmojiPicker();
+    if (top.id === 'modal-compose') { this.closeComposeEmojiPicker(); this.closeComposeVisibilityPicker(); }
     return true;
   }
 
