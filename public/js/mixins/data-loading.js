@@ -440,6 +440,36 @@ export const DataLoadingMixin = {
         });
       if (notifPosts.length > 0) this.cachePosts(notifPosts);
 
+      // Fetch missing reply parents for notification posts
+      await this.fetchMissingReplyParents(notifPosts, accounts);
+
+      // Track oldest notification IDs per account for backward pagination
+      if (!this._notifOldestIds) this._notifOldestIds = new Map();
+      const oldestIds = this._notifOldestIds.get(container) || new Map();
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
+          const notifs = result.value;
+          const accountId = notifs[0].accountId;
+          let minId = notifs[0].id;
+          for (let i = 1; i < notifs.length; i++) {
+            if (notifs[i].id < minId) minId = notifs[i].id;
+          }
+          // Only go backward on first load (don't override with newer oldest when polling)
+          if (isFirstLoad || !oldestIds.has(accountId)) {
+            oldestIds.set(accountId, minId);
+          }
+        }
+      }
+      this._notifOldestIds.set(container, oldestIds);
+
+      // Store pagination metadata for infinite scroll
+      if (!this._notifPagination) this._notifPagination = new Map();
+      this._notifPagination.set(container, {
+        accounts,
+        loading: false,
+        hasMore: allNotifs.length > 0,
+      });
+
       if (allNotifs.length === 0) {
         if (isFirstLoad) {
           container.innerHTML = '';
@@ -453,6 +483,7 @@ export const DataLoadingMixin = {
         for (const notif of allNotifs) {
           container.appendChild(renderNotification(notif));
         }
+        this.enrichLinkCards(container);
       } else {
         // Smooth incremental update: prepend new notifications (use dedup key)
         // Re-query DOM cards for freshness (existingCards was captured before async API calls)
@@ -493,6 +524,8 @@ export const DataLoadingMixin = {
           setTimeout(() => {
             container.querySelectorAll('.new-post').forEach(el => el.classList.remove('new-post'));
           }, 400);
+
+          this.enrichLinkCards(container);
         }
       }
     } catch (err) {
@@ -560,6 +593,143 @@ export const DataLoadingMixin = {
       }
     }
     return deduped;
+  },
+
+  async loadOlderNotifications(container) {
+    const pagination = this._notifPagination?.get(container);
+    if (!pagination || pagination.loading || !pagination.hasMore) return;
+
+    const oldestIds = this._notifOldestIds?.get(container);
+    if (!oldestIds || oldestIds.size === 0) return;
+
+    pagination.loading = true;
+
+    // Show loading indicator at bottom
+    let loadingEl = container.querySelector('.load-more-spinner');
+    if (!loadingEl) {
+      loadingEl = document.createElement('div');
+      loadingEl.className = 'load-more-spinner';
+      loadingEl.innerHTML = '<div class="spinner"></div>';
+      container.appendChild(loadingEl);
+    }
+
+    try {
+      const { accounts } = pagination;
+      const allNotifs = [];
+
+      const results = await Promise.allSettled(
+        accounts.map(async (account) => {
+          const client = this.store.getClient(account.id);
+          if (!client) return [];
+          const maxId = oldestIds.get(account.id);
+          if (!maxId) return [];
+
+          try {
+            const notifs = await client.getNotifications(this.settings.postsCount, maxId, null);
+            return notifs.map(n => {
+              const notif = client.normalizeNotification(n);
+              notif.themeColor = account.themeColor || null;
+              notif.accountId = account.id;
+              notif.instanceUrl = account.instanceUrl;
+              return notif;
+            });
+          } catch (err) {
+            console.error(`Older notifications error for ${account.label}:`, err);
+            return [];
+          }
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          allNotifs.push(...result.value);
+        }
+      }
+
+      // Deduplicate by platform:id
+      {
+        const seenIds = new Set();
+        let write = 0;
+        for (let read = 0; read < allNotifs.length; read++) {
+          const key = `${allNotifs[read].platform}:${allNotifs[read].id}`;
+          if (!seenIds.has(key)) {
+            seenIds.add(key);
+            allNotifs[write++] = allNotifs[read];
+          }
+        }
+        allNotifs.length = write;
+      }
+
+      // Compute dedup keys
+      for (const notif of allNotifs) {
+        const actorAcct = notif.actor?.acct
+          ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl)
+          : (notif.actor?.id || '');
+        const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+        const reactionKey = notif.reactionEmoji || '';
+        notif._dedupKey = `${notif.type}:${actorAcct}:${postKey}:${reactionKey}`;
+      }
+
+      // Semantic deduplication
+      {
+        const deduped = this._deduplicateNotifications(allNotifs);
+        allNotifs.length = 0;
+        allNotifs.push(...deduped);
+      }
+
+      allNotifs.sort((a, b) => b.createdAt - a.createdAt);
+
+      // Filter out already-displayed notifications
+      const existingKeys = new Set();
+      for (const card of container.querySelectorAll('.notif-card')) {
+        if (card.dataset.dedupKey) existingKeys.add(card.dataset.dedupKey);
+        existingKeys.add(`${card.dataset.platform}:${card.dataset.notifId}`);
+      }
+      const newNotifs = allNotifs.filter(n => {
+        return !existingKeys.has(n._dedupKey) && !existingKeys.has(`${n.platform}:${n.id}`);
+      });
+
+      // Update oldest IDs for next pagination
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
+          const notifs = result.value;
+          const accountId = notifs[0].accountId;
+          let minId = notifs[0].id;
+          for (let i = 1; i < notifs.length; i++) {
+            if (notifs[i].id < minId) minId = notifs[i].id;
+          }
+          oldestIds.set(accountId, minId);
+        }
+      }
+
+      // Cache and fetch missing parents
+      const notifPosts = newNotifs
+        .filter(n => n.post?.id)
+        .map(n => {
+          const post = { ...n.post, accountId: n.accountId, accountPlatform: n.platform };
+          if (n.mergedAccounts) post.mergedAccounts = n.mergedAccounts;
+          return post;
+        });
+      if (notifPosts.length > 0) {
+        this.cachePosts(notifPosts);
+        await this.fetchMissingReplyParents(notifPosts, accounts);
+      }
+
+      if (newNotifs.length === 0) {
+        pagination.hasMore = false;
+      } else {
+        for (const notif of newNotifs) {
+          container.appendChild(renderNotification(notif));
+        }
+        this.enrichLinkCards(container);
+      }
+    } catch (err) {
+      console.error('Failed to load older notifications:', err);
+    } finally {
+      pagination.loading = false;
+      const spinner = container.querySelector('.load-more-spinner');
+      if (spinner) spinner.remove();
+    }
   },
 
   cachePosts(posts) {

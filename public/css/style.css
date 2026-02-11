@@ -1729,6 +1729,9 @@ h4.mfm-heading { font-size: 1em; }
   color: var(--text-muted);
   font-size: 0.75rem;
   margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .notif-excerpt {
@@ -3258,6 +3261,12 @@ textarea.input {
     var(--merged-gradient) border-box;
 }
 
+/* Quote post inside notification card — full-width */
+.notif-card .quote-post {
+  width: 100%;
+  flex-basis: 100%;
+}
+
 /* ===== Notification Post Content ===== */
 .notif-post-content {
   font-size: 0.82rem;
@@ -3341,6 +3350,7 @@ textarea.input {
   color: #c9a0ff;
 }
 
+/* Legacy notif-media (kept for backwards compat) */
 .notif-media {
   display: flex;
   gap: 3px;
@@ -3357,6 +3367,63 @@ textarea.input {
   cursor: pointer;
 }
 
+/* Notification media grid (uses post-media grid layout) */
+.notif-media-grid {
+  width: 100%;
+  flex-basis: 100%;
+  margin-top: 0.4rem;
+}
+.notif-media-grid img,
+.notif-media-grid video {
+  max-height: 200px;
+}
+
+/* CW warning inside notification card */
+.notif-cw-warning {
+  width: 100%;
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: rgba(245, 166, 35, 0.08);
+  border: 1px solid rgba(245, 166, 35, 0.15);
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  margin-top: 0.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.notif-cw-warning .cw-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.notif-cw-warning .cw-toggle {
+  margin-left: auto;
+}
+
+/* CW content wrapper inside notification — uses .visible class (same as post-card) */
+.notif-card > .cw-content {
+  width: 100%;
+  flex-basis: 100%;
+}
+.notif-card > .cw-content.visible {
+  display: contents;
+}
+
+/* Notification link card */
+.notif-link-card {
+  width: 100%;
+  flex-basis: 100%;
+  margin-top: 0.4rem;
+}
+
+/* Notification reactions */
+.notif-reactions {
+  width: 100%;
+  flex-basis: 100%;
+}
+
 /* Notification parent post context */
 .notif-parent-context {
   width: 100%;
@@ -3368,6 +3435,80 @@ textarea.input {
   background: rgba(124, 125, 255, 0.04);
   border-left: 2px solid var(--text-muted);
   border-radius: 0 4px 4px 0;
+}
+
+/* Full reply context (with avatar + full content) */
+.notif-parent-context-full {
+  padding: 0.45rem 0.6rem;
+}
+.notif-parent-header {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.2rem;
+}
+.notif-parent-avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.notif-parent-author {
+  font-weight: 600;
+  font-size: 0.73rem;
+  color: var(--text-secondary);
+}
+.notif-parent-author .inline-emoji {
+  height: 1em;
+  width: auto;
+  vertical-align: -1px;
+}
+.notif-parent-label-tag {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  padding: 0.05rem 0.35rem;
+  border-radius: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-left: auto;
+}
+.notif-parent-content {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.notif-parent-content p {
+  margin: 0;
+}
+.notif-parent-content p + p {
+  margin-top: 0.25em;
+}
+.notif-parent-content a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+.notif-parent-content .inline-emoji {
+  height: 1.2em;
+  width: auto;
+}
+.notif-parent-content.collapsed {
+  max-height: 4.5em;
+  overflow: hidden;
+  position: relative;
+}
+.notif-parent-content.collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1.5em;
+  background: linear-gradient(transparent, rgba(124, 125, 255, 0.04));
+  pointer-events: none;
 }
 .notif-parent-label {
   font-size: 0.72rem;
@@ -3426,6 +3567,7 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   background: none;
   border: none;
   color: var(--text-muted);
@@ -3433,14 +3575,38 @@ textarea.input {
   padding: 3px 8px;
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
+  font-family: inherit;
 }
 .notif-action-btn:hover {
   color: var(--accent-primary);
-  background: var(--bg-tertiary);
+  background: rgba(124, 125, 255, 0.1);
 }
 .notif-action-btn svg {
   width: 14px;
   height: 14px;
+}
+.notif-action-count {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+/* Active states for notification action buttons */
+.notif-action-btn[data-action="fav"].active {
+  color: #f5a623;
+}
+.notif-action-btn[data-action="fav"]:hover {
+  color: #f5a623;
+  background: rgba(245, 166, 35, 0.12);
+}
+.notif-action-btn[data-action="boost"].active {
+  color: #2ecc71;
+}
+.notif-action-btn[data-action="boost"]:hover {
+  color: #2ecc71;
+  background: rgba(46, 204, 113, 0.12);
+}
+.notif-action-btn[data-action="reply"]:hover {
+  color: #3498db;
+  background: rgba(52, 152, 219, 0.12);
 }
 
 /* ===== Compose Modal Redesign ===== */

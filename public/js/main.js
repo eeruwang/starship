@@ -336,9 +336,16 @@ class StarShipApp {
     // CW toggle
     document.addEventListener('click', (e) => {
       if (e.target.matches('.cw-toggle')) {
-        const cwWarning = e.target.closest('.cw-warning, .reply-context-cw');
-        const target = cwWarning?.nextElementSibling;
-        if (target && (target.classList.contains('cw-content') || target.id?.startsWith('reply-ctx-'))) {
+        // Support data-cw-target for ID-based lookup (more reliable in flex layouts)
+        const targetId = e.target.dataset.cwTarget;
+        let target;
+        if (targetId) {
+          target = document.getElementById(targetId);
+        } else {
+          const cwWarning = e.target.closest('.cw-warning, .reply-context-cw, .notif-cw-warning');
+          target = cwWarning?.nextElementSibling;
+        }
+        if (target && (target.classList.contains('cw-content') || target.id?.startsWith('reply-ctx-') || target.id?.startsWith('notif-reply-ctx-'))) {
           target.classList.toggle('visible');
           e.target.textContent = target.classList.contains('visible') ? '숨기기' : '내용 보기';
         }
@@ -410,11 +417,18 @@ class StarShipApp {
     document.addEventListener('click', (e) => {
       const card = e.target.closest('.notif-clickable');
       if (!card) return;
-      if (e.target.closest('.notif-avatar') || e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn')) return;
-      const postId = card.dataset.postId;
-      const accountId = card.dataset.accountId;
+      if (e.target.closest('.notif-avatar') || e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn') || e.target.closest('.cw-toggle') || e.target.closest('.sensitive-reveal') || e.target.closest('.sensitive-hide') || e.target.closest('.link-card') || e.target.closest('.reaction-badge') || e.target.closest('.post-media')) return;
       const platform = card.dataset.platform;
-      if (postId && accountId && platform) {
+      const accountId = card.dataset.accountId;
+      if (!platform || !accountId) return;
+      // Quote post inside notification: open quote's thread
+      const quotePart = e.target.closest('.quote-post');
+      if (quotePart && quotePart.dataset.quoteId) {
+        this.openThreadView(quotePart.dataset.quoteId, platform, accountId);
+        return;
+      }
+      const postId = card.dataset.postId;
+      if (postId) {
         this.openThreadView(postId, platform, accountId);
       }
     });
@@ -615,13 +629,18 @@ class StarShipApp {
       }
     }, { passive: false });
 
-    // Infinite scroll
+    // Infinite scroll (timeline + notifications)
     this.columnsContainer.addEventListener('scroll', (e) => {
       const columnContent = e.target;
       if (!columnContent.classList.contains('column-content')) return;
       const distFromBottom = columnContent.scrollHeight - columnContent.scrollTop - columnContent.clientHeight;
       if (distFromBottom < 300) {
-        this.loadOlderPosts(columnContent);
+        const column = columnContent.closest('.column');
+        if (column && column.dataset.columnType === 'notifications') {
+          this.loadOlderNotifications(columnContent);
+        } else {
+          this.loadOlderPosts(columnContent);
+        }
       }
     }, { passive: true, capture: true });
 
