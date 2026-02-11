@@ -172,36 +172,59 @@ export class MastodonClient {
   }
 
   async fetchThemeColor() {
+    // Strategy 1: Try Mastodon v2 instance API for accent_color (Mastodon 4.3+)
+    try {
+      const instance = await this.request('GET', '/api/v2/instance');
+      if (instance.accent_color && this._isUsableColor(instance.accent_color)) {
+        return instance.accent_color;
+      }
+    } catch { /* v2 not available, try fallbacks */ }
+
+    // Strategy 2: Try v1 instance API (some forks include theme_color)
+    try {
+      const instance = await this.request('GET', '/api/v1/instance');
+      if (instance.accent_color && this._isUsableColor(instance.accent_color)) {
+        return instance.accent_color;
+      }
+    } catch { /* continue to HTML fallback */ }
+
+    // Strategy 3: Fetch instance HTML for CSS --color-accent or theme-color meta
     try {
       let color = null;
       if (this.useProxy) {
-        // Use dedicated worker endpoint (proxy blocks non-API paths)
         const res = await fetch(`/api/instance-theme?url=${encodeURIComponent(this.instanceUrl)}`);
         if (!res.ok) return null;
         const data = await res.json();
         color = data.color || null;
       } else {
-        // Local dev: fetch HTML directly
         const res = await fetch(this.instanceUrl, { headers: { 'Accept': 'text/html' } });
         if (!res.ok) return null;
         const html = await res.text();
-        const match = html.match(/<meta[^>]*name=["']theme-color["'][^>]*content=["']([^"']+)["']/i)
-          || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']theme-color["']/i);
-        color = match ? match[1] : null;
+        // Try CSS variable --color-accent first (Mastodon 4.x injects this)
+        const cssMatch = html.match(/--color-accent:\s*([^;}\s]+)/);
+        if (cssMatch) color = cssMatch[1].trim();
+        // Fall back to theme-color meta tag
+        if (!color) {
+          const metaMatch = html.match(/<meta[^>]*name=["']theme-color["'][^>]*content=["']([^"']+)["']/i)
+            || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']theme-color["']/i);
+          color = metaMatch ? metaMatch[1] : null;
+        }
       }
-      // Mastodon's default theme-color meta tags are page background colors
-      // (#181820 dark, #ffffff light), not instance accent colors.
-      // Filter out near-black/near-white colors so the platform default is used.
-      if (color && /^#?[0-9a-f]{6}$/i.test(color)) {
-        const hex = color.replace(/^#/, '');
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        if (brightness < 30 || brightness > 225) return null;
-      }
-      return color;
+      if (color && this._isUsableColor(color)) return color;
+      return null;
     } catch { return null; }
+  }
+
+  _isUsableColor(color) {
+    if (!color) return false;
+    if (!/^#?[0-9a-f]{3,8}$/i.test(color)) return true; // non-hex (e.g. named color) — let it through
+    const hex = color.replace(/^#/, '');
+    if (hex.length < 6) return true; // short hex — let it through
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness >= 30 && brightness <= 225;
   }
 
   async createStatus(text, options = {}) {

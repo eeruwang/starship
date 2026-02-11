@@ -534,7 +534,16 @@ async function handleInstanceTheme(url) {
       return jsonResponse({ color: null });
     }
     const html = await readPartial(res, 32768);
-    const color = extractMeta(html, 'theme-color', true, true);
+    // Try CSS --color-accent variable first (Mastodon 4.x accent color)
+    let color = null;
+    const cssMatch = html.match(/--color-accent:\s*([^;}\s]+)/);
+    if (cssMatch) {
+      color = cssMatch[1].trim();
+    }
+    // Fall back to theme-color meta tag
+    if (!color) {
+      color = extractMeta(html, 'theme-color', true, true);
+    }
     const headers = {
       'Content-Type': 'application/json',
       'Cache-Control': 'public, max-age=86400',
