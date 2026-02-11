@@ -113,9 +113,10 @@ export class MastodonClient {
     return this.request('GET', path);
   }
 
-  async getNotifications(limit = 30, maxId = null) {
+  async getNotifications(limit = 30, maxId = null, sinceId = null) {
     let path = `/api/v1/notifications?limit=${limit}`;
     if (maxId) path += `&max_id=${maxId}`;
+    if (sinceId) path += `&since_id=${sinceId}`;
     return this.request('GET', path);
   }
 

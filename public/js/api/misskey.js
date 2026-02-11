@@ -86,9 +86,10 @@ export class MisskeyClient {
     return this.request('notes/timeline', body);
   }
 
-  async getNotifications(limit = 30, untilId = null) {
+  async getNotifications(limit = 30, untilId = null, sinceId = null) {
     const body = { limit };
     if (untilId) body.untilId = untilId;
+    if (sinceId) body.sinceId = sinceId;
     return this.request('i/notifications', body);
   }
 

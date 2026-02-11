@@ -332,6 +332,10 @@ export const DataLoadingMixin = {
       return;
     }
 
+    // Concurrency guard - prevent overlapping notification fetches
+    if (container._notifLoading) return;
+    container._notifLoading = true;
+
     const existingCards = container.querySelectorAll('.notif-card');
     const isFirstLoad = existingCards.length === 0;
 
@@ -342,6 +346,7 @@ export const DataLoadingMixin = {
 
     try {
       const allNotifs = [];
+      const prevNewestIds = this._notifNewestIds?.get(container);
 
       const results = await Promise.allSettled(
         accounts.map(async (account) => {
@@ -349,7 +354,8 @@ export const DataLoadingMixin = {
           if (!client) return [];
 
           try {
-            const notifs = await client.getNotifications(this.settings.postsCount);
+            const sinceId = !isFirstLoad ? prevNewestIds?.get(account.id) || null : null;
+            const notifs = await client.getNotifications(this.settings.postsCount, null, sinceId);
             return notifs.map(n => {
               const notif = client.normalizeNotification(n);
               notif.themeColor = account.themeColor || null;
@@ -368,6 +374,27 @@ export const DataLoadingMixin = {
         if (result.status === 'fulfilled' && result.value) {
           allNotifs.push(...result.value);
         }
+      }
+
+      // Track newest notification IDs per account for since_id pagination
+      if (!this._notifNewestIds) this._notifNewestIds = new Map();
+      const newestIds = this._notifNewestIds.get(container) || new Map();
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
+          const notifs = result.value;
+          newestIds.set(notifs[0].accountId, notifs[0].id);
+        }
+      }
+      this._notifNewestIds.set(container, newestIds);
+
+      // Compute normalized dedup keys for all notifications
+      for (const notif of allNotifs) {
+        const actorAcct = notif.actor?.acct
+          ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl)
+          : (notif.actor?.id || '');
+        const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+        const reactionKey = notif.reactionEmoji || '';
+        notif._dedupKey = `${notif.type}:${actorAcct}:${postKey}:${reactionKey}`;
       }
 
       // Deduplicate notifications across accounts (same actor + type + target post)
@@ -404,17 +431,12 @@ export const DataLoadingMixin = {
         for (const card of existingCards) {
           if (card.dataset.dedupKey) {
             existingKeys.add(card.dataset.dedupKey);
-          } else {
-            existingKeys.add(`${card.dataset.platform}:${card.dataset.notifId}`);
           }
+          existingKeys.add(`${card.dataset.platform}:${card.dataset.notifId}`);
         }
 
         const newNotifs = allNotifs.filter(n => {
-          const actorKey = n.actor?.acct || n.actor?.id || '';
-          const postKey = n.post?.canonicalUri || n.post?.id || '';
-          const reactionKey = n.reactionEmoji || '';
-          const dedupKey = `${n.type}:${actorKey}:${postKey}:${reactionKey}`;
-          return !existingKeys.has(dedupKey) && !existingKeys.has(`${n.platform}:${n.id}`);
+          return !existingKeys.has(n._dedupKey) && !existingKeys.has(`${n.platform}:${n.id}`);
         });
 
         if (newNotifs.length > 0) {
@@ -447,6 +469,8 @@ export const DataLoadingMixin = {
       if (isFirstLoad) {
         container.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
       }
+    } finally {
+      container._notifLoading = false;
     }
   },
 
