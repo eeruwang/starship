@@ -25,6 +25,24 @@ const PLATFORM_COLORS = {
   mastodon: '#6364ff',
 };
 
+// Mastodon의 theme-color 메타태그는 배경색(#181820/#ffffff)을 반환하므로
+// 너무 어둡거나 밝은 색은 플랫폼 기본색으로 대체
+function usableColor(color, platform) {
+  if (color) {
+    const m = color.match(/^#?([0-9a-f]{6})$/i);
+    if (m) {
+      const h = m[1];
+      const brightness = (parseInt(h.substring(0, 2), 16) * 299
+        + parseInt(h.substring(2, 4), 16) * 587
+        + parseInt(h.substring(4, 6), 16) * 114) / 1000;
+      if (brightness >= 30 && brightness <= 225) return color;
+    } else {
+      return color;
+    }
+  }
+  return PLATFORM_COLORS[platform] || '#7c7dff';
+}
+
 function isFediPostUrl(url) {
   try {
     const u = new URL(url);
@@ -82,13 +100,13 @@ export function renderPost(post) {
   if (post._dedupKey) card.dataset.dedupKey = post._dedupKey;
 
   // Per-account theme color for single-account posts
-  if (post.themeColor && (!post.mergedAccounts || post.mergedAccounts.length <= 1)) {
-    card.style.borderLeftColor = post.themeColor;
+  if (!post.mergedAccounts || post.mergedAccounts.length <= 1) {
+    card.style.borderLeftColor = usableColor(post.themeColor, post.platform);
   }
 
   // Merged account border (uses background trick to follow border-radius)
   if (post.mergedAccounts && post.mergedAccounts.length > 1) {
-    const colors = post.mergedAccounts.map(a => a.themeColor || PLATFORM_COLORS[a.platform] || '#7c7dff');
+    const colors = post.mergedAccounts.map(a => usableColor(a.themeColor, a.platform));
     const segmentSize = 100 / colors.length;
     const stops = colors.map((c, i) =>
       `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
@@ -297,15 +315,15 @@ export function renderNotification(notif) {
   if (notif.actor?.username) card.dataset.actorUsername = notif.actor.username;
   // Per-account or merged theme color
   if (notif.mergedAccounts && notif.mergedAccounts.length > 1) {
-    const colors = notif.mergedAccounts.map(a => a.themeColor || PLATFORM_COLORS[a.platform] || '#7c7dff');
+    const colors = notif.mergedAccounts.map(a => usableColor(a.themeColor, a.platform));
     const segmentSize = 100 / colors.length;
     const stops = colors.map((c, i) =>
       `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
     ).join(', ');
     card.style.setProperty('--merged-gradient', `linear-gradient(to bottom, ${stops})`);
     card.classList.add('merged-border');
-  } else if (notif.themeColor) {
-    card.style.borderLeftColor = notif.themeColor;
+  } else {
+    card.style.borderLeftColor = usableColor(notif.themeColor, notif.platform);
   }
 
   let iconHtml;
@@ -396,7 +414,7 @@ export function renderNotification(notif) {
 export function renderAccountCard(account, onRemove) {
   const card = document.createElement('div');
   card.className = `account-card platform-${account.platform}`;
-  if (account.themeColor) card.style.borderLeftColor = account.themeColor;
+  card.style.borderLeftColor = usableColor(account.themeColor, account.platform);
 
   const p = account.profile;
   const platformLabels = {

@@ -17,7 +17,24 @@ export class AccountStore {
   load() {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
+      const accounts = data ? JSON.parse(data) : [];
+      // Mastodon의 theme-color 메타태그는 배경색(#181820/#ffffff)을 반환하므로
+      // 기존 저장된 무의미한 색상을 정리
+      let dirty = false;
+      for (const a of accounts) {
+        if (a.themeColor && /^#?([0-9a-f]{6})$/i.test(a.themeColor)) {
+          const h = a.themeColor.replace(/^#/, '');
+          const brightness = (parseInt(h.substring(0, 2), 16) * 299
+            + parseInt(h.substring(2, 4), 16) * 587
+            + parseInt(h.substring(4, 6), 16) * 114) / 1000;
+          if (brightness < 30 || brightness > 225) {
+            a.themeColor = null;
+            dirty = true;
+          }
+        }
+      }
+      if (dirty) localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+      return accounts;
     } catch {
       return [];
     }
