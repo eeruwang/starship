@@ -343,6 +343,7 @@ export class MastodonClient {
       replyToAcct: status.in_reply_to_id
         ? ((status.mentions || []).find(m => m.id === status.in_reply_to_account_id)?.acct || null)
         : null,
+      visibility: ({ public: 'public', unlisted: 'home', private: 'followers', direct: 'direct' })[status.visibility] || 'public',
       url: status.url,
       raw: status,
     };

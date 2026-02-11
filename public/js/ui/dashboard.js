@@ -7,8 +7,16 @@ import {
   iconRefresh, iconClose, iconWarning, iconImage,
   iconQuote, iconSmile, iconTrash, iconEdit,
   iconHeartSmall, iconStarSmall,
+  iconVisPublic, iconVisHome, iconVisFollowers, iconVisDirect,
   getNotifIcon,
 } from './icons.js';
+
+const VISIBILITY_ICONS = {
+  public: { icon: iconVisPublic, title: '공개' },
+  home: { icon: iconVisHome, title: '홈' },
+  followers: { icon: iconVisFollowers, title: '팔로워만' },
+  direct: { icon: iconVisDirect, title: '다이렉트' },
+};
 
 const PLATFORM_COLORS = {
   misskey: '#96d04a',
@@ -133,7 +141,7 @@ export function renderPost(post) {
         <div class="post-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName)}</div>
         <div class="post-handle">@${escapeHtml(displayPost.author.acct)}</div>
       </div>
-      <span class="post-time" title="${displayPost.createdAt.toLocaleString()}">${timeAgo(displayPost.createdAt)}</span>
+      <span class="post-time" title="${displayPost.createdAt.toLocaleString()}">${timeAgo(displayPost.createdAt)}${displayPost.visibility && VISIBILITY_ICONS[displayPost.visibility] ? `<span class="visibility-icon" title="${VISIBILITY_ICONS[displayPost.visibility].title}">${VISIBILITY_ICONS[displayPost.visibility].icon}</span>` : ''}</span>
     </div>
   `;
 

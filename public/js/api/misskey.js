@@ -414,6 +414,7 @@ export class MisskeyClient {
       } : null,
       replyToId: actualNote.replyId || null,
       instanceUrl: this.instanceUrl,
+      visibility: actualNote.visibility || 'public',
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
     };
