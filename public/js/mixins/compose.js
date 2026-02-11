@@ -2,6 +2,7 @@
  * Compose Mixin
  * Handles the compose modal: opening, emoji picker, file attachments, and submission
  */
+import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
 
 export const ComposeMixin = {
 
@@ -316,12 +317,6 @@ export const ComposeMixin = {
     picker.className = 'compose-emoji-picker';
     picker.id = 'compose-emoji-picker-popup';
 
-    // Common unicode emojis
-    const commonReactions = [
-      '👍', '❤️', '😆', '🎉', '😮', '🤔', '😢', '👀',
-      '🔥', '⭐', '💯', '✨', '😂', '🙏', '💕', '😊',
-    ];
-
     // Determine first selected account with instance emojis
     let emojiAccountId = null;
     for (const id of this.composeSelectedAccounts) {
@@ -338,7 +333,7 @@ export const ComposeMixin = {
     picker.innerHTML = `
       <div class="reaction-picker-section-label">이모지</div>
       <div class="reaction-picker-grid reaction-picker-unicode">
-        ${commonReactions.map(r => `<button class="reaction-picker-item" data-emoji="${r}">${r}</button>`).join('')}
+        ${COMMON_EMOJIS.map(r => `<button class="reaction-picker-item" data-emoji="${r}">${r}</button>`).join('')}
       </div>
       ${emojiAccountId ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
     `;
@@ -385,61 +380,16 @@ export const ComposeMixin = {
     // Fetch instance emojis async
     if (emojiAccountId) {
       const client = this.store.getClient(emojiAccountId);
-      client?.getInstanceEmojis?.().then(emojis => {
-        if (!document.getElementById('compose-emoji-picker-popup')) return;
-        const loadingEl = picker.querySelector('.reaction-picker-loading');
-        if (!emojis || emojis.length === 0) {
-          if (loadingEl) loadingEl.remove();
-          return;
-        }
-
-        const categories = new Map();
-        for (const emoji of emojis) {
-          const cat = emoji.category || '기타';
-          if (!categories.has(cat)) categories.set(cat, []);
-          categories.get(cat).push(emoji);
-        }
-
-        const section = document.createElement('div');
-        section.className = 'reaction-picker-instance-section';
-        section.innerHTML = `
-          <div class="reaction-picker-search">
-            <input type="text" class="reaction-picker-search-input" placeholder="커스텀 이모지 검색..." />
-          </div>
-          <div class="reaction-picker-emojis">
-            ${Array.from(categories.entries()).map(([cat, catEmojis]) => `
-              <div class="reaction-picker-category" data-category="${cat}">
-                <div class="reaction-picker-category-name">${this.escapeHtml(cat)}</div>
-                <div class="reaction-picker-grid">
-                  ${catEmojis.map(e => `<button class="compose-emoji-item" data-emoji=":${e.name}:" title=":${e.name}:"><img src="${this.escapeHtml(e.url)}" alt=":${e.name}:" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `;
-
-        if (loadingEl) loadingEl.replaceWith(section);
-
-        const searchInput = section.querySelector('.reaction-picker-search-input');
-        if (searchInput) {
-          searchInput.addEventListener('input', () => {
-            const query = searchInput.value.trim().toLowerCase();
-            const items = section.querySelectorAll('.compose-emoji-item');
-            const cats = section.querySelectorAll('.reaction-picker-category');
-            for (const item of items) {
-              const name = (item.dataset.emoji || '').toLowerCase();
-              item.style.display = (!query || name.includes(query)) ? '' : 'none';
-            }
-            for (const cat of cats) {
-              const visible = cat.querySelectorAll('.compose-emoji-item:not([style*="display: none"])');
-              cat.style.display = visible.length > 0 ? '' : 'none';
-            }
-          });
-        }
-      }).catch(() => {
-        const loadingEl = picker.querySelector('.reaction-picker-loading');
-        if (loadingEl) loadingEl.remove();
-      });
+      if (client?.getInstanceEmojis) {
+        loadInstanceEmojis({
+          client,
+          picker,
+          pickerId: 'compose-emoji-picker-popup',
+          escapeHtml: this.escapeHtml.bind(this),
+          itemClass: 'compose-emoji-item',
+          dataAttr: 'emoji',
+        });
+      }
     }
   },
 

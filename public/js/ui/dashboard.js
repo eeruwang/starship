@@ -412,7 +412,7 @@ export function renderAccountCard(account, onRemove) {
         <div class="account-card-name">${escapeHtml(p.displayName)}</div>
         <div class="account-card-handle">@${escapeHtml(p.acct)} · ${new URL(account.instanceUrl).hostname}</div>
       </div>
-      <span class="account-card-platform ${account.platform}">${platformLabels[account.platform]}</span>
+      <span class="account-card-platform platform-badge ${account.platform}">${platformLabels[account.platform]}</span>
     </div>
     <div class="account-card-stats">
       <div class="account-stat">

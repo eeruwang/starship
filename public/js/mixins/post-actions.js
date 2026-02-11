@@ -3,6 +3,7 @@
  * Handles post interactions: fav, boost, reply, quote, reaction, edit, delete
  */
 import { renderPost } from '../ui/dashboard.js';
+import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
 
 export const PostActionsMixin = {
 
@@ -365,12 +366,6 @@ export const PostActionsMixin = {
     picker.className = 'reaction-picker';
     picker.id = 'reaction-picker-popup';
 
-    // Common unicode emoji reactions
-    const commonReactions = [
-      '👍', '❤️', '😆', '🎉', '😮', '🤔', '😢', '👀',
-      '🔥', '⭐', '💯', '✨', '😂', '🙏', '💕', '😊',
-    ];
-
     // Check if this is a Misskey-type account (needs instance emojis)
     const client = this.store.getClient(accountId);
     const account = this.store.getById(accountId);
@@ -380,7 +375,7 @@ export const PostActionsMixin = {
     picker.innerHTML = `
       <div class="reaction-picker-section-label">이모지</div>
       <div class="reaction-picker-grid reaction-picker-unicode">
-        ${commonReactions.map(r => `<button class="reaction-picker-item" data-reaction="${r}">${r}</button>`).join('')}
+        ${COMMON_EMOJIS.map(r => `<button class="reaction-picker-item" data-reaction="${r}">${r}</button>`).join('')}
       </div>
       ${isMisskeyType ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
       <div class="reaction-picker-custom">
@@ -434,66 +429,15 @@ export const PostActionsMixin = {
 
     // Async: fetch and insert instance custom emojis for Misskey accounts
     if (isMisskeyType && client?.getInstanceEmojis) {
-      client.getInstanceEmojis().then(instanceEmojis => {
-        // Picker might have been closed while loading
-        if (!document.getElementById('reaction-picker-popup')) return;
-
-        const loadingEl = picker.querySelector('.reaction-picker-loading');
-        if (!instanceEmojis || instanceEmojis.length === 0) {
-          if (loadingEl) loadingEl.textContent = '커스텀 이모지 없음';
-          return;
-        }
-
-        // Build categories
-        const categories = new Map();
-        for (const emoji of instanceEmojis) {
-          const cat = emoji.category || '기타';
-          if (!categories.has(cat)) categories.set(cat, []);
-          categories.get(cat).push(emoji);
-        }
-
-        const emojiSection = document.createElement('div');
-        emojiSection.className = 'reaction-picker-instance-section';
-        emojiSection.innerHTML = `
-          <div class="reaction-picker-search">
-            <input type="text" class="reaction-picker-search-input" placeholder="커스텀 이모지 검색..." />
-          </div>
-          <div class="reaction-picker-emojis">
-            ${Array.from(categories.entries()).map(([cat, emojis]) => `
-              <div class="reaction-picker-category" data-category="${cat}">
-                <div class="reaction-picker-category-name">${this.escapeHtml(cat)}</div>
-                <div class="reaction-picker-grid">
-                  ${emojis.map(e => `<button class="reaction-picker-item instance-emoji" data-reaction=":${e.name}:" title=":${e.name}:"><img src="${this.escapeHtml(e.url)}" alt=":${e.name}:" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `;
-
-        // Replace loading element with emoji section
-        if (loadingEl) loadingEl.replaceWith(emojiSection);
-
-        // Attach search filter
-        const searchInput = emojiSection.querySelector('.reaction-picker-search-input');
-        if (searchInput) {
-          searchInput.addEventListener('input', () => {
-            const query = searchInput.value.trim().toLowerCase();
-            const items = emojiSection.querySelectorAll('.instance-emoji');
-            const cats = emojiSection.querySelectorAll('.reaction-picker-category');
-            for (const item of items) {
-              const name = (item.dataset.reaction || '').toLowerCase();
-              item.style.display = (!query || name.includes(query)) ? '' : 'none';
-            }
-            for (const cat of cats) {
-              const visibleItems = cat.querySelectorAll('.instance-emoji:not([style*="display: none"])');
-              cat.style.display = visibleItems.length > 0 ? '' : 'none';
-            }
-          });
-        }
-      }).catch(err => {
-        console.error('Failed to load instance emojis:', err);
-        const loadingEl = picker.querySelector('.reaction-picker-loading');
-        if (loadingEl) loadingEl.textContent = '이모지 로딩 실패';
+      loadInstanceEmojis({
+        client,
+        picker,
+        pickerId: 'reaction-picker-popup',
+        escapeHtml: this.escapeHtml.bind(this),
+        itemClass: 'reaction-picker-item instance-emoji',
+        dataAttr: 'reaction',
+        emptyMessage: '커스텀 이모지 없음',
+        errorMessage: '이모지 로딩 실패',
       });
     }
   },

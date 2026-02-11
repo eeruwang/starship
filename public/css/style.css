@@ -73,6 +73,18 @@
   background: rgba(100, 100, 180, 0.4);
 }
 
+/* Platform accent colors — shared across post/notif/account cards */
+.platform-misskey { border-left-color: var(--accent-misskey); }
+.platform-iceshrimp { border-left-color: var(--accent-iceshrimp); }
+.platform-cherrypick { border-left-color: var(--accent-cherrypick); }
+.platform-mastodon { border-left-color: var(--accent-mastodon); }
+
+/* Platform badge labels — shared across account-card and compose */
+.platform-badge.misskey { background: rgba(150,208,74,0.2); color: var(--accent-misskey); }
+.platform-badge.iceshrimp { background: rgba(227,106,138,0.2); color: var(--accent-iceshrimp); }
+.platform-badge.cherrypick { background: rgba(255,107,157,0.2); color: var(--accent-cherrypick); }
+.platform-badge.mastodon { background: rgba(99,100,255,0.2); color: var(--accent-mastodon); }
+
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -564,10 +576,7 @@ body {
   background: var(--bg-hover);
 }
 
-.post-card.platform-misskey { border-left-color: var(--accent-misskey); }
-.post-card.platform-iceshrimp { border-left-color: var(--accent-iceshrimp); }
-.post-card.platform-cherrypick { border-left-color: var(--accent-cherrypick); }
-.post-card.platform-mastodon { border-left-color: var(--accent-mastodon); }
+
 
 .post-header {
   display: flex;
@@ -1424,10 +1433,7 @@ h4.mfm-heading { font-size: 1em; }
   background: var(--bg-hover);
 }
 
-.notif-card.platform-misskey { border-left-color: var(--accent-misskey); }
-.notif-card.platform-iceshrimp { border-left-color: var(--accent-iceshrimp); }
-.notif-card.platform-cherrypick { border-left-color: var(--accent-cherrypick); }
-.notif-card.platform-mastodon { border-left-color: var(--accent-mastodon); }
+
 
 .notif-actor-wrap {
   position: relative;
@@ -1609,10 +1615,7 @@ h4.mfm-heading { font-size: 1em; }
   flex-shrink: 0;
 }
 
-.account-card.platform-misskey { border-left-color: var(--accent-misskey); }
-.account-card.platform-iceshrimp { border-left-color: var(--accent-iceshrimp); }
-.account-card.platform-cherrypick { border-left-color: var(--accent-cherrypick); }
-.account-card.platform-mastodon { border-left-color: var(--accent-mastodon); }
+
 
 .account-card-header {
   display: flex;
@@ -1650,10 +1653,6 @@ h4.mfm-heading { font-size: 1em; }
   text-transform: uppercase;
 }
 
-.account-card-platform.misskey { background: rgba(150,208,74,0.2); color: var(--accent-misskey); }
-.account-card-platform.iceshrimp { background: rgba(227,106,138,0.2); color: var(--accent-iceshrimp); }
-.account-card-platform.cherrypick { background: rgba(255,107,157,0.2); color: var(--accent-cherrypick); }
-.account-card-platform.mastodon { background: rgba(99,100,255,0.2); color: var(--accent-mastodon); }
 
 .account-card-stats {
   display: flex;
@@ -3351,19 +3350,6 @@ textarea.input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.compose-account-platform {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.3rem;
-  border-radius: 6px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.compose-account-platform.misskey { background: rgba(150,208,74,0.2); color: var(--accent-misskey); }
-.compose-account-platform.iceshrimp { background: rgba(227,106,138,0.2); color: var(--accent-iceshrimp); }
-.compose-account-platform.cherrypick { background: rgba(255,107,157,0.2); color: var(--accent-cherrypick); }
-.compose-account-platform.mastodon { background: rgba(99,100,255,0.2); color: var(--accent-mastodon); }
 
 /* Compose reply context */
 .compose-reply-context {

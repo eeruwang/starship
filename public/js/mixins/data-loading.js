@@ -118,28 +118,8 @@ export const DataLoadingMixin = {
       });
 
       // Deduplicate posts by canonical URI (same post seen from different accounts)
-      // Renotes/reblogs are kept as separate timeline entries from the original
       if (accounts.length > 1) {
-        const seen = new Map(); // key -> index in deduped
-        const deduped = [];
-        for (const post of allPosts) {
-          const displayPost = post.reblog || post;
-          const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
-          // Renotes/reblogs: use reblogger's acct so the same renote seen from different accounts deduplicates
-          const key = post.rebloggedBy ? `reblog:${post.rebloggedBy.acct}:${baseKey}` : baseKey;
-          if (!seen.has(key)) {
-            post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
-            seen.set(key, deduped.length);
-            deduped.push(post);
-          } else {
-            // Merge: add this account's info to the existing post
-            const idx = seen.get(key);
-            const existing = deduped[idx];
-            if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
-              existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
-            }
-          }
-        }
+        const deduped = this._deduplicatePosts(allPosts);
         allPosts.length = 0;
         allPosts.push(...deduped);
       }
@@ -295,24 +275,7 @@ export const DataLoadingMixin = {
 
       // Deduplicate among fetched posts (multi-account)
       if (accounts.length > 1) {
-        const seen = new Map();
-        const deduped = [];
-        for (const post of allPosts) {
-          const displayPost = post.reblog || post;
-          const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
-          const key = post.rebloggedBy ? `reblog:${post.rebloggedBy.acct}:${baseKey}` : baseKey;
-          if (!seen.has(key)) {
-            post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
-            seen.set(key, deduped.length);
-            deduped.push(post);
-          } else {
-            const idx = seen.get(key);
-            const existing = deduped[idx];
-            if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
-              existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
-            }
-          }
-        }
+        const deduped = this._deduplicatePosts(allPosts);
         allPosts.length = 0;
         allPosts.push(...deduped);
       }
@@ -398,25 +361,7 @@ export const DataLoadingMixin = {
 
       // Deduplicate notifications across accounts (same actor + type + target post)
       if (accounts.length > 1) {
-        const seen = new Map();
-        const deduped = [];
-        for (const notif of allNotifs) {
-          const actorKey = notif.actor?.acct || notif.actor?.id || '';
-          const postKey = notif.post?.canonicalUri || notif.post?.id || '';
-          const reactionKey = notif.reactionEmoji || '';
-          const key = `${notif.type}:${actorKey}:${postKey}:${reactionKey}`;
-          if (!seen.has(key)) {
-            notif.mergedAccounts = [{ id: notif.accountId, platform: notif.platform, themeColor: notif.themeColor }];
-            seen.set(key, deduped.length);
-            deduped.push(notif);
-          } else {
-            const idx = seen.get(key);
-            const existing = deduped[idx];
-            if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === notif.accountId)) {
-              existing.mergedAccounts.push({ id: notif.accountId, platform: notif.platform, themeColor: notif.themeColor });
-            }
-          }
-        }
+        const deduped = this._deduplicateNotifications(allNotifs);
         allNotifs.length = 0;
         allNotifs.push(...deduped);
       }
@@ -492,6 +437,51 @@ export const DataLoadingMixin = {
         container.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
       }
     }
+  },
+
+  _deduplicatePosts(posts) {
+    const seen = new Map();
+    const deduped = [];
+    for (const post of posts) {
+      const displayPost = post.reblog || post;
+      const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
+      const key = post.rebloggedBy ? `reblog:${post.rebloggedBy.acct}:${baseKey}` : baseKey;
+      if (!seen.has(key)) {
+        post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];
+        seen.set(key, deduped.length);
+        deduped.push(post);
+      } else {
+        const idx = seen.get(key);
+        const existing = deduped[idx];
+        if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
+          existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
+        }
+      }
+    }
+    return deduped;
+  },
+
+  _deduplicateNotifications(notifs) {
+    const seen = new Map();
+    const deduped = [];
+    for (const notif of notifs) {
+      const actorKey = notif.actor?.acct || notif.actor?.id || '';
+      const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+      const reactionKey = notif.reactionEmoji || '';
+      const key = `${notif.type}:${actorKey}:${postKey}:${reactionKey}`;
+      if (!seen.has(key)) {
+        notif.mergedAccounts = [{ id: notif.accountId, platform: notif.platform, themeColor: notif.themeColor }];
+        seen.set(key, deduped.length);
+        deduped.push(notif);
+      } else {
+        const idx = seen.get(key);
+        const existing = deduped[idx];
+        if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === notif.accountId)) {
+          existing.mergedAccounts.push({ id: notif.accountId, platform: notif.platform, themeColor: notif.themeColor });
+        }
+      }
+    }
+    return deduped;
   },
 
   cachePosts(posts) {
