@@ -3,7 +3,7 @@
  * Fediverse multi-account dashboard for Misskey, Iceshrimp, CherryPick, and Mastodon.
  */
 import { AccountStore } from './accounts.js';
-import { renderPost, renderNotification, renderAccountCard, renderLoading, renderLoadingText, iconRefresh, iconClose } from './ui/dashboard.js';
+import { iconRefresh, iconClose } from './ui/dashboard.js';
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from './auth.js';
 
 // Mixins
@@ -13,6 +13,7 @@ import { DataLoadingMixin } from './mixins/data-loading.js';
 import { AuthUIMixin } from './mixins/auth-ui.js';
 import { AccountSetupMixin } from './mixins/account-setup.js';
 import { ThreadViewMixin } from './mixins/thread-view.js';
+import { ProfileModalMixin } from './mixins/profile-modal.js';
 
 const COLUMN_STATE_KEY = 'starship_column_state';
 const SETTINGS_KEY = 'starship_settings';
@@ -166,24 +167,30 @@ class StarShipApp {
   }
 
   bindEvents() {
-    // Open add account modal
+    this._bindHeaderEvents();
+    this._bindAuthEvents();
+    this._bindModalEvents();
+    this._bindAccountSetupEvents();
+    this._bindToggleBarDrag();
+    this._bindDelegatedEvents();
+    this._bindComposeEvents();
+    this._bindColumnEvents();
+    this._bindKeyboardEvents();
+  }
+
+  _bindHeaderEvents() {
     this.btnAddAccount?.addEventListener('click', () => this.openAddAccountModal());
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
     document.getElementById('btn-welcome-login')?.addEventListener('click', () => this.handleAuthButtonClick());
-
-    // Header compose button: pre-select focused column's account
     document.getElementById('btn-compose-header').addEventListener('click', () => {
       const accountId = this.getFocusedColumnAccountId();
       this.openComposeModal(null, accountId || null);
     });
-
-    // Refresh (full reload: re-fetch profiles + all content)
     this.btnRefreshAll.addEventListener('click', () => this.refreshAll(true));
-
-    // Settings
     this.btnSettings.addEventListener('click', () => this.openSettingsModal());
+  }
 
-    // Auth
+  _bindAuthEvents() {
     this.btnAuth.addEventListener('click', () => this.handleAuthButtonClick());
     this.btnAuthSubmit.addEventListener('click', () => this.handleAuthSubmit());
     this.btnAuthSwitch.addEventListener('click', () => this.toggleAuthMode());
@@ -191,11 +198,9 @@ class StarShipApp {
       if (e.key === 'Enter') this.handleAuthSubmit();
     });
 
-    // User menu actions
     document.querySelectorAll('.user-menu-item[data-action]').forEach(item => {
       item.addEventListener('click', () => this.handleUserMenuAction(item.dataset.action));
     });
-    // Registration mode buttons
     document.querySelectorAll('.reg-mode-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -216,8 +221,9 @@ class StarShipApp {
       } catch (err) { console.error('Import failed:', err); this.showToast('파일을 읽을 수 없습니다.'); }
       e.target.value = '';
     });
+  }
 
-    // Modal close
+  _bindModalEvents() {
     document.querySelectorAll('[data-close-modal]').forEach(btn => {
       btn.addEventListener('click', () => {
         const modalId = btn.dataset.closeModal;
@@ -225,8 +231,6 @@ class StarShipApp {
         if (modalId === 'modal-compose') { this.closeComposeEmojiPicker(); this.closeComposeVisibilityPicker(); }
       });
     });
-
-    // Close modal on overlay click
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
@@ -236,110 +240,100 @@ class StarShipApp {
         }
       });
     });
+  }
 
-    // Instance URL input: auto-detect platform on blur/change
-    this.instanceUrl.addEventListener('input', () => {
-      this.updateOAuthButton();
-    });
-
-    this.instanceUrl.addEventListener('blur', () => {
-      this.autoDetectPlatform();
-    });
-
-    // OAuth login
+  _bindAccountSetupEvents() {
+    this.instanceUrl.addEventListener('input', () => this.updateOAuthButton());
+    this.instanceUrl.addEventListener('blur', () => this.autoDetectPlatform());
     this.btnOAuthLogin.addEventListener('click', () => this.handleOAuthLogin());
-
-    // Manual token add
     this.btnConfirmAdd.addEventListener('click', () => this.handleAddAccount());
+  }
 
-    // Toggle bar: drag to scroll (mouse + touch)
-    {
-      let isDragging = false, startX = 0, startY = 0, scrollStart = 0, moved = false;
-      let directionLocked = false;
-      const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
-      const getY = (e) => e.touches ? e.touches[0].pageY : e.pageY;
+  _bindToggleBarDrag() {
+    let isDragging = false, startX = 0, startY = 0, scrollStart = 0, moved = false;
+    let directionLocked = false;
+    const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
+    const getY = (e) => e.touches ? e.touches[0].pageY : e.pageY;
 
-      const onStart = (e) => {
-        isDragging = true;
-        directionLocked = false;
-        startX = getX(e);
-        startY = e.touches ? getY(e) : 0;
-        scrollStart = this.toggleBar.scrollLeft;
-        moved = false;
-        if (!e.touches) {
-          this.toggleBar.style.cursor = 'grabbing';
-          e.preventDefault();
-        }
-      };
-      const onMove = (e) => {
-        if (!isDragging) return;
-        const x = e.touches ? e.touches[0].pageX : e.pageX;
+    const onStart = (e) => {
+      isDragging = true;
+      directionLocked = false;
+      startX = getX(e);
+      startY = e.touches ? getY(e) : 0;
+      scrollStart = this.toggleBar.scrollLeft;
+      moved = false;
+      if (!e.touches) {
+        this.toggleBar.style.cursor = 'grabbing';
+        e.preventDefault();
+      }
+    };
+    const onMove = (e) => {
+      if (!isDragging) return;
+      const x = e.touches ? e.touches[0].pageX : e.pageX;
 
-        // Touch direction lock
-        if (e.touches && !directionLocked) {
-          const y = e.touches[0].pageY;
-          const dx = Math.abs(x - startX);
-          const dy = Math.abs(y - startY);
-          if (dx + dy > 5) {
-            if (dx > dy) {
-              directionLocked = true;
-            } else {
-              isDragging = false;
-              return;
-            }
+      if (e.touches && !directionLocked) {
+        const y = e.touches[0].pageY;
+        const dx = Math.abs(x - startX);
+        const dy = Math.abs(y - startY);
+        if (dx + dy > 5) {
+          if (dx > dy) {
+            directionLocked = true;
           } else {
+            isDragging = false;
             return;
           }
-        }
-
-        if (e.cancelable) e.preventDefault();
-        const dx = x - startX;
-        if (Math.abs(dx) > 3) {
-          moved = true;
-          this.toggleBar.scrollLeft = scrollStart - dx;
-        }
-      };
-      const onEnd = () => {
-        if (isDragging) {
-          isDragging = false;
-          directionLocked = false;
-          this.toggleBar.style.cursor = '';
-        }
-      };
-
-      this.toggleBar.addEventListener('mousedown', onStart);
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onEnd);
-      this.toggleBar.addEventListener('touchstart', onStart, { passive: true });
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', (e) => {
-        const wasDrag = moved;
-        onEnd();
-        // Touch tap: manually trigger toggle if it wasn't a drag
-        if (!wasDrag && e.changedTouches && e.changedTouches.length) {
-          const touch = e.changedTouches[0];
-          const el = document.elementFromPoint(touch.clientX, touch.clientY);
-          const toggle = el && el.closest('.col-toggle');
-          if (toggle && this.toggleBar.contains(toggle)) {
-            this.handleToggleClick(toggle);
-          }
-        }
-      });
-
-      // Prevent toggle click when dragging (mouse)
-      this.toggleBar.addEventListener('click', (e) => {
-        if (moved) {
-          e.stopPropagation();
-          moved = false;
+        } else {
           return;
         }
-        const toggle = e.target.closest('.col-toggle');
-        if (!toggle) return;
-        this.handleToggleClick(toggle);
-      }, true);
-    }
+      }
 
-    // CW toggle (delegated) — use relative DOM instead of getElementById to avoid duplicate-id issues
+      if (e.cancelable) e.preventDefault();
+      const dx = x - startX;
+      if (Math.abs(dx) > 3) {
+        moved = true;
+        this.toggleBar.scrollLeft = scrollStart - dx;
+      }
+    };
+    const onEnd = () => {
+      if (isDragging) {
+        isDragging = false;
+        directionLocked = false;
+        this.toggleBar.style.cursor = '';
+      }
+    };
+
+    this.toggleBar.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    this.toggleBar.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', (e) => {
+      const wasDrag = moved;
+      onEnd();
+      if (!wasDrag && e.changedTouches && e.changedTouches.length) {
+        const touch = e.changedTouches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        const toggle = el && el.closest('.col-toggle');
+        if (toggle && this.toggleBar.contains(toggle)) {
+          this.handleToggleClick(toggle);
+        }
+      }
+    });
+
+    this.toggleBar.addEventListener('click', (e) => {
+      if (moved) {
+        e.stopPropagation();
+        moved = false;
+        return;
+      }
+      const toggle = e.target.closest('.col-toggle');
+      if (!toggle) return;
+      this.handleToggleClick(toggle);
+    }, true);
+  }
+
+  _bindDelegatedEvents() {
+    // CW toggle
     document.addEventListener('click', (e) => {
       if (e.target.matches('.cw-toggle')) {
         const cwWarning = e.target.closest('.cw-warning, .reply-context-cw');
@@ -351,7 +345,7 @@ class StarShipApp {
       }
     });
 
-    // Expand toggle for long content — use relative DOM
+    // Expand toggle for long content
     document.addEventListener('click', (e) => {
       if (e.target.matches('.expand-toggle')) {
         const target = e.target.previousElementSibling;
@@ -362,7 +356,7 @@ class StarShipApp {
       }
     });
 
-    // Post actions (delegated)
+    // Post actions
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.post-action');
       if (!btn) return;
@@ -394,7 +388,7 @@ class StarShipApp {
       }
     });
 
-    // Notification action buttons (reply, boost, react)
+    // Notification action buttons
     document.addEventListener('click', (e) => {
       const actionBtn = e.target.closest('.notif-action-btn');
       if (actionBtn) {
@@ -420,7 +414,6 @@ class StarShipApp {
     document.addEventListener('click', (e) => {
       const card = e.target.closest('.notif-clickable');
       if (!card) return;
-      // Don't trigger on avatars, lightbox images, expand toggles, or action buttons
       if (e.target.closest('.notif-avatar') || e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn')) return;
       const postId = card.dataset.postId;
       const accountId = card.dataset.accountId;
@@ -442,7 +435,6 @@ class StarShipApp {
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;
 
-      // Notification avatar → always open the actor's profile
       if (avatar.classList.contains('notif-avatar')) {
         const actorId = card.dataset.actorId;
         if (actorId) {
@@ -458,7 +450,6 @@ class StarShipApp {
         return;
       }
 
-      // Post avatar → open post author's profile
       const postId = card.dataset.postId;
       if (postId) {
         const post = this.postCache.get(`${platform}:${postId}`);
@@ -470,7 +461,7 @@ class StarShipApp {
       }
     });
 
-    // Reaction badge hover/click: show who reacted
+    // Reaction badge click: show who reacted
     document.addEventListener('click', (e) => {
       const badge = e.target.closest('.reaction-badge');
       if (!badge) return;
@@ -481,7 +472,6 @@ class StarShipApp {
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       const reaction = badge.dataset.reaction;
-      // For renotes/reblogs, reactions are on the inner post, not the renote wrapper
       const cached = this.postCache.get(`${platform}:${postId}`);
       const reactionPostId = cached?.reblog?.id || postId;
       this.showReactionUsers(badge, reactionPostId, platform, accountId, reaction);
@@ -489,51 +479,46 @@ class StarShipApp {
 
     // Post card click: open thread view
     document.addEventListener('click', (e) => {
-      // Skip if clicking interactive elements
       if (e.target.closest('.post-action, .reaction-badge, a, button, [data-lightbox], .expand-toggle, .cw-toggle, .post-media, img')) return;
       const card = e.target.closest('.post-card');
       if (!card) return;
-      // Don't open thread from inside the thread modal itself
       if (card.closest('.thread-content')) return;
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;
 
-      // If clicking inside a quote-post, open thread for the quoted post
       const quotePart = e.target.closest('.quote-post');
       if (quotePart && quotePart.dataset.quoteId) {
         this.openThreadView(quotePart.dataset.quoteId, platform, accountId);
         return;
       }
 
-      // Otherwise open thread for the parent post
       const postId = card.dataset.postId;
       if (postId) {
         this.openThreadView(postId, platform, accountId);
       }
     });
 
-    // Sensitive media reveal
+    // Sensitive media reveal/hide
     document.addEventListener('click', (e) => {
-      const btn = e.target.closest('.sensitive-reveal');
-      if (!btn) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const media = btn.closest('.post-media');
-      if (media) media.classList.add('media-revealed');
+      const revealBtn = e.target.closest('.sensitive-reveal');
+      if (revealBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const media = revealBtn.closest('.post-media');
+        if (media) media.classList.add('media-revealed');
+        return;
+      }
+      const hideBtn = e.target.closest('.sensitive-hide');
+      if (hideBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const media = hideBtn.closest('.post-media');
+        if (media) media.classList.remove('media-revealed');
+      }
     });
 
-    // Sensitive media re-hide
-    document.addEventListener('click', (e) => {
-      const btn = e.target.closest('.sensitive-hide');
-      if (!btn) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const media = btn.closest('.post-media');
-      if (media) media.classList.remove('media-revealed');
-    });
-
-    // Image lightbox (delegated)
+    // Image lightbox
     document.addEventListener('click', (e) => {
       const img = e.target.closest('img[data-lightbox="true"]');
       if (!img) return;
@@ -543,83 +528,16 @@ class StarShipApp {
       this.openLightbox(fullUrl, img);
     });
 
-    // Lightbox close: background, image, or close button
+    // Lightbox close
     this.lightboxClose.addEventListener('click', () => this.closeLightbox());
     this.lightbox.addEventListener('click', (e) => {
       if (e.target === this.lightbox || e.target === this.lightboxImg) {
         this.closeLightbox();
       }
     });
+  }
 
-    // Horizontal scroll with mouse wheel
-    this.columnsContainer.addEventListener('wheel', (e) => {
-      // If the target is inside column-content that can scroll vertically, let it scroll
-      const columnContent = e.target.closest('.column-content');
-      if (columnContent) {
-        const canScrollVertically = columnContent.scrollHeight > columnContent.clientHeight;
-        if (canScrollVertically) {
-          // Check if we're at scroll boundaries
-          const atTop = columnContent.scrollTop <= 0;
-          const atBottom = columnContent.scrollTop + columnContent.clientHeight >= columnContent.scrollHeight - 1;
-
-          // If scrolling down and not at bottom, or scrolling up and not at top, let vertical scroll happen
-          if ((e.deltaY > 0 && !atBottom) || (e.deltaY < 0 && !atTop)) {
-            return; // Let vertical scroll happen naturally
-          }
-        }
-      }
-
-      // Otherwise, convert vertical wheel to horizontal scroll
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault();
-        this.columnsContainer.scrollLeft += e.deltaY;
-      }
-    }, { passive: false });
-
-    // Infinite scroll: load older posts when near bottom of a column
-    this.columnsContainer.addEventListener('scroll', (e) => {
-      const columnContent = e.target;
-      if (!columnContent.classList.contains('column-content')) return;
-      const distFromBottom = columnContent.scrollHeight - columnContent.scrollTop - columnContent.clientHeight;
-      if (distFromBottom < 300) {
-        this.loadOlderPosts(columnContent);
-      }
-    }, { passive: true, capture: true });
-
-    // Arrow key navigation
-    document.addEventListener('keydown', (e) => {
-      // Cmd/Ctrl+N: open compose modal (override browser new-window)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        e.stopPropagation();
-        const accountId = this.getFocusedColumnAccountId();
-        this.openComposeModal(null, accountId || null);
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        // Close one layer at a time: topmost modal first
-        if (this.closeTopmostModal()) return;
-        this.closeLightbox();
-        this.closeAccountPicker();
-        this.closeReactionPicker();
-        this.closeReactionPopup();
-        return;
-      }
-
-      // Don't handle arrows when focused on input elements
-      if (e.target.matches('input, textarea, select')) return;
-
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        this.navigateColumn(-1);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        this.navigateColumn(1);
-      }
-    });
-
-    // Compose modal
+  _bindComposeEvents() {
     this.btnComposeAttach.addEventListener('click', () => this.composeFilesInput.click());
     this.btnComposeSensitive.addEventListener('click', () => {
       this.composeSensitive = !this.composeSensitive;
@@ -629,11 +547,9 @@ class StarShipApp {
     this.btnComposeVisibility.addEventListener('click', () => this.showComposeVisibilityPicker());
     this.composeFilesInput.addEventListener('change', () => this.handleComposeFileSelect());
     this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());
-
-    // Word count display
     this.composeText.addEventListener('input', () => this._updateComposeWordCount());
 
-    // Drag-and-drop image upload on compose editor
+    // Drag-and-drop image upload
     this.composeEditor.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -658,7 +574,7 @@ class StarShipApp {
       if (files.length > 0) this.renderComposeImagePreview();
     });
 
-    // Cmd/Ctrl+Enter to submit compose
+    // Cmd/Ctrl+Enter to submit
     this.composeText.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -681,107 +597,40 @@ class StarShipApp {
         this.renderComposeImagePreview();
       }
     });
+  }
 
-    // Column headers: drag to scroll columns container horizontally (with momentum)
-    {
-      let isDragging = false, startX = 0, startY = 0, scrollStart = 0, moved = false;
-      let velocity = 0, momentumId = null;
-      let prevX = 0, prevTime = 0;
-      let directionLocked = false; // once locked horizontal, prevent vertical scroll
-      const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
-      const getY = (e) => e.touches ? e.touches[0].pageY : e.pageY;
-      const SMOOTHING = 0.5;
-
-      const startDrag = (e, isTouch) => {
-        const header = e.target.closest('.column-header');
-        if (!header || e.target.closest('button') || e.target.closest('.column-header-avatar')) return;
-        if (momentumId) { cancelAnimationFrame(momentumId); momentumId = null; }
-        isDragging = true;
-        directionLocked = false;
-        const x = getX(e);
-        startX = x;
-        startY = isTouch ? getY(e) : 0;
-        prevX = x;
-        prevTime = performance.now();
-        velocity = 0;
-        scrollStart = this.columnsContainer.scrollLeft;
-        moved = false;
-        if (!isTouch) {
-          this.columnsContainer.style.cursor = 'grabbing';
-          e.preventDefault();
-        }
-      };
-      const onMove = (e) => {
-        if (!isDragging) return;
-        const x = e.touches ? e.touches[0].pageX : e.pageX;
-        const now = performance.now();
-
-        // Touch: lock direction after small movement
-        if (e.touches && !directionLocked) {
-          const y = e.touches[0].pageY;
-          const dx = Math.abs(x - startX);
-          const dy = Math.abs(y - startY);
-          if (dx + dy > 5) {
-            if (dx > dy) {
-              directionLocked = true; // horizontal drag confirmed
-            } else {
-              isDragging = false; // vertical scroll, release
-              return;
-            }
-          } else {
-            return; // wait for direction
+  _bindColumnEvents() {
+    // Horizontal scroll with mouse wheel
+    this.columnsContainer.addEventListener('wheel', (e) => {
+      const columnContent = e.target.closest('.column-content');
+      if (columnContent) {
+        const canScrollVertically = columnContent.scrollHeight > columnContent.clientHeight;
+        if (canScrollVertically) {
+          const atTop = columnContent.scrollTop <= 0;
+          const atBottom = columnContent.scrollTop + columnContent.clientHeight >= columnContent.scrollHeight - 1;
+          if ((e.deltaY > 0 && !atBottom) || (e.deltaY < 0 && !atTop)) {
+            return;
           }
         }
+      }
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        this.columnsContainer.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
 
-        // Prevent default scroll once locked horizontal
-        if (e.cancelable) e.preventDefault();
+    // Infinite scroll
+    this.columnsContainer.addEventListener('scroll', (e) => {
+      const columnContent = e.target;
+      if (!columnContent.classList.contains('column-content')) return;
+      const distFromBottom = columnContent.scrollHeight - columnContent.scrollTop - columnContent.clientHeight;
+      if (distFromBottom < 300) {
+        this.loadOlderPosts(columnContent);
+      }
+    }, { passive: true, capture: true });
 
-        const dt = now - prevTime;
-        if (dt > 0) {
-          const instantV = (x - prevX) / dt;
-          velocity = velocity * (1 - SMOOTHING) + instantV * SMOOTHING;
-        }
-        prevX = x;
-        prevTime = now;
-        this.columnsContainer.scrollLeft = scrollStart - (x - startX);
-        if (Math.abs(x - startX) > 3) moved = true;
-      };
-      const onEnd = (e) => {
-        if (!isDragging) return;
-        // Use last known velocity (changedTouches has no pageX for velocity)
-        isDragging = false;
-        directionLocked = false;
-        this.columnsContainer.style.cursor = '';
-        if (Math.abs(velocity) > 0.1) {
-          let v = -velocity * 16;
-          const decel = 0.96;
-          const step = () => {
-            if (Math.abs(v) < 0.3) { momentumId = null; return; }
-            this.columnsContainer.scrollLeft += v;
-            v *= decel;
-            momentumId = requestAnimationFrame(step);
-          };
-          momentumId = requestAnimationFrame(step);
-        }
-      };
-
-      this.columnsContainer.addEventListener('mousedown', (e) => startDrag(e, false));
-      this.columnsContainer.addEventListener('touchstart', (e) => startDrag(e, true), { passive: true });
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('mouseup', onEnd);
-      document.addEventListener('touchend', onEnd);
-
-      // Click on column header (not drag): focus the column
-      this.columnsContainer.addEventListener('click', (e) => {
-        if (moved) return; // was a drag, not a click
-        const header = e.target.closest('.column-header');
-        if (!header || e.target.closest('button')) return;
-        const col = header.closest('.column');
-        if (!col) return;
-        this.focusColumn(col);
-      });
-    }
+    // Column headers: drag to scroll with momentum
+    this._bindColumnHeaderDrag();
 
     // Column header avatar click: open profile modal
     this.columnsContainer.addEventListener('click', (e) => {
@@ -805,7 +654,7 @@ class StarShipApp {
       this.openProfileModal(author, platform, accountId);
     });
 
-    // Column close buttons (delegated)
+    // Column close/refresh buttons
     this.columnsContainer.addEventListener('click', (e) => {
       const closeBtn = e.target.closest('[data-action="close-column"]');
       if (closeBtn) {
@@ -825,12 +674,138 @@ class StarShipApp {
         this.toggleColumnSmooth(colType, false, accountId);
       }
 
-      // Column refresh buttons
       const refreshBtn = e.target.closest('[data-action="refresh-column"]');
       if (refreshBtn) {
         const colType = refreshBtn.dataset.columnType;
         const accountId = refreshBtn.dataset.accountId;
         this.refreshColumn(colType, accountId);
+      }
+    });
+  }
+
+  _bindColumnHeaderDrag() {
+    let isDragging = false, startX = 0, startY = 0, scrollStart = 0, moved = false;
+    let velocity = 0, momentumId = null;
+    let prevX = 0, prevTime = 0;
+    let directionLocked = false;
+    const getX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
+    const getY = (e) => e.touches ? e.touches[0].pageY : e.pageY;
+    const SMOOTHING = 0.5;
+
+    const startDrag = (e, isTouch) => {
+      const header = e.target.closest('.column-header');
+      if (!header || e.target.closest('button') || e.target.closest('.column-header-avatar')) return;
+      if (momentumId) { cancelAnimationFrame(momentumId); momentumId = null; }
+      isDragging = true;
+      directionLocked = false;
+      const x = getX(e);
+      startX = x;
+      startY = isTouch ? getY(e) : 0;
+      prevX = x;
+      prevTime = performance.now();
+      velocity = 0;
+      scrollStart = this.columnsContainer.scrollLeft;
+      moved = false;
+      if (!isTouch) {
+        this.columnsContainer.style.cursor = 'grabbing';
+        e.preventDefault();
+      }
+    };
+    const onMove = (e) => {
+      if (!isDragging) return;
+      const x = e.touches ? e.touches[0].pageX : e.pageX;
+      const now = performance.now();
+
+      if (e.touches && !directionLocked) {
+        const y = e.touches[0].pageY;
+        const dx = Math.abs(x - startX);
+        const dy = Math.abs(y - startY);
+        if (dx + dy > 5) {
+          if (dx > dy) {
+            directionLocked = true;
+          } else {
+            isDragging = false;
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+
+      if (e.cancelable) e.preventDefault();
+
+      const dt = now - prevTime;
+      if (dt > 0) {
+        const instantV = (x - prevX) / dt;
+        velocity = velocity * (1 - SMOOTHING) + instantV * SMOOTHING;
+      }
+      prevX = x;
+      prevTime = now;
+      this.columnsContainer.scrollLeft = scrollStart - (x - startX);
+      if (Math.abs(x - startX) > 3) moved = true;
+    };
+    const onEnd = (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      directionLocked = false;
+      this.columnsContainer.style.cursor = '';
+      if (Math.abs(velocity) > 0.1) {
+        let v = -velocity * 16;
+        const decel = 0.96;
+        const step = () => {
+          if (Math.abs(v) < 0.3) { momentumId = null; return; }
+          this.columnsContainer.scrollLeft += v;
+          v *= decel;
+          momentumId = requestAnimationFrame(step);
+        };
+        momentumId = requestAnimationFrame(step);
+      }
+    };
+
+    this.columnsContainer.addEventListener('mousedown', (e) => startDrag(e, false));
+    this.columnsContainer.addEventListener('touchstart', (e) => startDrag(e, true), { passive: true });
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchend', onEnd);
+
+    this.columnsContainer.addEventListener('click', (e) => {
+      if (moved) return;
+      const header = e.target.closest('.column-header');
+      if (!header || e.target.closest('button')) return;
+      const col = header.closest('.column');
+      if (!col) return;
+      this.focusColumn(col);
+    });
+  }
+
+  _bindKeyboardEvents() {
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        e.stopPropagation();
+        const accountId = this.getFocusedColumnAccountId();
+        this.openComposeModal(null, accountId || null);
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (this.closeTopmostModal()) return;
+        this.closeLightbox();
+        this.closeAccountPicker();
+        this.closeReactionPicker();
+        this.closeReactionPopup();
+        return;
+      }
+
+      if (e.target.matches('input, textarea, select')) return;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        this.navigateColumn(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        this.navigateColumn(1);
       }
     });
   }
@@ -1322,643 +1297,7 @@ class StarShipApp {
     return true;
   }
 
-  async openProfileModal(author, platform, accountId) {
-    const modal = document.getElementById('modal-profile');
-    const banner = document.getElementById('profile-banner');
-    const avatar = document.getElementById('profile-avatar');
-    const nameEl = document.getElementById('profile-name');
-    const handleEl = document.getElementById('profile-handle');
-    const bioEl = document.getElementById('profile-bio');
-    const statsEl = document.getElementById('profile-stats');
-    const fieldsEl = document.getElementById('profile-fields');
-    const actionsEl = document.getElementById('profile-actions');
-    const editInline = document.getElementById('profile-edit-inline');
-    const tabsEl = document.getElementById('profile-tabs');
-    const postsEl = document.getElementById('profile-posts');
-    const editBannerBtn = document.getElementById('profile-edit-banner-btn');
-    const editBannerInput = document.getElementById('profile-edit-banner-input');
-    const editAvatarBtn = document.getElementById('profile-edit-avatar-btn');
-    const editAvatarInput = document.getElementById('profile-edit-avatar-input');
-    const stickyHeader = document.getElementById('profile-sticky-header');
-    const stickyAvatar = document.getElementById('profile-sticky-avatar');
-    const stickyName = document.getElementById('profile-sticky-name');
-    const stickyHandle = document.getElementById('profile-sticky-handle');
-
-    // Cleanup previous scroll listeners
-    const scrollEl = modal.querySelector('.profile-scroll');
-    if (this._profileScrollHandler && scrollEl) {
-      scrollEl.removeEventListener('scroll', this._profileScrollHandler);
-      this._profileScrollHandler = null;
-    }
-    if (this._profileStickyScrollHandler && scrollEl) {
-      scrollEl.removeEventListener('scroll', this._profileStickyScrollHandler);
-      this._profileStickyScrollHandler = null;
-    }
-    this._profileState = null;
-
-    // Clean up previous follow badges
-    const oldBadges = document.getElementById('profile-follow-badges');
-    if (oldBadges) oldBadges.remove();
-    const oldFollowBtn = document.getElementById('btn-profile-follow');
-    if (oldFollowBtn) oldFollowBtn.remove();
-
-    // Reset
-    banner.style.backgroundImage = '';
-    banner.style.backgroundPosition = '';
-    banner.style.backgroundSize = '';
-    banner.style.background = 'linear-gradient(135deg, var(--accent-primary), #a78bfa)';
-    avatar.src = author.avatarUrl || '';
-    nameEl.innerHTML = author.displayNameHtml || this.escapeHtml(author.displayName);
-    handleEl.textContent = `@${author.acct}`;
-    bioEl.innerHTML = '';
-    statsEl.innerHTML = '';
-    fieldsEl.innerHTML = '';
-    actionsEl.innerHTML = '';
-    editInline.style.display = 'none';
-    editBannerBtn.style.display = 'none';
-    editAvatarBtn.style.display = 'none';
-    editBannerInput.value = '';
-    editAvatarInput.value = '';
-    this._profileEditAvatarFile = null;
-    this._profileEditBannerFile = null;
-    tabsEl.style.display = 'none';
-    postsEl.style.display = 'none';
-    postsEl.innerHTML = '';
-
-    // Reset sticky header
-    stickyHeader.classList.remove('visible');
-    stickyAvatar.src = author.avatarUrl || '';
-    stickyName.innerHTML = author.displayNameHtml || this.escapeHtml(author.displayName);
-    stickyHandle.textContent = `@${author.acct}`;
-
-    // Scroll listener for sticky header
-    const bannerHeight = 160; // matches CSS .profile-banner height
-    const threshold = bannerHeight - 44; // show sticky when banner mostly scrolled away
-    const onScroll = () => {
-      const scrollTop = scrollEl.scrollTop;
-      if (scrollTop >= threshold) {
-        stickyHeader.classList.add('visible');
-      } else {
-        stickyHeader.classList.remove('visible');
-      }
-    };
-    scrollEl.addEventListener('scroll', onScroll);
-    this._profileStickyScrollHandler = onScroll;
-
-    // Reset scroll position
-    scrollEl.scrollTop = 0;
-
-    this.openModal(modal);
-
-    // Fetch full profile
-    const client = this.store.getClient(accountId);
-    if (!client) return;
-
-    try {
-      const user = await client.getUser(author.id);
-      if (!user) return;
-
-      // Banner
-      const bannerUrl = user.bannerUrl || user.header;
-      if (bannerUrl) {
-        banner.style.background = 'none';
-        banner.style.backgroundImage = `url(${bannerUrl})`;
-        banner.style.backgroundPosition = 'center';
-        banner.style.backgroundSize = 'cover';
-        banner.style.backgroundColor = 'var(--bg-tertiary)';
-      }
-
-      // Avatar
-      avatar.src = user.avatarUrl || user.avatar || author.avatarUrl;
-
-      // Name with emoji
-      const isMisskey = platform !== 'mastodon';
-      if (isMisskey) {
-        // Resolve custom emojis in Misskey display name
-        const userEmojis = {};
-        if (user.emojis && typeof user.emojis === 'object' && !Array.isArray(user.emojis)) {
-          Object.assign(userEmojis, user.emojis);
-        }
-        if (Array.isArray(user.emojis)) {
-          for (const e of user.emojis) {
-            if (e.name && e.url) userEmojis[e.name] = e.url;
-          }
-        }
-        nameEl.innerHTML = client.resolveNameEmojis(user.name || user.username, userEmojis);
-      } else {
-        // Resolve custom emojis in Mastodon display name
-        let nameHtml = this.escapeHtml(user.display_name || user.username);
-        if (user.emojis && user.emojis.length > 0) {
-          for (const emoji of user.emojis) {
-            nameHtml = nameHtml.replaceAll(`:${emoji.shortcode}:`,
-              `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
-          }
-        }
-        nameEl.innerHTML = nameHtml;
-      }
-
-      // Handle
-      const host = user.host || '';
-      const acct = user.acct || (host ? `${user.username}@${host}` : user.username);
-      handleEl.textContent = `@${acct}`;
-
-      // Sync sticky header with full data
-      stickyAvatar.src = avatar.src;
-      stickyName.innerHTML = nameEl.innerHTML;
-      stickyHandle.textContent = handleEl.textContent;
-
-      // Bio - render with MFM (Misskey) or HTML (Mastodon)
-      if (isMisskey) {
-        const bio = user.description || '';
-        if (bio) {
-          const userEmojis = {};
-          if (user.emojis && typeof user.emojis === 'object' && !Array.isArray(user.emojis)) {
-            Object.assign(userEmojis, user.emojis);
-          }
-          if (Array.isArray(user.emojis)) {
-            for (const e of user.emojis) {
-              if (e.name && e.url) userEmojis[e.name] = e.url;
-            }
-          }
-          bioEl.innerHTML = client.mfmToHtml(bio, userEmojis);
-        }
-      } else {
-        let bio = user.note || '';
-        if (bio) {
-          // Resolve custom emojis in Mastodon bio
-          if (user.emojis && user.emojis.length > 0) {
-            for (const emoji of user.emojis) {
-              bio = bio.replaceAll(`:${emoji.shortcode}:`,
-                `<img class="inline-emoji" src="${this.escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
-            }
-          }
-          bioEl.innerHTML = bio;
-        }
-      }
-
-      // Stats
-      const followers = user.followersCount ?? user.followers_count ?? 0;
-      const following = user.followingCount ?? user.following_count ?? 0;
-      const posts = user.notesCount ?? user.statuses_count ?? 0;
-      statsEl.innerHTML = `
-        <span class="profile-stat"><strong>${followers}</strong> 팔로워</span>
-        <span class="profile-stat"><strong>${following}</strong> 팔로잉</span>
-        <span class="profile-stat"><strong>${posts}</strong> ${isMisskey ? '노트' : '게시물'}</span>
-      `;
-
-      // Fields
-      const fields = user.fields || [];
-      if (fields.length > 0) {
-        // Build emoji resolver for field values (Mastodon emojis)
-        const resolveFieldEmojis = (html) => {
-          if (!isMisskey && user.emojis && user.emojis.length > 0) {
-            for (const emoji of user.emojis) {
-              html = html.replaceAll(`:${emoji.shortcode}:`,
-                `<img class="inline-emoji" src="${this.escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
-            }
-          }
-          return html;
-        };
-        fieldsEl.innerHTML = fields.map(f => `
-          <div class="profile-field">
-            <span class="profile-field-name">${resolveFieldEmojis(this.escapeHtml(f.name))}</span>
-            <span class="profile-field-value">${resolveFieldEmojis(f.value || this.escapeHtml(f.value))}</span>
-          </div>
-        `).join('');
-      }
-
-      // Check if this is my account
-      const myAccount = this.store.getAll().find(a =>
-        String(a.profile?.id) === String(user.id) && a.platform === platform
-      );
-      const account = this.store.getById(accountId);
-      const instanceUrl = account?.instanceUrl || '';
-
-      // Actions
-      let actionsHtml = `<a class="btn btn-secondary btn-small" href="${instanceUrl}/@${user.username}" target="_blank" rel="noopener">인스턴스에서 보기</a>`;
-      if (myAccount) {
-        actionsHtml += `<button class="btn btn-primary btn-small" id="btn-profile-edit">프로필 수정</button>`;
-      }
-      actionsEl.innerHTML = actionsHtml;
-
-      // Show notes tabs for own account
-      if (myAccount) {
-        tabsEl.style.display = 'flex';
-        postsEl.style.display = 'block';
-        this._loadProfileNotes(user.id, platform, accountId, client, isMisskey, account);
-      }
-
-      // Follow relationship for other users
-      if (!myAccount) {
-        this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl);
-      }
-
-      // Edit handlers
-      if (myAccount) {
-        const editBtn = document.getElementById('btn-profile-edit');
-        const editName = document.getElementById('profile-edit-name');
-        const editBio = document.getElementById('profile-edit-bio');
-
-        const enterEditMode = () => {
-          editName.value = isMisskey ? (user.name || '') : (user.display_name || '');
-          editBio.value = isMisskey ? (user.description || '') : (user.source?.note || user.note?.replace(/<[^>]*>/g, '') || '');
-          this._profileEditAvatarFile = null;
-          this._profileEditBannerFile = null;
-          editAvatarInput.value = '';
-          editBannerInput.value = '';
-          // Show inline edit fields, hide display fields
-          editInline.style.display = 'block';
-          nameEl.style.display = 'none';
-          bioEl.style.display = 'none';
-          // Show image overlays
-          editBannerBtn.style.display = 'flex';
-          editAvatarBtn.style.display = 'flex';
-          // Swap action buttons
-          actionsEl.innerHTML = `
-            <button class="btn btn-secondary btn-small" id="btn-profile-edit-cancel">취소</button>
-            <button class="btn btn-primary btn-small" id="btn-profile-edit-save">저장</button>
-          `;
-          document.getElementById('btn-profile-edit-cancel').addEventListener('click', exitEditMode);
-          document.getElementById('btn-profile-edit-save').addEventListener('click', saveProfile);
-        };
-
-        const exitEditMode = () => {
-          editInline.style.display = 'none';
-          nameEl.style.display = '';
-          bioEl.style.display = '';
-          editBannerBtn.style.display = 'none';
-          editAvatarBtn.style.display = 'none';
-          // Restore original avatar/banner if changed but not saved
-          if (this._profileEditAvatarFile) {
-            avatar.src = this._profileOriginalAvatar || '';
-          }
-          if (this._profileEditBannerFile) {
-            banner.style.cssText = this._profileOriginalBannerStyle || '';
-          }
-          // Restore action buttons
-          let html = `<a class="btn btn-secondary btn-small" href="${instanceUrl}/@${user.username}" target="_blank" rel="noopener">인스턴스에서 보기</a>`;
-          html += `<button class="btn btn-primary btn-small" id="btn-profile-edit">프로필 수정</button>`;
-          actionsEl.innerHTML = html;
-          document.getElementById('btn-profile-edit').addEventListener('click', enterEditMode);
-        };
-
-        const saveProfile = async () => {
-          const saveBtn = document.getElementById('btn-profile-edit-save');
-          saveBtn.disabled = true;
-          saveBtn.textContent = '저장 중...';
-          try {
-            const myClient = this.store.getClient(myAccount.id);
-            if (isMisskey) {
-              const params = { name: editName.value, description: editBio.value };
-              // Upload avatar/banner to drive first
-              if (this._profileEditAvatarFile) {
-                const file = await myClient.uploadFile(this._profileEditAvatarFile);
-                params.avatarId = file.id;
-              }
-              if (this._profileEditBannerFile) {
-                const file = await myClient.uploadFile(this._profileEditBannerFile);
-                params.bannerId = file.id;
-              }
-              await myClient.updateProfile(params);
-            } else {
-              await myClient.updateProfile({
-                displayName: editName.value,
-                note: editBio.value,
-                avatar: this._profileEditAvatarFile || undefined,
-                header: this._profileEditBannerFile || undefined,
-              });
-            }
-            // Re-fetch profile from server to get updated avatar/banner URLs
-            const oldDisplayName = myAccount.profile.displayName;
-            try {
-              const freshProfile = await myClient.verifyCredentials();
-              if (isMisskey) {
-                myAccount.profile.displayName = freshProfile.name || freshProfile.username;
-                myAccount.profile.avatarUrl = freshProfile.avatarUrl;
-              } else {
-                myAccount.profile.displayName = freshProfile.display_name || freshProfile.username;
-                myAccount.profile.avatarUrl = freshProfile.avatar;
-              }
-            } catch {
-              // Fallback: use input values
-              myAccount.profile.displayName = editName.value || myAccount.profile.username;
-            }
-            // Update label if it was auto-set from the old display name
-            if (!myAccount.label || myAccount.label === oldDisplayName) {
-              myAccount.label = myAccount.profile.displayName;
-            }
-            this.store.save();
-            this.debouncedSaveToCloud();
-            // Update display
-            nameEl.textContent = myAccount.profile.displayName;
-            bioEl.innerHTML = this.escapeHtml(editBio.value).replace(/\n/g, '<br>');
-            stickyName.textContent = myAccount.profile.displayName;
-            if (myAccount.profile.avatarUrl) avatar.src = myAccount.profile.avatarUrl;
-            // Refresh column headers and toggle bar to reflect name/avatar change
-            this._refreshColumnHeaders();
-            // Save new originals for next edit
-            this._profileOriginalAvatar = avatar.src;
-            this._profileOriginalBannerStyle = banner.style.cssText;
-            // Exit edit mode
-            editInline.style.display = 'none';
-            nameEl.style.display = '';
-            bioEl.style.display = '';
-            editBannerBtn.style.display = 'none';
-            editAvatarBtn.style.display = 'none';
-            let html = `<a class="btn btn-secondary btn-small" href="${instanceUrl}/@${user.username}" target="_blank" rel="noopener">인스턴스에서 보기</a>`;
-            html += `<button class="btn btn-primary btn-small" id="btn-profile-edit">프로필 수정</button>`;
-            actionsEl.innerHTML = html;
-            document.getElementById('btn-profile-edit').addEventListener('click', enterEditMode);
-          } catch (err) {
-            if (err.message.includes('PERMISSION_DENIED')) {
-              this.showToast('프로필 수정 권한이 없습니다. 계정 재인증으로 권한을 갱신하세요.');
-            } else {
-              this.showToast('프로필 수정 실패: ' + err.message);
-            }
-          } finally {
-            const btn = document.getElementById('btn-profile-edit-save');
-            if (btn) { btn.disabled = false; btn.textContent = '저장'; }
-          }
-        };
-
-        // Image upload handlers
-        editBannerBtn.onclick = () => editBannerInput.click();
-        editBannerInput.onchange = () => {
-          const file = editBannerInput.files[0];
-          if (!file) return;
-          this._profileEditBannerFile = file;
-          const url = URL.createObjectURL(file);
-          banner.style.background = 'none';
-          banner.style.backgroundImage = `url(${url})`;
-          banner.style.backgroundSize = 'cover';
-          banner.style.backgroundPosition = 'center';
-        };
-        editAvatarBtn.onclick = () => editAvatarInput.click();
-        editAvatarInput.onchange = () => {
-          const file = editAvatarInput.files[0];
-          if (!file) return;
-          this._profileEditAvatarFile = file;
-          avatar.src = URL.createObjectURL(file);
-        };
-
-        // Store originals for cancel
-        this._profileOriginalAvatar = avatar.src;
-        this._profileOriginalBannerStyle = banner.style.cssText;
-
-        editBtn.addEventListener('click', enterEditMode);
-      }
-    } catch (err) {
-      bioEl.innerHTML = `<span style="color:var(--text-muted)">프로필을 불러올 수 없습니다</span>`;
-    }
-  }
-
-  async _loadProfileNotes(userId, platform, accountId, client, isMisskey, account) {
-    const postsEl = document.getElementById('profile-posts');
-    const tabsEl = document.getElementById('profile-tabs');
-    const scrollEl = document.querySelector('#modal-profile .profile-scroll');
-    postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
-
-    // State for infinite scroll
-    this._profileState = {
-      userId, platform, accountId, client, isMisskey, account,
-      tabData: { notes: [], renotes: [], replies: [] },
-      activeTab: 'notes',
-      loading: false,
-      hasMore: true,
-      lastRawId: null,
-    };
-
-    try {
-      await this._fetchMoreProfileNotes();
-
-      // Setup tabs
-      const newTabs = tabsEl.cloneNode(true);
-      tabsEl.replaceWith(newTabs);
-      this._profileState.tabsEl = newTabs;
-      this._updateProfileTabCounts();
-      this._renderProfileTab('notes', postsEl);
-
-      // Tab click
-      newTabs.addEventListener('click', (e) => {
-        const tab = e.target.closest('.profile-tab');
-        if (!tab) return;
-        const tabName = tab.dataset.profileTab;
-        if (!tabName) return;
-        newTabs.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        this._profileState.activeTab = tabName;
-        this._renderProfileTab(tabName, postsEl);
-      });
-
-      // Infinite scroll on the profile-scroll container
-      if (this._profileScrollHandler) {
-        scrollEl.removeEventListener('scroll', this._profileScrollHandler);
-      }
-      this._profileScrollHandler = () => {
-        if (!this._profileState || this._profileState.loading || !this._profileState.hasMore) return;
-        const { scrollTop, scrollHeight, clientHeight } = scrollEl;
-        if (scrollTop + clientHeight >= scrollHeight - 100) {
-          this._loadMoreProfileNotes();
-        }
-      };
-      scrollEl.addEventListener('scroll', this._profileScrollHandler);
-    } catch (err) {
-      console.error('Failed to load profile notes:', err);
-      postsEl.innerHTML = '<div class="profile-posts-empty">노트를 불러올 수 없습니다</div>';
-    }
-  }
-
-  async _fetchMoreProfileNotes() {
-    const s = this._profileState;
-    if (!s || s.loading || !s.hasMore) return [];
-    s.loading = true;
-
-    try {
-      let raw;
-      if (s.isMisskey) {
-        raw = await s.client.getUserNotes(s.userId, 20, s.lastRawId);
-      } else {
-        raw = await s.client.getUserStatuses(s.userId, 20, s.lastRawId);
-      }
-      if (!raw || raw.length === 0) {
-        s.hasMore = false;
-        return [];
-      }
-      s.lastRawId = raw[raw.length - 1].id;
-      if (raw.length < 20) s.hasMore = false;
-
-      const normalized = raw.map(n => s.client.normalizePost(n));
-      normalized.forEach(post => {
-        post.accountId = s.accountId;
-        post.accountPlatform = s.platform;
-        post.themeColor = s.account?.themeColor || null;
-        const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
-        post.isOwn = String(ownerId) === String(s.account?.profile?.id);
-      });
-      this.cachePosts(normalized);
-
-      // Categorize and append
-      for (const n of normalized) {
-        if (n.rebloggedBy) s.tabData.renotes.push(n);
-        else if (n.replyToId) s.tabData.replies.push(n);
-        else s.tabData.notes.push(n);
-      }
-      return normalized;
-    } finally {
-      s.loading = false;
-    }
-  }
-
-  async _loadMoreProfileNotes() {
-    const s = this._profileState;
-    if (!s) return;
-    const postsEl = document.getElementById('profile-posts');
-    const prevCounts = {
-      notes: s.tabData.notes.length,
-      renotes: s.tabData.renotes.length,
-      replies: s.tabData.replies.length,
-    };
-
-    // Show loading indicator
-    let loader = postsEl.querySelector('.profile-load-more');
-    if (!loader) {
-      loader = document.createElement('div');
-      loader.className = 'profile-posts-empty profile-load-more';
-      loader.innerHTML = '<div class="spinner"></div>';
-      postsEl.appendChild(loader);
-    }
-
-    await this._fetchMoreProfileNotes();
-    this._updateProfileTabCounts();
-
-    // Remove loader
-    loader = postsEl.querySelector('.profile-load-more');
-    if (loader) loader.remove();
-
-    // Append only new posts for active tab
-    const tab = s.activeTab;
-    const allPosts = s.tabData[tab] || [];
-    const prevCount = prevCounts[tab] || 0;
-    const newPosts = allPosts.slice(prevCount);
-    for (const post of newPosts) {
-      postsEl.appendChild(renderPost(post));
-    }
-    this.enrichLinkCards(postsEl);
-
-    // Remove empty message if posts appeared
-    if (allPosts.length > 0) {
-      const empty = postsEl.querySelector('.profile-posts-empty:not(.profile-load-more)');
-      if (empty) empty.remove();
-    }
-  }
-
-  _updateProfileTabCounts() {
-    const s = this._profileState;
-    if (!s || !s.tabsEl) return;
-    const tabLabels = { notes: '노트', renotes: '리노트', replies: '댓글' };
-    s.tabsEl.querySelectorAll('.profile-tab').forEach(btn => {
-      const key = btn.dataset.profileTab;
-      const count = (s.tabData[key] || []).length;
-      btn.innerHTML = `${tabLabels[key]} <span class="tab-count">${count}</span>`;
-    });
-  }
-
-  _renderProfileTab(tabName, container) {
-    const s = this._profileState;
-    const posts = s ? (s.tabData[tabName] || []) : [];
-    container.innerHTML = '';
-    if (posts.length === 0) {
-      const labels = { notes: '노트', renotes: '리노트', replies: '댓글' };
-      container.innerHTML = `<div class="profile-posts-empty">${labels[tabName] || '게시물'}이 없습니다</div>`;
-      return;
-    }
-    for (const post of posts) {
-      container.appendChild(renderPost(post));
-    }
-    this.enrichLinkCards(container);
-  }
-
-  async _loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl) {
-    try {
-      let isFollowing = false;
-      let isFollowedBy = false;
-
-      if (isMisskey) {
-        const rel = await client.getRelation(user.id);
-        isFollowing = !!rel?.isFollowing;
-        isFollowedBy = !!rel?.isFollowed;
-      } else {
-        const rels = await client.getRelationships([user.id]);
-        if (rels && rels.length > 0) {
-          isFollowing = !!rels[0].following;
-          isFollowedBy = !!rels[0].followed_by;
-        }
-      }
-
-      // Build relation badges (inside banner-wrap for overlay)
-      const badgesEl = document.getElementById('profile-follow-badges');
-      if (badgesEl) badgesEl.remove();
-      const badges = document.createElement('div');
-      badges.id = 'profile-follow-badges';
-      badges.className = 'profile-follow-badges';
-
-      if (isFollowedBy) {
-        badges.innerHTML += `<span class="follow-badge follow-badge-follower">나를 팔로우 중</span>`;
-      }
-      if (isFollowing) {
-        badges.innerHTML += `<span class="follow-badge follow-badge-following">팔로우 중</span>`;
-      }
-
-      // Insert badges into banner area
-      const bannerWrap = document.querySelector('#modal-profile .profile-banner-wrap');
-      if (bannerWrap) {
-        bannerWrap.appendChild(badges);
-      }
-
-      // Add follow/unfollow button
-      const existingFollowBtn = document.getElementById('btn-profile-follow');
-      if (existingFollowBtn) existingFollowBtn.remove();
-
-      const followBtn = document.createElement('button');
-      followBtn.id = 'btn-profile-follow';
-      followBtn.className = isFollowing
-        ? 'btn btn-secondary btn-small profile-follow-btn following'
-        : 'btn btn-primary btn-small profile-follow-btn';
-      followBtn.textContent = isFollowing ? '팔로우 해제' : '팔로우';
-
-      // Hover state for unfollow
-      if (isFollowing) {
-        followBtn.addEventListener('mouseenter', () => { followBtn.textContent = '팔로우 해제'; followBtn.classList.add('unfollow-hover'); });
-        followBtn.addEventListener('mouseleave', () => { followBtn.textContent = '팔로우 중'; followBtn.classList.remove('unfollow-hover'); });
-        followBtn.textContent = '팔로우 중';
-      }
-
-      followBtn.addEventListener('click', async () => {
-        followBtn.disabled = true;
-        try {
-          if (isFollowing) {
-            if (isMisskey) await client.unfollowUser(user.id);
-            else await client.unfollowUser(user.id);
-            isFollowing = false;
-          } else {
-            if (isMisskey) await client.followUser(user.id);
-            else await client.followUser(user.id);
-            isFollowing = true;
-          }
-          // Refresh the UI
-          this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl);
-        } catch (err) {
-          this.showToast('팔로우 처리 실패: ' + err.message);
-        } finally {
-          followBtn.disabled = false;
-        }
-      });
-
-      actionsEl.appendChild(followBtn);
-    } catch (err) {
-      console.error('Failed to load follow relation:', err);
-    }
-  }
+  // Profile modal methods are in mixins/profile-modal.js
 
   /** Fetch OG metadata for link cards that lack title/image and update DOM */
   enrichLinkCards(container) {
@@ -2155,6 +1494,7 @@ Object.assign(StarShipApp.prototype,
   AuthUIMixin,
   AccountSetupMixin,
   ThreadViewMixin,
+  ProfileModalMixin,
 );
 
 // Initialize

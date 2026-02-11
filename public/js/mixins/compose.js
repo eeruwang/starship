@@ -118,10 +118,11 @@ export const ComposeMixin = {
     if (!this._composeEmojiInputHandler) {
       this._composeEmojiInputHandler = () => this._updateComposeEmojiPreview();
       this.composeText.addEventListener('input', this._composeEmojiInputHandler);
-      this.composeText.addEventListener('scroll', () => {
+      this._composeScrollSyncHandler = () => {
         const ov = document.getElementById('compose-text-overlay');
         if (ov) ov.scrollTop = this.composeText.scrollTop;
-      });
+      };
+      this.composeText.addEventListener('scroll', this._composeScrollSyncHandler);
     }
 
     this.openModal(this.modalCompose);
