@@ -3879,7 +3879,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 650;
+  z-index: 695;
   width: 320px;
   max-height: 420px;
   display: flex;
