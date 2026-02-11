@@ -3581,6 +3581,24 @@ textarea.input {
   object-fit: contain;
 }
 
+.compose-visibility-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+}
+.compose-visibility-select:hover {
+  border-color: var(--accent-primary);
+}
+.compose-visibility-select:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(124, 125, 255, 0.2);
+}
+
 .compose-char-hint {
   flex: 1;
   font-size: 0.75rem;

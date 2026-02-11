@@ -147,6 +147,7 @@ export class MisskeyClient {
   async createNote(text, options = {}) {
     const body = { text };
     if (options.cw) body.cw = options.cw;
+    if (options.visibility) body.visibility = options.visibility;
     if (options.fileIds && options.fileIds.length > 0) body.fileIds = options.fileIds;
     if (options.replyId) body.replyId = options.replyId;
     if (options.renoteId) body.renoteId = options.renoteId;

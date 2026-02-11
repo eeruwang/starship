@@ -139,6 +139,8 @@ class StarShipApp {
     this.btnComposeAttach = document.getElementById('btn-compose-attach');
     this.btnComposeSensitive = document.getElementById('btn-compose-sensitive');
     this.btnComposeEmoji = document.getElementById('btn-compose-emoji');
+    this.composeVisibility = document.getElementById('compose-visibility');
+    this.composeCharHint = document.getElementById('compose-char-hint');
     this.btnComposeSubmit = document.getElementById('btn-compose-submit');
     this.composeError = document.getElementById('compose-error');
     this.composeSensitive = false;
@@ -623,6 +625,9 @@ class StarShipApp {
     this.btnComposeEmoji.addEventListener('click', () => this.showComposeEmojiPicker());
     this.composeFilesInput.addEventListener('change', () => this.handleComposeFileSelect());
     this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());
+
+    // Word count display
+    this.composeText.addEventListener('input', () => this._updateComposeWordCount());
 
     // Drag-and-drop image upload on compose editor
     this.composeEditor.addEventListener('dragover', (e) => {

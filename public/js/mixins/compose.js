@@ -52,6 +52,8 @@ export const ComposeMixin = {
     this.composeImagePreview.innerHTML = '';
     this.composeSensitive = false;
     this.btnComposeSensitive.classList.remove('active');
+    this.composeVisibility.value = 'public';
+    this.composeCharHint.textContent = '';
     this.composeError.style.display = 'none';
     this.btnComposeSubmit.disabled = false;
     this.btnComposeSubmit.textContent = '게시';
@@ -122,6 +124,17 @@ export const ComposeMixin = {
 
     this.openModal(this.modalCompose);
     this.composeText.focus();
+  },
+
+  _updateComposeWordCount() {
+    const text = this.composeText.value;
+    if (!text.trim()) {
+      this.composeCharHint.textContent = '';
+      return;
+    }
+    const chars = text.length;
+    const words = text.trim().split(/\s+/).length;
+    this.composeCharHint.textContent = `${chars}자 · ${words}단어`;
   },
 
   async _updateComposeEmojiPreview() {
@@ -385,6 +398,7 @@ export const ComposeMixin = {
     const selectedIds = [...this.composeSelectedAccounts];
     const text = this.composeText.value.trim();
     const cw = this.composeCw.value.trim();
+    const visibility = this.composeVisibility.value;
     const replyToId = this.composeText.dataset.replyTo;
     const quoteId = this.composeText.dataset.quoteId;
     const quoteUrl = this.composeText.dataset.quoteUrl;
@@ -434,9 +448,11 @@ export const ComposeMixin = {
           if (quoteId && quoteUrl && !text.includes(quoteUrl)) {
             statusText = text + '\n\n' + quoteUrl;
           }
+          const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || 'public';
           await client.createStatus(statusText, {
             spoilerText: cw || undefined,
             sensitive: this.composeSensitive || undefined,
+            visibility: mastodonVisibility,
             mediaIds: fileIds.length > 0 ? fileIds : undefined,
             inReplyToId: replyToId || undefined,
             quoteId: quoteId || undefined,
@@ -448,8 +464,10 @@ export const ComposeMixin = {
               await client.updateFile(fid, { isSensitive: true }).catch(() => {});
             }
           }
+          const misskeyVisibility = ({ public: 'public', home: 'home', followers: 'followers', direct: 'specified' })[visibility] || 'public';
           await client.createNote(text, {
             cw: cw || undefined,
+            visibility: misskeyVisibility,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
             replyId: replyToId || undefined,
             renoteId: quoteId || undefined,
