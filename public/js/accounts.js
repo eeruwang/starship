@@ -119,9 +119,11 @@ export class AccountStore {
       if (!client) continue;
       // Fetch theme color if not yet stored
       if (!account.themeColor) {
-        client.fetchThemeColor().then(color => {
-          if (color) account.themeColor = color;
-        }).catch(() => {});
+        updates.push(
+          client.fetchThemeColor().then(color => {
+            if (color) account.themeColor = color;
+          }).catch(() => {})
+        );
       }
       updates.push(
         client.verifyCredentials().then(profile => {

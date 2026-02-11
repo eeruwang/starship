@@ -173,20 +173,34 @@ export class MastodonClient {
 
   async fetchThemeColor() {
     try {
+      let color = null;
       if (this.useProxy) {
         // Use dedicated worker endpoint (proxy blocks non-API paths)
         const res = await fetch(`/api/instance-theme?url=${encodeURIComponent(this.instanceUrl)}`);
         if (!res.ok) return null;
         const data = await res.json();
-        return data.color || null;
+        color = data.color || null;
+      } else {
+        // Local dev: fetch HTML directly
+        const res = await fetch(this.instanceUrl, { headers: { 'Accept': 'text/html' } });
+        if (!res.ok) return null;
+        const html = await res.text();
+        const match = html.match(/<meta[^>]*name=["']theme-color["'][^>]*content=["']([^"']+)["']/i)
+          || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']theme-color["']/i);
+        color = match ? match[1] : null;
       }
-      // Local dev: fetch HTML directly
-      const res = await fetch(this.instanceUrl, { headers: { 'Accept': 'text/html' } });
-      if (!res.ok) return null;
-      const html = await res.text();
-      const match = html.match(/<meta[^>]*name=["']theme-color["'][^>]*content=["']([^"']+)["']/i)
-        || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']theme-color["']/i);
-      return match ? match[1] : null;
+      // Mastodon's default theme-color meta tags are page background colors
+      // (#181820 dark, #ffffff light), not instance accent colors.
+      // Filter out near-black/near-white colors so the platform default is used.
+      if (color && /^#?[0-9a-f]{6}$/i.test(color)) {
+        const hex = color.replace(/^#/, '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        if (brightness < 30 || brightness > 225) return null;
+      }
+      return color;
     } catch { return null; }
   }
 
