@@ -4226,7 +4226,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  z-index: 650;
+  z-index: 695;
   min-width: 180px;
   max-width: 260px;
   max-height: 200px;
