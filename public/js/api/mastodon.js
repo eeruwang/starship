@@ -173,11 +173,15 @@ export class MastodonClient {
 
   async fetchThemeColor() {
     try {
-      const targetUrl = this.instanceUrl;
-      const fetchUrl = this.useProxy
-        ? `/proxy?url=${encodeURIComponent(targetUrl)}`
-        : targetUrl;
-      const res = await fetch(fetchUrl, { headers: { 'Accept': 'text/html' } });
+      if (this.useProxy) {
+        // Use dedicated worker endpoint (proxy blocks non-API paths)
+        const res = await fetch(`/api/instance-theme?url=${encodeURIComponent(this.instanceUrl)}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.color || null;
+      }
+      // Local dev: fetch HTML directly
+      const res = await fetch(this.instanceUrl, { headers: { 'Accept': 'text/html' } });
       if (!res.ok) return null;
       const html = await res.text();
       const match = html.match(/<meta[^>]*name=["']theme-color["'][^>]*content=["']([^"']+)["']/i)

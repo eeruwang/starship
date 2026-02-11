@@ -31,6 +31,11 @@ export default {
       return handleOgFetch(url);
     }
 
+    // Instance theme-color fetch (no DB needed)
+    if (url.pathname === '/api/instance-theme' && request.method === 'GET') {
+      return handleInstanceTheme(url);
+    }
+
     // Auth & sync API
     if (url.pathname.startsWith('/api/')) {
       if (!_tablesInitialized) {
@@ -500,6 +505,44 @@ async function handleOgFetch(url) {
     return await fetchAndParseOg(targetUrl);
   } catch (err) {
     return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
+  }
+}
+
+async function handleInstanceTheme(url) {
+  const targetUrl = url.searchParams.get('url');
+  if (!targetUrl) {
+    return jsonResponse({ error: 'Missing "url" parameter' }, 400);
+  }
+
+  let parsed;
+  try { parsed = new URL(targetUrl); } catch {
+    return jsonResponse({ error: 'Invalid URL' }, 400);
+  }
+  if (parsed.protocol !== 'https:') {
+    return jsonResponse({ error: 'Only HTTPS URLs allowed' }, 400);
+  }
+
+  try {
+    const res = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'StarShip/1.0',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+    });
+    if (!res.ok) {
+      return jsonResponse({ color: null });
+    }
+    const html = await readPartial(res, 32768);
+    const color = extractMeta(html, 'theme-color', true, true);
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=86400',
+      ...corsHeaders(),
+    };
+    return new Response(JSON.stringify({ color: color || null }), { status: 200, headers });
+  } catch {
+    return jsonResponse({ color: null });
   }
 }
 
