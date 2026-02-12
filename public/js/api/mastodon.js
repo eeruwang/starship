@@ -171,7 +171,7 @@ export class MastodonClient {
     try {
       const emojis = await this.request('GET', '/api/v1/custom_emojis');
       if (!Array.isArray(emojis)) return [];
-      return emojis.map(e => ({ name: e.shortcode, url: e.static_url || e.url, category: e.category || null }));
+      return emojis.map(e => ({ name: e.shortcode, url: e.url, staticUrl: e.static_url || e.url, category: e.category || null }));
     } catch { return []; }
   }
 
