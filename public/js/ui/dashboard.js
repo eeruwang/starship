@@ -96,6 +96,22 @@ function renderQuotePost(qp, depth = 0) {
   return html;
 }
 
+function renderReplyMedia(media) {
+  if (!media || media.length === 0) return '';
+  const items = media.filter(m => m.type !== 'audio').slice(0, 4);
+  if (items.length === 0) return '';
+  let html = `<div class="reply-context-media post-media media-${items.length}">`;
+  for (const m of items) {
+    if (m.type === 'video') {
+      html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
+    } else {
+      html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
 export function renderPost(post) {
   const card = document.createElement('div');
   card.className = `post-card platform-${post.platform}`;
@@ -146,7 +162,7 @@ export function renderPost(post) {
           <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
         </div>
         ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
-        <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
+        <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}${renderReplyMedia(displayPost.replyTo.media)}</div>
         ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
       </div>
     `;
@@ -378,7 +394,7 @@ export function renderNotification(notif) {
             <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
           </div>
           ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
-          <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
+          <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}${renderReplyMedia(displayPost.replyTo.media)}</div>
           ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
         </div>
       `;
@@ -566,7 +582,7 @@ export function renderNotification(notif) {
           <span class="notif-parent-label-tag">원본</span>
         </div>
         ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
-        <div class="notif-parent-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
+        <div class="notif-parent-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}${renderReplyMedia(displayPost.replyTo.media)}</div>
         ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
       </div>`;
     } else if (displayPost.replyToAcct) {
@@ -592,7 +608,8 @@ export function renderNotification(notif) {
   }
 
   // Post content area (with CW toggle, media, quote, reactions, link card)
-  if (displayPost && displayPost.content) {
+  const hasDisplayContent = displayPost && (displayPost.content || (displayPost.media && displayPost.media.length > 0) || displayPost.quotePost || displayPost.linkCard);
+  if (hasDisplayContent) {
     const notifCwId = `notif-cw-${notif.id}`;
 
     // CW (Content Warning) toggle

@@ -1009,6 +1009,7 @@ export const DataLoadingMixin = {
           content: pdp.content,
           author: pdp.author,
           contentWarning: pdp.contentWarning || null,
+          media: pdp.media || null,
         };
       }
     }
@@ -1042,6 +1043,7 @@ export const DataLoadingMixin = {
               content: normalized.content,
               author: normalized.author,
               contentWarning: normalized.contentWarning || null,
+              media: normalized.media || null,
             };
           }
         } else {
@@ -1053,6 +1055,7 @@ export const DataLoadingMixin = {
               content: normalized.content,
               author: normalized.author,
               contentWarning: normalized.contentWarning || null,
+              media: normalized.media || null,
             };
           }
         }
