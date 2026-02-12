@@ -1598,7 +1598,7 @@ h4.mfm-heading { font-size: 1em; }
   padding-bottom: 0.35rem;
   border-bottom: 1px dashed var(--border-color);
 }
-.notif-indicator-actor {
+.notif-actor-wrap.notif-indicator-actor {
   width: 28px;
   height: 28px;
   flex-shrink: 0;
