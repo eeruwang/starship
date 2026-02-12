@@ -340,7 +340,10 @@ class StarShipApp {
         const targetId = e.target.dataset.cwTarget;
         let target;
         if (targetId) {
-          target = document.getElementById(targetId);
+          // Search within the closest container first to avoid ID conflicts
+          // (same post can exist in both column and thread view)
+          const container = e.target.closest('.thread-content, .column-content, .notif-card, .post-card');
+          target = container ? container.querySelector(`#${CSS.escape(targetId)}`) : document.getElementById(targetId);
         } else {
           const cwWarning = e.target.closest('.cw-warning, .reply-context-cw, .notif-cw-warning');
           target = cwWarning?.nextElementSibling;
