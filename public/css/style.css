@@ -351,6 +351,40 @@ body {
   background: rgba(255,255,255,0.6);
 }
 
+/* Hidden account toggle */
+.col-toggle.account-hidden {
+  opacity: 0.4;
+}
+.col-toggle.account-hidden:hover {
+  opacity: 0.7;
+}
+
+/* Eye toggle button inside account toggle */
+.eye-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  padding: 1px;
+  border-radius: 50%;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+.col-toggle:hover .eye-toggle-btn {
+  opacity: 0.8;
+}
+.eye-toggle-btn:hover {
+  opacity: 1 !important;
+  background: rgba(255,255,255,0.1);
+}
+.col-toggle.account-hidden .eye-toggle-btn {
+  opacity: 0.7;
+}
+.eye-toggle-btn .eye-toggle {
+  display: block;
+}
+
 .col-toggle-separator {
   width: 1px;
   height: 20px;

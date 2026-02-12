@@ -196,6 +196,19 @@ export class AccountStore {
     return [...this.accounts];
   }
 
+  getVisible() {
+    return this.accounts.filter(a => !a.hidden);
+  }
+
+  toggleHidden(accountId) {
+    const account = this.accounts.find(a => a.id === accountId);
+    if (account) {
+      account.hidden = !account.hidden;
+      this.save();
+    }
+    return account;
+  }
+
   getById(accountId) {
     return this.accounts.find(a => a.id === accountId);
   }

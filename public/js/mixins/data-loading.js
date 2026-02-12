@@ -37,9 +37,9 @@ export const DataLoadingMixin = {
 
         let loadPromise;
         if (type === 'all') {
-          loadPromise = this.loadTimelineForColumn(content, this.store.getAll());
+          loadPromise = this.loadTimelineForColumn(content, this.store.getVisible());
         } else if (type === 'notifications') {
-          loadPromise = this.loadNotificationsForColumn(content, this.store.getAll());
+          loadPromise = this.loadNotificationsForColumn(content, this.store.getVisible());
         } else if (type === 'account' && accountId) {
           const account = this.store.getById(accountId);
           if (account) {
