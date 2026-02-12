@@ -7,7 +7,7 @@ import {
   iconRefresh, iconClose, iconWarning, iconImage,
   iconQuote, iconSmile, iconTrash, iconEdit,
   iconHeartSmall, iconStarSmall,
-  iconReplyNotif, iconBoostNotif,
+  iconReplyNotif, iconBoostNotif, iconMegaphone,
   iconVisPublic, iconVisHome, iconVisFollowers, iconVisDirect,
   getNotifIcon,
 } from './icons.js';
@@ -378,7 +378,7 @@ export function renderNotification(notif) {
 
     // Unified indicator: actor avatar with type badge + label
     const indicatorLabels = { quote: '인용', mention: '멘션', reblog: notif.platform === 'mastodon' ? '부스트' : '리노트' };
-    const indicatorIcons = { quote: iconReplyNotif, mention: iconReplyNotif, reblog: iconBoostNotif };
+    const indicatorIcons = { quote: iconReplyNotif, mention: iconMegaphone, reblog: iconBoostNotif };
     const indicatorTypeClass = `notif-type-${notif.type}`;
     const actorName = notif.actor ? (notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)) : '';
     const actorAvatar = notif.actor?.avatarUrl || '';

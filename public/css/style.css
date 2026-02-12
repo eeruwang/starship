@@ -351,12 +351,9 @@ body {
   background: rgba(255,255,255,0.6);
 }
 
-/* Hidden account toggle */
+/* Hidden account toggle — completely hide from toggle bar */
 .col-toggle.account-hidden {
-  opacity: 0.4;
-}
-.col-toggle.account-hidden:hover {
-  opacity: 0.7;
+  display: none;
 }
 
 .col-toggle-separator {
@@ -1673,12 +1670,35 @@ h4.mfm-heading { font-size: 1em; }
 }
 
 .notif-type-badge .notif-svg-icon {
-  color: var(--accent-primary);
+  color: #fff;
 }
 
 .notif-type-badge .notif-svg-icon svg {
   width: 12px;
   height: 12px;
+}
+
+/* Colored badge backgrounds per notification type */
+.notif-type-badge.notif-type-favourite,
+.notif-type-badge.notif-type-reaction {
+  background: #e0245e;
+}
+.notif-type-badge.notif-type-mention {
+  background: #3b82f6;
+}
+.notif-type-badge.notif-type-reblog,
+.notif-type-badge.notif-type-renote {
+  background: #2ecc71;
+}
+.notif-type-badge.notif-type-quote {
+  background: #f59e0b;
+}
+.notif-type-badge.notif-type-reply {
+  background: #3b82f6;
+}
+.notif-type-badge.notif-type-follow,
+.notif-type-badge.notif-type-followRequestAccepted {
+  background: #7c7dff;
 }
 
 .notif-type-badge .notif-emoji {
@@ -1713,19 +1733,23 @@ h4.mfm-heading { font-size: 1em; }
   display: block;
 }
 
-/* Notification icon type colors */
-.notif-type-reaction .notif-svg-icon,
-.notif-type-favourite .notif-svg-icon {
+/* Notification icon type colors — standalone icons (not inside badge) */
+.notif-icon.notif-type-reaction .notif-svg-icon,
+.notif-icon.notif-type-favourite .notif-svg-icon {
   color: #e0245e;
 }
 
-.notif-type-renote .notif-svg-icon,
-.notif-type-reblog .notif-svg-icon {
+.notif-icon.notif-type-renote .notif-svg-icon,
+.notif-icon.notif-type-reblog .notif-svg-icon {
   color: #2ecc71;
 }
 
-.notif-type-follow .notif-svg-icon,
-.notif-type-followRequestAccepted .notif-svg-icon {
+.notif-icon.notif-type-mention .notif-svg-icon {
+  color: #3b82f6;
+}
+
+.notif-icon.notif-type-follow .notif-svg-icon,
+.notif-icon.notif-type-followRequestAccepted .notif-svg-icon {
   color: #7c7dff;
 }
 
