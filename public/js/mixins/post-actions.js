@@ -50,7 +50,16 @@ export const PostActionsMixin = {
 
     // For multi-account columns (all/notifications): show only accounts that received this post
     const cachedPost = this.postCache.get(`${platform}:${postId}`);
-    const relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
+    let relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
+
+    // Reaction: only Misskey accounts can react
+    if (action === 'reaction') {
+      relevantAccounts = relevantAccounts.filter(a => a.platform !== 'mastodon');
+      if (relevantAccounts.length === 0) {
+        this.showToast('리액션은 미스키 계정에서만 가능합니다.', 'info');
+        return;
+      }
+    }
 
     // Single relevant account: use it directly
     if (relevantAccounts.length === 1) {
@@ -165,13 +174,19 @@ export const PostActionsMixin = {
         btnElement.classList.remove('processing');
         // Small delay to ensure any previous picker (account picker) is fully cleaned up
         await new Promise(r => setTimeout(r, 50));
-        await this.showReactionPicker(btnElement, actionPostId, platform, accountId);
+        // Pass both: actionPostId for API calls, postId for card refresh
+        const originalPostId = isCrossInstance ? postId : null;
+        await this.showReactionPicker(btnElement, actionPostId, platform, accountId, originalPostId);
         return;
       }
 
       // Re-fetch the note and update the card in-place
-      // For cross-instance, use the original platform's client for refresh
-      await this.refreshSinglePost(postId, platform, isCrossInstance ? null : accountId);
+      if (isCrossInstance && actionPostId) {
+        // For cross-instance: refresh from both platforms and merge
+        await this._refreshMergedPost(postId, platform, accountId, actionPostId);
+      } else {
+        await this.refreshSinglePost(postId, platform, accountId);
+      }
     } catch (err) {
       console.error(`Action ${action} failed:`, err);
       btnElement.classList.remove('processing');
@@ -245,6 +260,83 @@ export const PostActionsMixin = {
     } catch (err) {
       // Silently fail - the action already succeeded
     }
+  },
+
+  async _refreshMergedPost(postId, platform, actingAccountId, actingPostId) {
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+
+    // Find original platform client
+    let origClient, origAccount;
+    if (cachedPost?.accountId) {
+      origClient = this.store.getClient(cachedPost.accountId);
+      origAccount = this.store.getById(cachedPost.accountId);
+    }
+    if (!origClient || origAccount?.platform !== platform) {
+      const match = this.store.getAll().find(a =>
+        (a.platform === 'mastodon') === (platform === 'mastodon')
+      );
+      if (match) { origClient = this.store.getClient(match.id); origAccount = match; }
+    }
+
+    const actingClient = this.store.getClient(actingAccountId);
+    const actingAccount = this.store.getById(actingAccountId);
+
+    // Fetch from both platforms in parallel
+    const [origResult, actingResult] = await Promise.allSettled([
+      origClient && origAccount
+        ? (origAccount.platform === 'mastodon' ? origClient.getStatus(postId) : origClient.getNote(postId))
+        : Promise.resolve(null),
+      actingClient && actingAccount
+        ? (actingAccount.platform === 'mastodon' ? actingClient.getStatus(actingPostId) : actingClient.getNote(actingPostId))
+        : Promise.resolve(null),
+    ]);
+
+    // Normalize original platform result
+    let basePost = cachedPost;
+    if (origResult.status === 'fulfilled' && origResult.value && origClient) {
+      basePost = origClient.normalizePost(origResult.value);
+      basePost.accountId = origAccount.id;
+      basePost.accountPlatform = origAccount.platform;
+      basePost.themeColor = origAccount.themeColor || null;
+      const ownerId = basePost.rebloggedBy ? basePost.rebloggedBy.id : basePost.author.id;
+      basePost.isOwn = String(ownerId) === String(origAccount.profile.id);
+    }
+    if (!basePost) return;
+
+    // Preserve mergedAccounts
+    if (cachedPost?.mergedAccounts) basePost.mergedAccounts = cachedPost.mergedAccounts;
+
+    // Merge data from acting account (e.g. Misskey reactions into Mastodon post)
+    if (actingResult.status === 'fulfilled' && actingResult.value && actingClient) {
+      const actingPost = actingClient.normalizePost(actingResult.value);
+      const dp = basePost.reblog || basePost;
+      const adp = actingPost.reblog || actingPost;
+
+      // Merge reactions
+      if (adp.reactions && Object.keys(adp.reactions).length > 0) {
+        dp.reactions = { ...(dp.reactions || {}), ...adp.reactions };
+      }
+      if (adp.reactionEmojis) dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...adp.reactionEmojis };
+      if (adp.emojis) dp.emojis = { ...(dp.emojis || {}), ...adp.emojis };
+      if (adp.instanceUrl) dp.instanceUrl = dp.instanceUrl || adp.instanceUrl;
+
+      // Merge fav/reaction state
+      if (actingPost.favourited) basePost.favourited = true;
+      if (actingPost.myReaction) basePost.myReaction = actingPost.myReaction;
+    }
+
+    // Preserve reblogged state
+    if (cachedPost?.reblogged) basePost.reblogged = true;
+
+    // Re-render all matching cards
+    const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
+    for (const card of cards) {
+      const newCard = renderPost(basePost);
+      card.replaceWith(newCard);
+    }
+
+    // Update cache
+    this.postCache.set(`${platform}:${postId}`, basePost);
   },
 
   async handleDeletePost(postId, platform, accountId, btnElement) {
@@ -426,7 +518,7 @@ export const PostActionsMixin = {
     return mentions.length > 0 ? mentions.join(' ') : null;
   },
 
-  async showReactionPicker(anchorElement, postId, platform, accountId) {
+  async showReactionPicker(anchorElement, actionPostId, platform, accountId, originalPostId) {
     // Close any existing picker
     this.closeReactionPicker();
 
@@ -469,7 +561,7 @@ export const PostActionsMixin = {
       if (!item) return;
       const reaction = item.dataset.reaction;
       this.closeReactionPicker();
-      await this.sendReaction(postId, platform, accountId, reaction, anchorElement);
+      await this.sendReaction(actionPostId, platform, accountId, reaction, anchorElement, originalPostId);
     });
 
     // Handle custom emoji input
@@ -479,7 +571,7 @@ export const PostActionsMixin = {
         const value = input.value.trim();
         if (value) {
           this.closeReactionPicker();
-          await this.sendReaction(postId, platform, accountId, value, anchorElement);
+          await this.sendReaction(actionPostId, platform, accountId, value, anchorElement, originalPostId);
         }
       }
     });
@@ -520,21 +612,27 @@ export const PostActionsMixin = {
     this._removeScrollTracker('reactionPicker');
   },
 
-  async sendReaction(postId, platform, accountId, reaction, btnElement) {
+  async sendReaction(actionPostId, platform, accountId, reaction, btnElement, originalPostId) {
     const client = this.store.getClient(accountId);
     if (!client) return;
+    const refreshPostId = originalPostId || actionPostId;
+    const isCrossInstance = originalPostId && originalPostId !== actionPostId;
     try {
       btnElement.classList.add('processing');
       // If already reacted on Misskey, delete old reaction first
-      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      const cachedPost = this.postCache.get(`${platform}:${refreshPostId}`);
       if (cachedPost?.myReaction) {
-        await client.deleteReaction(postId);
+        await client.deleteReaction(actionPostId);
       }
-      await client.createReaction(postId, reaction);
+      await client.createReaction(actionPostId, reaction);
       btnElement.classList.remove('processing');
       btnElement.classList.add('active', 'just-activated');
       setTimeout(() => btnElement.classList.remove('just-activated'), 600);
-      await this.refreshSinglePost(postId, platform, accountId);
+      if (isCrossInstance) {
+        await this._refreshMergedPost(refreshPostId, platform, accountId, actionPostId);
+      } else {
+        await this.refreshSinglePost(refreshPostId, platform, accountId);
+      }
     } catch (err) {
       console.error('Reaction failed:', err);
       btnElement.classList.remove('processing');

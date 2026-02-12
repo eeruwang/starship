@@ -260,9 +260,16 @@ export function renderPost(post) {
   // Actions
   const replyCount = displayPost.stats?.replies || 0;
   const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
-  const favCount = displayPost.stats?.favourites || displayPost.stats?.reactions || 0;
+  // Separate favourite count from reaction count:
+  // Mastodon uses stats.favourites; Misskey: count only ❤ from reactions (not all reactions)
+  let favCount = displayPost.stats?.favourites || 0;
+  if (!favCount && displayPost.reactions) {
+    favCount = (displayPost.reactions['❤'] || 0) + (displayPost.reactions['❤️'] || 0);
+  }
 
   const favIcon = iconHeart;
+  const isFaved = post.favourited || (post.myReaction && (post.myReaction === '❤' || post.myReaction === '❤️'));
+  const hasCustomReaction = post.myReaction && post.myReaction !== '❤' && post.myReaction !== '❤️';
 
   const isMisskey = post.platform !== 'mastodon'
     || (post.mergedAccounts && post.mergedAccounts.some(a => a.platform !== 'mastodon'));
@@ -280,11 +287,11 @@ export function renderPost(post) {
       <button class="post-action" data-action="quote" title="인용">
         <span class="action-icon">${iconQuote}</span>
       </button>
-      <button class="post-action${(post.favourited || post.myReaction) ? ' active' : ''}" data-action="fav" title="좋아요">
+      <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요">
         <span class="action-icon">${favIcon}</span>
         ${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}
       </button>
-      ${isMisskey ? `<button class="post-action" data-action="reaction" title="리액션">
+      ${isMisskey ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션">
         <span class="action-icon">${iconSmile}</span>
       </button>` : ''}
       ${post.isOwn ? `<button class="post-action action-edit" data-action="edit" title="수정">
@@ -498,17 +505,22 @@ export function renderNotification(notif) {
     if (hasPost) {
       const replyCount = displayPost.stats?.replies || 0;
       const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
-      const favCount = displayPost.stats?.favourites || displayPost.stats?.reactions || 0;
+      let favCount = displayPost.stats?.favourites || 0;
+      if (!favCount && displayPost.reactions) {
+        favCount = (displayPost.reactions['❤'] || 0) + (displayPost.reactions['❤️'] || 0);
+      }
       const isMisskey = notif.platform !== 'mastodon'
         || (notif.mergedAccounts && notif.mergedAccounts.some(a => a.platform !== 'mastodon'));
       const isBoosted = notif.reblogged || displayPost.reblogged;
-      const isFaved = notif.favourited || displayPost.favourited || displayPost.myReaction;
+      const isFaved = notif.favourited || displayPost.favourited
+        || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
+      const hasCustomReaction = displayPost.myReaction && displayPost.myReaction !== '❤' && displayPost.myReaction !== '❤️';
 
       html += `<div class="notif-actions">
         <button class="notif-action-btn" data-action="reply" title="답글">${iconReply}${replyCount > 0 ? `<span class="notif-action-count">${replyCount}</span>` : ''}</button>
         <button class="notif-action-btn${isBoosted ? ' active' : ''}" data-action="boost" title="부스트/리노트">${iconBoost}${boostCount > 0 ? `<span class="notif-action-count">${boostCount}</span>` : ''}</button>
         <button class="notif-action-btn${isFaved ? ' active' : ''}" data-action="fav" title="좋아요">${iconHeart}${favCount > 0 ? `<span class="notif-action-count">${favCount}</span>` : ''}</button>
-        ${isMisskey ? `<button class="notif-action-btn" data-action="reaction" title="리액션 선택">${iconSmile}</button>` : ''}
+        ${isMisskey ? `<button class="notif-action-btn${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션 선택">${iconSmile}</button>` : ''}
       </div>`;
     }
   }
