@@ -104,9 +104,13 @@ export const ThreadViewMixin = {
       // Control merged-account border via DOM, not data mutation
       // This keeps the post cache clean and consistent across views
       if (!showMergedUI) {
+        // Use the clicked account's color as solid border for merged posts
+        const clickedAcct = accounts.find(a => a.id === accountId);
+        const solidColor = clickedAcct?.themeColor || null;
         for (const el of content.querySelectorAll('.merged-border')) {
           el.classList.remove('merged-border');
           el.style.removeProperty('--merged-gradient');
+          if (solidColor) el.style.borderLeftColor = solidColor;
         }
       }
 
