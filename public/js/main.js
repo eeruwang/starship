@@ -1060,7 +1060,7 @@ class StarShipApp {
 
   loadColumnData(col, type, accountId) {
     const content = col.querySelector('.column-content');
-    const accounts = this.store.getAll();
+    const accounts = this.store.getVisible();
     if (type === 'all') {
       this.loadTimelineForColumn(content, accounts);
     } else if (type === 'notifications') {
@@ -1113,6 +1113,7 @@ class StarShipApp {
     const allAccounts = this.store.getAll();
     if (allAccounts.length === 0) return;
 
+    const visibleAccounts = this.store.getVisible();
     const order = this.columnState.order || [];
 
     // Render columns in saved toggle order
@@ -1120,11 +1121,11 @@ class StarShipApp {
       if (key === 'all' && this.columnState.all) {
         const col = this.createColumn('전체', 'all', null);
         this.columnsContainer.appendChild(col);
-        this.loadTimelineForColumn(col.querySelector('.column-content'), allAccounts);
+        this.loadTimelineForColumn(col.querySelector('.column-content'), visibleAccounts);
       } else if (key === 'notifications' && this.columnState.notifications) {
         const col = this.createColumn('알림', 'notifications', null);
         this.columnsContainer.appendChild(col);
-        this.loadNotificationsForColumn(col.querySelector('.column-content'), allAccounts);
+        this.loadNotificationsForColumn(col.querySelector('.column-content'), visibleAccounts);
       } else if (key.startsWith('account:')) {
         const accountId = key.slice('account:'.length);
         if (this.columnState.accounts[accountId]) {
@@ -1155,8 +1156,8 @@ class StarShipApp {
         avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
       }
     } else if (type === 'all' || type === 'notifications') {
-      // Show all account avatars stacked horizontally
-      const accounts = this.store.getAll();
+      // Show visible account avatars stacked horizontally
+      const accounts = this.store.getVisible();
       if (accounts.length > 0) {
         const avatars = accounts.map(a => {
           if (!a.profile?.avatarUrl) return '';
@@ -1207,7 +1208,7 @@ class StarShipApp {
         }
       } else if (type === 'all' || type === 'notifications') {
         const title = type === 'all' ? '전체' : '알림';
-        const accounts = this.store.getAll();
+        const accounts = this.store.getVisible();
         let avatarHtml = '';
         if (accounts.length > 0) {
           const avatars = accounts.map(a => {
@@ -1236,9 +1237,9 @@ class StarShipApp {
         const content = col.querySelector('.column-content');
         try {
           if (colType === 'all') {
-            await this.loadTimelineForColumn(content, this.store.getAll());
+            await this.loadTimelineForColumn(content, this.store.getVisible());
           } else if (colType === 'notifications') {
-            await this.loadNotificationsForColumn(content, this.store.getAll());
+            await this.loadNotificationsForColumn(content, this.store.getVisible());
           } else if (colType === 'account' && accountId) {
             const account = this.store.getById(accountId);
             if (account) {
