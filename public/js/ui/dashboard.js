@@ -806,6 +806,26 @@ export function renderLoadingText(message = '불러오는 중...') {
 // Export icons for use in main.js column headers
 export { iconRefresh, iconClose, iconImage };
 
+/** Build inner HTML for the .post-reactions section */
+export function buildReactionsHtml(displayPost, wrapperPost) {
+  const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
+  const hasFavs = displayPost.stats?.favourites > 0;
+  if (!hasReactions && !hasFavs) return '';
+  let html = '';
+  if (hasFavs) {
+    const isFaved = wrapperPost.favourited || displayPost.favourited
+      || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
+    html += `<span class="reaction-badge${isFaved ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
+  }
+  if (hasReactions) {
+    for (const [reaction, count] of Object.entries(displayPost.reactions)) {
+      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
+      html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+    }
+  }
+  return html;
+}
+
 // Helpers
 
 function escapeHtml(text) {

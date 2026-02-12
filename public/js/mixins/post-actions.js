@@ -3,6 +3,7 @@
  * Handles post interactions: fav, boost, reply, quote, reaction, edit, delete
  */
 import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
+import { buildReactionsHtml } from '../ui/dashboard.js';
 
 export const PostActionsMixin = {
 
@@ -338,13 +339,20 @@ export const PostActionsMixin = {
       }
     }
 
-    // Update reaction badges (favourite count in reactions area)
-    const favBadge = card.querySelector('.reaction-badge[data-reaction="favourite"]');
-    if (favBadge) {
-      const favCount = displayPost.stats?.favourites || 0;
-      const badgeCount = favBadge.querySelector('.reaction-count');
-      if (badgeCount) badgeCount.textContent = String(favCount);
-      favBadge.classList.toggle('reacted', !!isFaved);
+    // Rebuild reaction badges section (favourites + custom reactions)
+    const reactionsHtml = buildReactionsHtml(displayPost, wrapperPost);
+    let reactionsDiv = card.querySelector('.post-reactions');
+    if (reactionsHtml) {
+      if (!reactionsDiv) {
+        reactionsDiv = document.createElement('div');
+        reactionsDiv.className = card.classList.contains('notif-card')
+          ? 'post-reactions notif-reactions' : 'post-reactions';
+        const actionsDiv = card.querySelector('.post-actions, .notif-actions');
+        if (actionsDiv) actionsDiv.insertAdjacentElement('beforebegin', reactionsDiv);
+      }
+      reactionsDiv.innerHTML = reactionsHtml;
+    } else if (reactionsDiv) {
+      reactionsDiv.remove();
     }
   },
 
