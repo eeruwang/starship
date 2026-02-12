@@ -8,27 +8,25 @@ import { renderPost } from '../ui/dashboard.js';
 export const ThreadViewMixin = {
 
   async openThreadView(postId, platform, accountId, { columnType } = {}) {
-    // Only use merged view in 'all' or 'notifications' columns (or when column type is unknown)
-    const useMerged = !columnType || columnType === 'all' || columnType === 'notifications';
+    // Show merged account border UI only in 'all' or 'notifications' columns
+    const showMergedUI = !columnType || columnType === 'all' || columnType === 'notifications';
 
-    if (useMerged) {
-      // Check if this is a merged post (visible from multiple accounts)
-      const cachedPost = this.postCache.get(`${platform}:${postId}`);
-      if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 1) {
-        return this._openMergedThreadView(postId, platform, cachedPost.mergedAccounts);
-      }
+    // Always use merged data fetching when multiple accounts exist
+    // (for complete engagement data from all platforms), but control
+    // whether merged account borders are shown via showMergedUI flag
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 1) {
+      return this._openMergedThreadView(postId, platform, cachedPost.mergedAccounts, { showMergedUI });
+    }
 
-      // If user has accounts on other platforms, use merged view to properly
-      // separate favourites and reactions (e.g. Mastodon favs vs Misskey reactions)
-      const allAccounts = this.store.getAll();
-      if (allAccounts.length > 1) {
-        const mergedAccounts = allAccounts.map(a => ({
-          id: a.id,
-          platform: a.platform,
-          themeColor: a.themeColor || this._instanceColor(a.instanceUrl),
-        }));
-        return this._openMergedThreadView(postId, platform, mergedAccounts);
-      }
+    const allAccounts = this.store.getVisible();
+    if (allAccounts.length > 1) {
+      const mergedAccounts = allAccounts.map(a => ({
+        id: a.id,
+        platform: a.platform,
+        themeColor: a.themeColor || this._instanceColor(a.instanceUrl),
+      }));
+      return this._openMergedThreadView(postId, platform, mergedAccounts, { showMergedUI });
     }
 
     const client = this.store.getClient(accountId);
@@ -83,13 +81,16 @@ export const ThreadViewMixin = {
       this.cachePosts(allPosts);
 
       this._renderThread(content, ancestors, targetPost, descendants);
+
+      // Enrich posts with reaction data from Misskey (fire-and-forget)
+      this._fetchMissingReactions(allPosts, content);
     } catch (err) {
       console.error('Thread load failed:', err);
       content.innerHTML = `<div class="thread-loading">스레드를 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
     }
   },
 
-  async _openMergedThreadView(postId, platform, mergedAccounts) {
+  async _openMergedThreadView(postId, platform, mergedAccounts, { showMergedUI = true } = {}) {
     const modal = document.getElementById('modal-thread');
     const content = document.getElementById('thread-content');
     content.innerHTML = '<div class="thread-loading"><div class="spinner"></div></div>';
@@ -184,11 +185,22 @@ export const ThreadViewMixin = {
         targetPost.mergedAccounts = cachedPost.mergedAccounts;
       }
 
-      // Cache all posts
+      // Cache all posts (always with full merged data for cache benefit)
       const allPosts = [...allAncestors, ...(targetPost ? [targetPost] : []), ...allDescendants];
       this.cachePosts(allPosts);
 
+      // Strip merged account UI indicators for individual column threads
+      // (data is still merged for complete stats, just no colored borders)
+      if (!showMergedUI) {
+        for (const p of allPosts) {
+          delete p.mergedAccounts;
+        }
+      }
+
       this._renderThread(content, allAncestors, targetPost, allDescendants);
+
+      // Enrich posts with reaction data from Misskey (fire-and-forget)
+      this._fetchMissingReactions(allPosts, content);
     } catch (err) {
       console.error('Merged thread load failed:', err);
       content.innerHTML = `<div class="thread-loading">스레드를 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
