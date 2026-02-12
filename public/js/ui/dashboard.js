@@ -241,16 +241,24 @@ export function renderPost(post) {
     `;
   }
 
-  // Reactions (Misskey) / Favourites badge (Mastodon)
-  if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
-    html += '<div class="post-reactions">';
-    for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-      html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+  // Reactions (Misskey) / Favourites badge (Mastodon) — show both when merged
+  {
+    const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
+    const hasFavs = displayPost.stats?.favourites > 0;
+    if (hasReactions || hasFavs) {
+      html += '<div class="post-reactions">';
+      if (hasFavs) {
+        html += `<span class="reaction-badge${post.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
+      }
+      if (hasReactions) {
+        for (const [reaction, count] of Object.entries(displayPost.reactions)) {
+          if (hasFavs && (reaction === '❤' || reaction === '❤️')) continue;
+          const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
+          html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+        }
+      }
+      html += '</div>';
     }
-    html += '</div>';
-  } else if (post.platform === 'mastodon' && displayPost.stats?.favourites > 0) {
-    html += `<div class="post-reactions"><span class="reaction-badge${post.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span></div>`;
   }
 
   if (displayPost.contentWarning) {
@@ -456,15 +464,21 @@ export function renderNotification(notif) {
 
     // Reactions (hide for favourite/reaction notifications since the notif itself is about the reaction)
     if (!['favourite', 'reaction'].includes(notif.type)) {
-      if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
+      const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
+      const hasFavs = displayPost.stats?.favourites > 0;
+      if (hasReactions || hasFavs) {
         html += '<div class="post-reactions">';
-        for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-          const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-          html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+        if (hasFavs) {
+          html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
+        }
+        if (hasReactions) {
+          for (const [reaction, count] of Object.entries(displayPost.reactions)) {
+            if (hasFavs && (reaction === '❤' || reaction === '❤️')) continue;
+            const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
+            html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+          }
         }
         html += '</div>';
-      } else if (notif.platform === 'mastodon' && displayPost.stats?.favourites > 0) {
-        html += `<div class="post-reactions"><span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span></div>`;
       }
     }
 
@@ -643,15 +657,21 @@ export function renderNotification(notif) {
     // Reaction badges (Misskey custom emoji / Mastodon favourites)
     // Hide for favourite/reaction notifications since the notif itself is about the reaction
     if (!['favourite', 'reaction'].includes(notif.type)) {
-      if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
+      const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
+      const hasFavs = displayPost.stats?.favourites > 0;
+      if (hasReactions || hasFavs) {
         html += '<div class="post-reactions notif-reactions">';
-        for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-          const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-          html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+        if (hasFavs) {
+          html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
+        }
+        if (hasReactions) {
+          for (const [reaction, count] of Object.entries(displayPost.reactions)) {
+            if (hasFavs && (reaction === '❤' || reaction === '❤️')) continue;
+            const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
+            html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+          }
         }
         html += '</div>';
-      } else if (notif.platform === 'mastodon' && displayPost.stats?.favourites > 0) {
-        html += `<div class="post-reactions notif-reactions"><span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span></div>`;
       }
     }
 
