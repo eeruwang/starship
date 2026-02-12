@@ -530,7 +530,7 @@ export class MastodonClient {
       })),
       stats: {
         replies: status.replies_count || 0,
-        reblogs: status.reblogs_count || 0,
+        boosts: status.reblogs_count || 0,
         favourites: favouritesCount,
       },
       reblog: status.reblog ? this.normalizePost(status.reblog) : null,

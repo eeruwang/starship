@@ -394,8 +394,8 @@ export class MisskeyClient {
       })),
       stats: {
         replies: actualNote.repliesCount || 0,
-        renotes: actualNote.renoteCount || 0,
-        reactions: Object.values(actualNote.reactions || {}).reduce((a, b) => a + b, 0),
+        boosts: actualNote.renoteCount || 0,
+        favourites: 0,
       },
       reblog: isRenote ? this.normalizePost(note.renote) : null,
       rebloggedBy: isRenote ? author : null,

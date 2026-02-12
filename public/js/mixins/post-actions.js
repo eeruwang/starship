@@ -309,7 +309,7 @@ export const PostActionsMixin = {
 
     if (boostBtn) {
       boostBtn.classList.toggle('active', !!isBoosted);
-      const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
+      const boostCount = displayPost.stats?.boosts || 0;
       const countEl = boostBtn.querySelector('.action-count, .notif-action-count');
       if (countEl) {
         countEl.textContent = boostCount > 0 ? String(boostCount) : '';

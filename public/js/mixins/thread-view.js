@@ -205,15 +205,12 @@ export const ThreadViewMixin = {
     if (sDp.emojis) tDp.emojis = { ...(tDp.emojis || {}), ...sDp.emojis };
     if (sDp.instanceUrl && !tDp.instanceUrl) tDp.instanceUrl = sDp.instanceUrl;
 
-    // Merge stats (take max)
+    // Merge stats (take max of each unified field)
     if (sDp.stats) {
       tDp.stats = tDp.stats || {};
       tDp.stats.replies = Math.max(tDp.stats.replies || 0, sDp.stats.replies || 0);
-      tDp.stats.reblogs = Math.max(tDp.stats.reblogs || 0, sDp.stats.reblogs || 0);
-      tDp.stats.renotes = Math.max(tDp.stats.renotes || 0, sDp.stats.renotes || 0);
-      if (sDp.stats.favourites > 0) {
-        tDp.stats.favourites = Math.max(tDp.stats.favourites || 0, sDp.stats.favourites);
-      }
+      tDp.stats.boosts = Math.max(tDp.stats.boosts || 0, sDp.stats.boosts || 0);
+      tDp.stats.favourites = Math.max(tDp.stats.favourites || 0, sDp.stats.favourites || 0);
     }
     // Mastodon counts custom reactions as favourites — adjust to avoid double-counting
     if (tDp.reactions && Object.keys(tDp.reactions).length > 0 && tDp.stats && tDp.stats.favourites > 0) {

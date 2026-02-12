@@ -283,13 +283,8 @@ export function renderPost(post) {
 
   // Actions
   const replyCount = displayPost.stats?.replies || 0;
-  const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
-  // Separate favourite count from reaction count:
-  // Mastodon uses stats.favourites; Misskey: count only ❤ from reactions (not all reactions)
-  let favCount = displayPost.stats?.favourites || 0;
-  if (!favCount && displayPost.reactions) {
-    favCount = (displayPost.reactions['❤'] || 0) + (displayPost.reactions['❤️'] || 0);
-  }
+  const boostCount = displayPost.stats?.boosts || 0;
+  const favCount = displayPost.stats?.favourites || 0;
 
   const favIcon = iconHeart;
   const isFaved = post.favourited || (post.myReaction && (post.myReaction === '❤' || post.myReaction === '❤️'));
@@ -515,11 +510,8 @@ export function renderNotification(notif) {
 
     // Full action buttons (same as post-card)
     const replyCount = displayPost.stats?.replies || 0;
-    const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
-    let favCount = displayPost.stats?.favourites || 0;
-    if (!favCount && displayPost.reactions) {
-      favCount = (displayPost.reactions['❤'] || 0) + (displayPost.reactions['❤️'] || 0);
-    }
+    const boostCount = displayPost.stats?.boosts || 0;
+    const favCount = displayPost.stats?.favourites || 0;
     const isMisskey = notif.platform !== 'mastodon'
       || (notif.mergedAccounts && notif.mergedAccounts.some(a => a.platform !== 'mastodon'));
     const isFaved = notif.favourited || displayPost.favourited
@@ -710,7 +702,7 @@ export function renderNotification(notif) {
     // Action buttons with counts and active states (hide for favourite/reaction notifications)
     if (hasPost && !['favourite', 'reaction'].includes(notif.type)) {
       const replyCount = displayPost.stats?.replies || 0;
-      const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
+      const boostCount = displayPost.stats?.boosts || 0;
       let favCount = displayPost.stats?.favourites || 0;
       if (!favCount && displayPost.reactions) {
         favCount = (displayPost.reactions['❤'] || 0) + (displayPost.reactions['❤️'] || 0);
