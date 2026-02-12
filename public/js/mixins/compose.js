@@ -541,9 +541,10 @@ export const ComposeMixin = {
 
         // Create post
         if (account.platform === 'mastodon') {
-          // For Mastodon: append quote URL to text + try quote_id (supported by some servers)
+          // For Mastodon 4.3+: use native quote_id parameter
+          // Only append quote URL as text fallback if quote_id couldn't be resolved
           let statusText = text;
-          if (resolvedQuoteId && quoteUrl && !text.includes(quoteUrl)) {
+          if (quoteUrl && !resolvedQuoteId && !text.includes(quoteUrl)) {
             statusText = text + '\n\n' + quoteUrl;
           }
           const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || 'public';
