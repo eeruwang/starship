@@ -103,7 +103,7 @@ export const AuthUIMixin = {
           accounts: this.store.getAll().map(a => ({
             id: a.id, platform: a.platform, instanceUrl: a.instanceUrl,
             accessToken: a.accessToken, themeColor: a.themeColor,
-            label: a.label, profile: a.profile,
+            label: a.label, profile: a.profile, hidden: a.hidden || false,
           })),
           settings: this.settings,
           columnState: this.columnState,
@@ -372,7 +372,7 @@ export const AuthUIMixin = {
           accounts: this.store.getAll().map(a => ({
             id: a.id, platform: a.platform, instanceUrl: a.instanceUrl,
             accessToken: a.accessToken, themeColor: a.themeColor,
-            label: a.label, profile: a.profile,
+            label: a.label, profile: a.profile, hidden: a.hidden || false,
           })),
           settings: this.settings,
           columnState: this.columnState,
