@@ -870,8 +870,27 @@ export const PostActionsMixin = {
       const misskeyNoteId = displayPost?._misskeyNoteId;
       const misskeyAccountId = displayPost?._misskeyAccountId;
 
-      if (platform === 'mastodon' && misskeyNoteId) {
-        // Mastodon post with Misskey reactions: use Misskey API for reaction user list
+      // Determine if this is a heart/favourite badge click vs emoji reaction badge click
+      const isFavourite = !reaction || reaction === 'favourite';
+
+      if (platform === 'mastodon' && isFavourite) {
+        // Heart/favourite badge on Mastodon: always use Mastodon getFavouritedBy
+        const favUsers = await client.getFavouritedBy(postId);
+        if (!favUsers || favUsers.length === 0) {
+          popup.innerHTML = '<div class="reaction-users-loading">좋아요한 사용자가 없습니다.</div>';
+        } else {
+          users = favUsers.map(u => {
+            const normalized = client.normalizeUser(u);
+            return {
+              displayNameHtml: normalized.displayNameHtml,
+              username: normalized.acct || normalized.username,
+              avatarUrl: normalized.avatarUrl || '',
+            };
+          });
+          popup.innerHTML = this._renderReactionUsersHtml(users);
+        }
+      } else if (platform === 'mastodon' && misskeyNoteId) {
+        // Emoji reaction badge on merged Mastodon+Misskey post: use Misskey API
         const mkClient = this.store.getClient(misskeyAccountId) ||
           this.store.getClient(this.store.getAll().find(a => a.platform !== 'mastodon')?.id);
         if (mkClient) {
@@ -898,21 +917,10 @@ export const PostActionsMixin = {
         if (users.length === 0) {
           popup.innerHTML = '<div class="reaction-users-loading">리액션한 사용자가 없습니다.</div>';
         } else {
-          let html = '<div class="reaction-users-list">';
-          for (const user of users) {
-            html += `
-              <div class="reaction-user-item">
-                <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-                <span class="reaction-user-name">${user.displayNameHtml}</span>
-                <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
-              </div>
-            `;
-          }
-          html += '</div>';
-          popup.innerHTML = html;
+          popup.innerHTML = this._renderReactionUsersHtml(users);
         }
       } else if (platform === 'mastodon') {
-        // Mastodon: fetch favourited_by users
+        // Emoji reaction on pure Mastodon (no Misskey data): fallback to getFavouritedBy
         const favUsers = await client.getFavouritedBy(postId);
         if (!favUsers || favUsers.length === 0) {
           popup.innerHTML = '<div class="reaction-users-loading">좋아요한 사용자가 없습니다.</div>';
@@ -925,33 +933,22 @@ export const PostActionsMixin = {
               avatarUrl: normalized.avatarUrl || '',
             };
           });
-          let html = '<div class="reaction-users-list">';
-          for (const user of users) {
-            html += `
-              <div class="reaction-user-item">
-                <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-                <span class="reaction-user-name">${user.displayNameHtml}</span>
-                <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
-              </div>
-            `;
-          }
-          html += '</div>';
-          popup.innerHTML = html;
+          popup.innerHTML = this._renderReactionUsersHtml(users);
         }
       } else {
-        // Misskey: notes/reactions
-        let reactions = await client.getReactions(postId, reaction || undefined);
+        // Misskey platform: use notes/reactions
+        const reactionType = isFavourite ? '❤' : reaction;
+        let reactions = await client.getReactions(postId, reactionType || undefined);
 
         // Fallback: if type-filtered query returned empty, retry without filter
         // and match client-side (handles custom emoji format mismatches like :emoji@.: vs :emoji:)
-        if (reactions.length === 0 && reaction) {
+        if (reactions.length === 0 && reactionType) {
           const allReactions = await client.getReactions(postId);
-          // Normalize reaction string for comparison (strip @. suffix for local emoji)
           const normalize = (r) => r ? r.replace(/@\.:$/, ':').replace(/@\.$/, '') : '';
-          const target = normalize(reaction);
+          const target = normalize(reactionType);
           reactions = allReactions.filter(r => {
             const rType = normalize(r.type || '');
-            return rType === target || r.type === reaction;
+            return rType === target || r.type === reactionType;
           });
         }
 
@@ -968,18 +965,7 @@ export const PostActionsMixin = {
         if (users.length === 0) {
           popup.innerHTML = '<div class="reaction-users-loading">리액션한 사용자가 없습니다.</div>';
         } else {
-          let html = '<div class="reaction-users-list">';
-          for (const user of users) {
-            html += `
-              <div class="reaction-user-item">
-                <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-                <span class="reaction-user-name">${user.displayNameHtml}</span>
-                <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
-              </div>
-            `;
-          }
-          html += '</div>';
-          popup.innerHTML = html;
+          popup.innerHTML = this._renderReactionUsersHtml(users);
         }
       }
     } catch {
@@ -996,6 +982,21 @@ export const PostActionsMixin = {
       document.addEventListener('click', handler);
       this._reactionPopupClose = handler;
     }, 0);
+  },
+
+  _renderReactionUsersHtml(users) {
+    let html = '<div class="reaction-users-list">';
+    for (const user of users) {
+      html += `
+        <div class="reaction-user-item">
+          <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <span class="reaction-user-name">${user.displayNameHtml}</span>
+          <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
+        </div>
+      `;
+    }
+    html += '</div>';
+    return html;
   },
 
   closeReactionPopup() {

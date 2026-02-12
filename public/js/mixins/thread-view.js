@@ -14,6 +14,18 @@ export const ThreadViewMixin = {
       return this._openMergedThreadView(postId, platform, cachedPost.mergedAccounts);
     }
 
+    // If user has accounts on other platforms, use merged view to properly
+    // separate favourites and reactions (e.g. Mastodon favs vs Misskey reactions)
+    const allAccounts = this.store.getAll();
+    if (allAccounts.length > 1) {
+      const mergedAccounts = allAccounts.map(a => ({
+        id: a.id,
+        platform: a.platform,
+        themeColor: a.themeColor || this._instanceColor(a.instanceUrl),
+      }));
+      return this._openMergedThreadView(postId, platform, mergedAccounts);
+    }
+
     const client = this.store.getClient(accountId);
     const account = this.store.getById(accountId);
     if (!client || !account) return;

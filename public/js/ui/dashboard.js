@@ -252,7 +252,7 @@ export function renderPost(post) {
     if (hasReactions || hasFavs) {
       html += '<div class="post-reactions">';
       if (hasFavs) {
-        html += `<span class="reaction-badge${post.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
+        html += `<span class="reaction-badge${post.favourited ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
       }
       if (hasReactions) {
         for (const [reaction, count] of Object.entries(displayPost.reactions)) {
@@ -468,7 +468,7 @@ export function renderNotification(notif) {
       if (hasReactions || hasFavs) {
         html += '<div class="post-reactions">';
         if (hasFavs) {
-          html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
+          html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
         }
         if (hasReactions) {
           for (const [reaction, count] of Object.entries(displayPost.reactions)) {
@@ -665,7 +665,7 @@ export function renderNotification(notif) {
       if (hasReactions || hasFavs) {
         html += '<div class="post-reactions notif-reactions">';
         if (hasFavs) {
-          html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
+          html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
         }
         if (hasReactions) {
           for (const [reaction, count] of Object.entries(displayPost.reactions)) {
