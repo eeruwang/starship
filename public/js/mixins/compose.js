@@ -113,6 +113,16 @@ export const ComposeMixin = {
           <div class="compose-reply-context-body">${dp.content || ''}</div>
         `;
         replyCtx.style.display = '';
+
+        // Default reply visibility to the original post's visibility
+        if (dp.visibility) {
+          this.composeVisibilityValue = dp.visibility;
+          const opt = this._composeVisibilityOptions.find(o => o.value === dp.visibility);
+          if (opt) {
+            this.btnComposeVisibility.innerHTML = this._getVisibilitySvg(opt.icon);
+            this.btnComposeVisibility.title = `공개 범위: ${opt.label}`;
+          }
+        }
       } else {
         replyCtx.style.display = 'none';
       }
