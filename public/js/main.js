@@ -363,11 +363,11 @@ class StarShipApp {
       }
     });
 
-    // Post actions
+    // Post actions (works for post-card and mention-style notif-card)
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.post-action');
       if (!btn) return;
-      const card = btn.closest('.post-card');
+      const card = btn.closest('.post-card') || btn.closest('.notif-card');
       if (!card) return;
 
       const action = btn.dataset.action;
@@ -376,7 +376,7 @@ class StarShipApp {
       const accountId = card.dataset.accountId;
 
       if (action === 'open') {
-        const postUrl = this.findPostUrl(postId, platform);
+        const postUrl = this.findPostUrl(postId, platform) || card.dataset.postUrl;
         if (postUrl) window.open(postUrl, '_blank', 'noopener');
       } else if (action === 'fav') {
         this.handlePostAction('fav', postId, platform, accountId, btn);
@@ -417,7 +417,7 @@ class StarShipApp {
     document.addEventListener('click', (e) => {
       const card = e.target.closest('.notif-clickable');
       if (!card) return;
-      if (e.target.closest('.notif-avatar') || e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn') || e.target.closest('.cw-toggle') || e.target.closest('.sensitive-reveal') || e.target.closest('.sensitive-hide') || e.target.closest('.link-card') || e.target.closest('.reaction-badge') || e.target.closest('.post-media')) return;
+      if (e.target.closest('.notif-avatar') || e.target.closest('.post-avatar') || e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn') || e.target.closest('.post-action') || e.target.closest('.cw-toggle') || e.target.closest('.sensitive-reveal') || e.target.closest('.sensitive-hide') || e.target.closest('.link-card') || e.target.closest('.reaction-badge') || e.target.closest('.post-media')) return;
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;

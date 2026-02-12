@@ -1562,6 +1562,16 @@ h4.mfm-heading { font-size: 1em; }
   border-left: 3px solid transparent;
   flex-shrink: 0;
 }
+/* Mention notifications: use post-card-like block layout instead of flex-wrap */
+.notif-card.notif-mention {
+  display: block;
+}
+.notif-card.notif-mention .post-header {
+  margin-top: 0.2rem;
+}
+.notif-card.notif-mention .post-actions {
+  margin-top: 0.4rem;
+}
 .notif-card.notif-clickable {
   cursor: pointer;
   transition: background 0.15s;

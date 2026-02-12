@@ -326,6 +326,7 @@ export function renderNotification(notif) {
   }
   if (notif.accountId) card.dataset.accountId = notif.accountId;
   if (notif.post?.id) card.dataset.postId = notif.post.id;
+  if (notif.post?.url) card.dataset.postUrl = notif.post.url;
   if (notif.actor?.id) card.dataset.actorId = notif.actor.id;
   if (notif.actor?.acct) card.dataset.actorAcct = notif.actor.acct;
   if (notif.actor?.displayName) card.dataset.actorName = notif.actor.displayName;
@@ -343,6 +344,162 @@ export function renderNotification(notif) {
     card.style.borderLeftColor = usableColor(notif.themeColor, notif.platform);
   }
 
+  const displayPost = notif.post;
+  let html = '';
+
+  // Mention notifications: render as full post-card style
+  const isMentionStyle = notif.type === 'mention' && displayPost;
+  if (isMentionStyle) {
+    card.classList.add('notif-mention');
+
+    // Mention indicator
+    html += `<div class="renote-indicator"><span class="icon-inline" style="font-size:0.85em">💬</span> ${notif.actor ? (notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)) : ''}님이 멘션</div>`;
+
+    // Reply context
+    if (displayPost.replyTo) {
+      const replyAuthor = displayPost.replyTo.author;
+      const parentCw = displayPost.replyTo.contentWarning;
+      const parentText = stripHtml(displayPost.replyTo.content);
+      const isLong = !parentCw && parentText.length > 200;
+      const replyCtxId = `notif-reply-ctx-${notif.id}`;
+      html += `
+        <div class="reply-context">
+          <div class="reply-context-header">
+            <img class="reply-context-avatar" src="${replyAuthor?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+            <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
+          </div>
+          ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
+          <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
+          ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
+        </div>
+      `;
+    } else if (displayPost.replyToAcct) {
+      html += `<div class="reply-indicator">↩ @${escapeHtml(displayPost.replyToAcct)} 에게 답글</div>`;
+    } else if (displayPost.replyToId) {
+      html += `<div class="reply-indicator">↩ 답글</div>`;
+    }
+
+    // Post header (full avatar + name + handle + time)
+    html += `
+      <div class="post-header">
+        <img class="post-avatar" src="${displayPost.author.avatarUrl || ''}"
+             alt="${escapeHtml(displayPost.author.displayName)}"
+             loading="lazy" referrerpolicy="no-referrer"
+             onerror="this.style.opacity='0.3'">
+        <div class="post-meta">
+          <div class="post-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName)}</div>
+          <div class="post-handle">@${escapeHtml(displayPost.author.acct)}</div>
+        </div>
+        <span class="post-time" title="${displayPost.createdAt?.toLocaleString?.() || ''}">${timeAgo(displayPost.createdAt || notif.createdAt)}${displayPost.visibility && VISIBILITY_ICONS[displayPost.visibility] ? `<span class="visibility-icon" title="${VISIBILITY_ICONS[displayPost.visibility].title}">${VISIBILITY_ICONS[displayPost.visibility].icon}</span>` : ''}</span>
+      </div>
+    `;
+
+    // CW
+    const cwId = `notif-cw-${notif.id}`;
+    if (displayPost.contentWarning) {
+      html += `<div class="cw-warning"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(displayPost.contentWarning)} <button class="cw-toggle" data-cw-target="${cwId}">내용 보기</button></div>`;
+      html += `<div class="cw-content" id="${cwId}">`;
+    }
+
+    // Content
+    html += `<div class="post-content">${displayPost.content}</div>`;
+
+    // Quote post
+    if (displayPost.quotePost) {
+      html += renderQuotePost(displayPost.quotePost, 0);
+    }
+
+    // Media
+    if (displayPost.media && displayPost.media.length > 0) {
+      const count = Math.min(displayPost.media.length, 4);
+      const hasSensitive = displayPost.sensitive || displayPost.media.some(m => m.sensitive);
+      const sensitiveClass = hasSensitive ? ' media-sensitive' : '';
+      html += `<div class="post-media media-${count}${sensitiveClass}">`;
+      if (hasSensitive) {
+        html += `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
+        html += `<button class="sensitive-hide" title="민감한 미디어 숨기기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>숨기기</span></button>`;
+      }
+      for (const m of displayPost.media.slice(0, 4)) {
+        if (m.type === 'video') {
+          html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
+        } else {
+          html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
+        }
+      }
+      html += '</div>';
+    }
+
+    // Link card
+    if (displayPost.linkCard && displayPost.linkCard.url) {
+      const lc = displayPost.linkCard;
+      const hasImage = lc.image;
+      const hasTitle = lc.title;
+      const needsOg = !hasTitle && !hasImage;
+      const isFediUrl = isFediPostUrl(lc.url);
+      const cardClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
+      let extraAttrs = '';
+      if (isFediUrl) {
+        extraAttrs = ` data-fedi-url="${escapeHtml(lc.url)}" data-fedi-pending="true"`;
+      } else if (needsOg) {
+        extraAttrs = ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"`;
+      }
+      html += `<a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${extraAttrs}>
+        ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
+        <div class="link-card-info">
+          <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>
+          ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
+          ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
+          ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
+        </div>
+      </a>`;
+    }
+
+    // Reactions
+    if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
+      html += '<div class="post-reactions">';
+      for (const [reaction, count] of Object.entries(displayPost.reactions)) {
+        const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
+        html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+      }
+      html += '</div>';
+    } else if (notif.platform === 'mastodon' && displayPost.stats?.favourites > 0) {
+      html += `<div class="post-reactions"><span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span></div>`;
+    }
+
+    // Close CW
+    if (displayPost.contentWarning) {
+      html += '</div>';
+    }
+
+    // Full action buttons (same as post-card)
+    const replyCount = displayPost.stats?.replies || 0;
+    const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
+    let favCount = displayPost.stats?.favourites || 0;
+    if (!favCount && displayPost.reactions) {
+      favCount = (displayPost.reactions['❤'] || 0) + (displayPost.reactions['❤️'] || 0);
+    }
+    const isMisskey = notif.platform !== 'mastodon'
+      || (notif.mergedAccounts && notif.mergedAccounts.some(a => a.platform !== 'mastodon'));
+    const isFaved = notif.favourited || displayPost.favourited
+      || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
+    const hasCustomReaction = displayPost.myReaction && displayPost.myReaction !== '❤' && displayPost.myReaction !== '❤️';
+
+    html += `
+      <div class="post-actions">
+        <button class="post-action" data-action="reply" title="답글"><span class="action-icon">${iconReply}</span>${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}</button>
+        <button class="post-action${notif.reblogged || displayPost.reblogged ? ' active' : ''}" data-action="boost" title="${notif.platform === 'mastodon' ? '부스트' : '리노트'}"><span class="action-icon">${iconBoost}</span>${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}</button>
+        <button class="post-action" data-action="quote" title="인용"><span class="action-icon">${iconQuote}</span></button>
+        <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요"><span class="action-icon">${iconHeart}</span>${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}</button>
+        ${isMisskey ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션"><span class="action-icon">${iconSmile}</span></button>` : ''}
+        <button class="post-action action-end" data-action="open" title="원본 열기"><span class="action-icon">${iconLink}</span></button>
+      </div>
+    `;
+
+    card.innerHTML = html;
+    return card;
+  }
+
+  // --- Standard notification layout (non-mention) ---
   let iconHtml;
   const notifTypeClass = `notif-type-${notif.type}`;
   if (notif.reactionEmojiUrl) {
@@ -354,9 +511,6 @@ export function renderNotification(notif) {
       ? `<span class="notif-emoji">${icon}</span>`
       : `<span class="notif-svg-icon">${icon}</span>`;
   }
-
-  const displayPost = notif.post;
-  let html = '';
 
   // Actor avatar with notification type badge overlay
   if (notif.actor && notif.actor.avatarUrl) {
@@ -382,7 +536,7 @@ export function renderNotification(notif) {
   `;
 
   // Reply context (full content + CW toggle) for reply/mention/quote notifications
-  if (['reply', 'mention', 'quote'].includes(notif.type) && displayPost) {
+  if (['reply', 'quote'].includes(notif.type) && displayPost) {
     if (displayPost.replyTo) {
       const notifReplyAuthor = displayPost.replyTo.author;
       const parentCw = displayPost.replyTo.contentWarning;
