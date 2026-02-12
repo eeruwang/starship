@@ -199,15 +199,9 @@ export const ThreadViewMixin = {
       tDp.stats = tDp.stats || {};
       tDp.stats.replies = Math.max(tDp.stats.replies || 0, sDp.stats.replies || 0);
       tDp.stats.reblogs = Math.max(tDp.stats.reblogs || 0, sDp.stats.reblogs || 0);
-      // Only keep Mastodon favourites count if no detailed reactions exist
-      if (sDp.stats.favourites > 0 && (!tDp.reactions || Object.keys(tDp.reactions).length === 0)) {
+      if (sDp.stats.favourites > 0) {
         tDp.stats.favourites = Math.max(tDp.stats.favourites || 0, sDp.stats.favourites);
       }
-    }
-
-    // If reactions include ❤, clear stats.favourites to prevent heart badge + ❤ reaction duplication
-    if (tDp.reactions && (tDp.reactions['❤'] || tDp.reactions['❤️'])) {
-      if (tDp.stats) tDp.stats.favourites = 0;
     }
 
     // Merge fav/reaction state

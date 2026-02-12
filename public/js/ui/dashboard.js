@@ -241,18 +241,19 @@ export function renderPost(post) {
     `;
   }
 
-  // Reactions (Misskey) / Favourites badge (Mastodon) — show both when merged
+  // Reactions (Misskey) / Favourites badge (Mastodon)
+  // Show heart badge only when reactions don't already include ❤ (avoid double-counting)
   {
     const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
     const hasFavs = displayPost.stats?.favourites > 0;
+    const reactionsIncludeHeart = hasReactions && (displayPost.reactions['❤'] || displayPost.reactions['❤️']);
     if (hasReactions || hasFavs) {
       html += '<div class="post-reactions">';
-      if (hasFavs) {
+      if (hasFavs && !reactionsIncludeHeart) {
         html += `<span class="reaction-badge${post.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
       }
       if (hasReactions) {
         for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-          if (hasFavs && (reaction === '❤' || reaction === '❤️')) continue;
           const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
           html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
         }
@@ -463,17 +464,18 @@ export function renderNotification(notif) {
     }
 
     // Reactions (hide for favourite/reaction notifications since the notif itself is about the reaction)
+    // Show heart badge only when reactions don't already include ❤ (avoid double-counting)
     if (!['favourite', 'reaction'].includes(notif.type)) {
       const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
       const hasFavs = displayPost.stats?.favourites > 0;
+      const reactionsIncludeHeart = hasReactions && (displayPost.reactions['❤'] || displayPost.reactions['❤️']);
       if (hasReactions || hasFavs) {
         html += '<div class="post-reactions">';
-        if (hasFavs) {
+        if (hasFavs && !reactionsIncludeHeart) {
           html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
         }
         if (hasReactions) {
           for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-            if (hasFavs && (reaction === '❤' || reaction === '❤️')) continue;
             const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
             html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
           }
@@ -656,17 +658,18 @@ export function renderNotification(notif) {
 
     // Reaction badges (Misskey custom emoji / Mastodon favourites)
     // Hide for favourite/reaction notifications since the notif itself is about the reaction
+    // Show heart badge only when reactions don't already include ❤ (avoid double-counting)
     if (!['favourite', 'reaction'].includes(notif.type)) {
       const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
       const hasFavs = displayPost.stats?.favourites > 0;
+      const reactionsIncludeHeart = hasReactions && (displayPost.reactions['❤'] || displayPost.reactions['❤️']);
       if (hasReactions || hasFavs) {
         html += '<div class="post-reactions notif-reactions">';
-        if (hasFavs) {
+        if (hasFavs && !reactionsIncludeHeart) {
           html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
         }
         if (hasReactions) {
           for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-            if (hasFavs && (reaction === '❤' || reaction === '❤️')) continue;
             const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
             html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
           }
