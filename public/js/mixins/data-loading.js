@@ -668,6 +668,18 @@ export const DataLoadingMixin = {
         if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
           existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
         }
+        // Merge Misskey reaction data into the primary post
+        const srcDisplay = post.reblog || post;
+        const dstDisplay = existing.reblog || existing;
+        if (srcDisplay.reactions && Object.keys(srcDisplay.reactions).length > 0 &&
+            (!dstDisplay.reactions || Object.keys(dstDisplay.reactions).length === 0)) {
+          dstDisplay.reactions = srcDisplay.reactions;
+          dstDisplay.reactionEmojis = srcDisplay.reactionEmojis || dstDisplay.reactionEmojis;
+          dstDisplay.emojis = srcDisplay.emojis || dstDisplay.emojis;
+        }
+        if (srcDisplay.myReaction && !dstDisplay.myReaction) {
+          dstDisplay.myReaction = srcDisplay.myReaction;
+        }
       }
     }
     return deduped;
