@@ -665,6 +665,8 @@ export class MisskeyClient {
     // Blockquotes: lines starting with &gt; (before newline conversion)
     html = html.replace(/^&gt;\s?(.*)/gm, '<blockquote class="mfm-quote">$1</blockquote>');
     html = html.replace(/<\/blockquote>\n<blockquote class="mfm-quote">/g, '<br>');
+    // Remove newline immediately after blockquote (block element already provides spacing)
+    html = html.replace(/<\/blockquote>\n/g, '</blockquote>');
 
     // Restore markdown links
     html = html.replace(/\x00ML(\d+)\x00/g, (match, idx) => {
