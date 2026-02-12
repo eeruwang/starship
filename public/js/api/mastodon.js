@@ -305,6 +305,57 @@ export class MastodonClient {
     return div.innerHTML;
   }
 
+  /**
+   * Enhance Mastodon HTML content with markdown-like formatting.
+   * Mastodon API returns pre-formatted HTML, but some instances/forks
+   * don't render markdown syntax (bold, code, blockquotes, etc.).
+   * This processes text nodes within the HTML to add formatting that
+   * matches Misskey's MFM rendering.
+   */
+  enhanceHtml(html) {
+    if (!html) return '';
+
+    // Split HTML into tags and text segments
+    const parts = html.split(/(<[^>]+>)/);
+    let inPre = false;
+    let inCode = false;
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part.startsWith('<')) {
+        if (/<pre[\s>]/i.test(part)) inPre = true;
+        else if (/<\/pre>/i.test(part)) inPre = false;
+        if (/<code[\s>]/i.test(part)) inCode = true;
+        else if (/<\/code>/i.test(part)) inCode = false;
+        continue;
+      }
+      if (inPre || inCode) continue;
+
+      let t = part;
+
+      // Code blocks: ```lang\ncode``` → <pre><code>
+      t = t.replace(/```(\w*)\n?([\s\S]*?)```/g, (m, lang, code) =>
+        `<pre class="mfm-code-block"><code>${code.replace(/\n$/, '')}</code></pre>`);
+
+      // Inline code: `code`
+      t = t.replace(/`([^`\n]+)`/g, '<code class="mfm-inline-code">$1</code>');
+
+      // Bold: **text**
+      t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+      // Strikethrough: ~~text~~
+      t = t.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+      // Blockquote: &gt; at line start (Mastodon HTML-encodes >)
+      t = t.replace(/^&gt;\s?(.*)/gm, '<blockquote class="mfm-quote">$1</blockquote>');
+      t = t.replace(/<\/blockquote>\n<blockquote class="mfm-quote">/g, '<br>');
+
+      parts[i] = t;
+    }
+
+    return parts.join('');
+  }
+
   normalizePost(status) {
     const acct = status.account;
     // Process custom emojis in content
@@ -317,6 +368,8 @@ export class MastodonClient {
           `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
       }
     }
+    // Enhance HTML with markdown-like formatting
+    content = this.enhanceHtml(content);
     // Link card from Mastodon API
     const card = status.card;
     let linkCard = null;
