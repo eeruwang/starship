@@ -149,9 +149,6 @@ export const DataLoadingMixin = {
       // Fetch missing reply parents
       await this.fetchMissingReplyParents(allPosts, accounts);
 
-      // Cache posts
-      this.cachePosts(allPosts);
-
       // Track oldest post IDs per account for pagination
       const oldestIds = new Map();
       for (const result of results) {
@@ -265,6 +262,9 @@ export const DataLoadingMixin = {
           this.enrichLinkCards(container);
         }
       }
+
+      // Cache posts AFTER incremental merge so Phase 1 can compare against old cache
+      this.cachePosts(allPosts);
     } catch (err) {
       if (isFirstLoad) {
         container.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
