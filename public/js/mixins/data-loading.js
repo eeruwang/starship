@@ -380,8 +380,9 @@ export const DataLoadingMixin = {
         }
       }
 
-      // Cache and append
+      // Cache and fetch missing reply parents
       this.cachePosts(newPosts);
+      await this.fetchMissingReplyParents(newPosts, accounts);
 
       if (newPosts.length === 0) {
         pagination.hasMore = false;
@@ -874,8 +875,44 @@ export const DataLoadingMixin = {
 
     if (needsFetch.length === 0) return;
 
-    // Limit to 10 concurrent fetches
-    const toFetch = needsFetch.slice(0, 10);
+    // First pass: resolve parents from existing timeline data or cache (no API calls)
+    for (const post of needsFetch) {
+      const dp = post.reblog || post;
+      const parentId = dp.replyToId;
+      // Search in the same batch
+      const found = posts.find(p => {
+        const pdp = p.reblog || p;
+        return pdp.id === parentId;
+      });
+      // Or search in the post cache
+      const cached = found || (this.postCache && (() => {
+        for (const [, p] of this.postCache) {
+          const pdp = p.reblog || p;
+          if (pdp.id === parentId) return p;
+        }
+        return null;
+      })());
+      if (cached) {
+        const pdp = cached.reblog || cached;
+        dp.replyTo = {
+          id: pdp.id,
+          content: pdp.content,
+          author: pdp.author,
+          contentWarning: pdp.contentWarning || null,
+        };
+      }
+    }
+
+    // Second pass: fetch remaining from API
+    const stillNeedsFetch = needsFetch.filter(p => {
+      const dp = p.reblog || p;
+      return dp.replyToId && !dp.replyTo;
+    });
+
+    if (stillNeedsFetch.length === 0) return;
+
+    // Fetch up to 30 parent posts concurrently
+    const toFetch = stillNeedsFetch.slice(0, 30);
 
     await Promise.allSettled(toFetch.map(async (post) => {
       const dp = post.reblog || post;
