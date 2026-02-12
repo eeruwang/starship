@@ -82,16 +82,38 @@ export const DataLoadingMixin = {
           if (!client) return [];
 
           try {
-            const items = await client.getHomeTimeline(this.settings.postsCount);
-            return items.map(item => {
-              const post = client.normalizePost(item);
+            const addMeta = (post) => {
               post.accountId = account.id;
               post.accountPlatform = account.platform;
               post.themeColor = account.themeColor || null;
               const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
               post.isOwn = String(ownerId) === String(account.profile.id);
               return post;
-            });
+            };
+
+            // For Mastodon: also fetch own statuses to ensure own posts/boosts appear
+            // (home timeline may not include own reblogs on some instances)
+            if (account.platform === 'mastodon' && account.profile?.id) {
+              const [homeItems, ownItems] = await Promise.all([
+                client.getHomeTimeline(this.settings.postsCount),
+                client.getUserStatuses(account.profile.id, 15).catch(() => []),
+              ]);
+              const seenIds = new Set();
+              const merged = [];
+              for (const item of homeItems) {
+                seenIds.add(item.id);
+                merged.push(item);
+              }
+              for (const item of ownItems) {
+                if (!seenIds.has(item.id)) {
+                  merged.push(item);
+                }
+              }
+              return merged.map(item => addMeta(client.normalizePost(item)));
+            }
+
+            const items = await client.getHomeTimeline(this.settings.postsCount);
+            return items.map(item => addMeta(client.normalizePost(item)));
           } catch (err) {
             console.error(`Timeline error for ${account.label}:`, err);
             return [];
@@ -252,16 +274,37 @@ export const DataLoadingMixin = {
           if (!untilId) return [];
 
           try {
-            const items = await client.getHomeTimeline(this.settings.postsCount, untilId);
-            return items.map(item => {
-              const post = client.normalizePost(item);
+            const addMeta = (post) => {
               post.accountId = account.id;
               post.accountPlatform = account.platform;
               post.themeColor = account.themeColor || null;
               const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
               post.isOwn = String(ownerId) === String(account.profile.id);
               return post;
-            });
+            };
+
+            // For Mastodon: also fetch own statuses to ensure own posts/boosts appear
+            if (account.platform === 'mastodon' && account.profile?.id) {
+              const [homeItems, ownItems] = await Promise.all([
+                client.getHomeTimeline(this.settings.postsCount, untilId),
+                client.getUserStatuses(account.profile.id, 15, untilId).catch(() => []),
+              ]);
+              const seenIds = new Set();
+              const merged = [];
+              for (const item of homeItems) {
+                seenIds.add(item.id);
+                merged.push(item);
+              }
+              for (const item of ownItems) {
+                if (!seenIds.has(item.id)) {
+                  merged.push(item);
+                }
+              }
+              return merged.map(item => addMeta(client.normalizePost(item)));
+            }
+
+            const items = await client.getHomeTimeline(this.settings.postsCount, untilId);
+            return items.map(item => addMeta(client.normalizePost(item)));
           } catch (err) {
             console.error(`Older posts error for ${account.label}:`, err);
             return [];
