@@ -544,11 +544,12 @@ export class MastodonClient {
     const acct = notif.account;
 
     // Extract reaction emoji from notification (Fedibird, glitch-soc, Pleroma, Akkoma)
-    let reactionEmoji = null;
-    let reactionEmojiUrl = null;
-    if (notif.type === 'emoji_reaction' || notif.type === 'reaction' || notif.type === 'pleroma:emoji_reaction') {
-      reactionEmoji = notif.emoji || notif.emoji_reaction || null;
-      reactionEmojiUrl = notif.emoji_url || null;
+    // Some forks include emoji/emoji_url even on 'favourite' notifications
+    let reactionEmoji = notif.emoji || notif.emoji_reaction || null;
+    let reactionEmojiUrl = notif.emoji_url || null;
+    // For favourite type with reaction emoji, normalize to 'reaction' type
+    if (type === 'favourite' && reactionEmoji) {
+      type = 'reaction';
     }
 
     return {

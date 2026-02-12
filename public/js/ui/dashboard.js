@@ -241,7 +241,11 @@ export function renderPost(post) {
     `;
   }
 
-  // Reactions (Misskey) / Favourites badge (Mastodon)
+  if (displayPost.contentWarning) {
+    html += '</div>'; // close cw-content
+  }
+
+  // Reactions (Misskey) / Favourites badge (Mastodon) — outside CW so always visible
   {
     const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
     const hasFavs = displayPost.stats?.favourites > 0;
@@ -258,10 +262,6 @@ export function renderPost(post) {
       }
       html += '</div>';
     }
-  }
-
-  if (displayPost.contentWarning) {
-    html += '</div>'; // close cw-content
   }
 
   // Actions
@@ -652,7 +652,12 @@ export function renderNotification(notif) {
       `;
     }
 
-    // Reaction badges (Misskey custom emoji / Mastodon favourites)
+    // Close CW content wrapper
+    if (displayPost.contentWarning) {
+      html += '</div>'; // close cw-content
+    }
+
+    // Reaction badges (Misskey custom emoji / Mastodon favourites) — outside CW so always visible
     // Hide for favourite/reaction notifications since the notif itself is about the reaction
     if (!['favourite', 'reaction'].includes(notif.type)) {
       const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
@@ -670,11 +675,6 @@ export function renderNotification(notif) {
         }
         html += '</div>';
       }
-    }
-
-    // Close CW content wrapper
-    if (displayPost.contentWarning) {
-      html += '</div>'; // close cw-content
     }
 
     // Action buttons with counts and active states (hide for favourite/reaction notifications)
