@@ -200,20 +200,37 @@ export const DataLoadingMixin = {
           }
         }
 
+        // Phase 1: Update existing cards whose mergedAccounts have grown
+        // (e.g. Mastodon post now also seen from Misskey account via federation)
+        for (const p of allPosts) {
+          if (!p.mergedAccounts || p.mergedAccounts.length <= 1) continue;
+          const displayPost = p.reblog || p;
+          const uri = displayPost.canonicalUri;
+          if (!uri || !uriToCard.has(uri)) continue;
+          const existingCard = uriToCard.get(uri);
+          const cacheKey = `${existingCard.dataset.platform}:${existingCard.dataset.postId}`;
+          const cachedPost = this.postCache?.get(cacheKey);
+          if (!cachedPost) continue;
+          const existingCount = cachedPost.mergedAccounts?.length || 1;
+          if (p.mergedAccounts.length > existingCount) {
+            cachedPost.mergedAccounts = p.mergedAccounts;
+            const newCard = renderPost(cachedPost);
+            existingCard.replaceWith(newCard);
+            uriToCard.set(uri, newCard);
+          }
+        }
+
+        // Phase 2: Filter for truly new posts
         const newPosts = [];
         for (const p of allPosts) {
           // Check platform:id
           if (existingKeys.has(`${p.platform}:${p.id}`)) continue;
           // Check dedup key (handles cross-instance renotes/boosts)
           if (p._dedupKey && existingKeys.has(`dedup:${p._dedupKey}`)) continue;
-          // For non-renote posts, check canonicalUri — but merge accounts if from different account
+          // For non-renote posts, also check canonicalUri to avoid duplicates
           if (!p.rebloggedBy) {
             const displayPost = p.reblog || p;
-            if (displayPost.canonicalUri && existingKeys.has(`uri:${displayPost.canonicalUri}`)) {
-              // Duplicate URI — try to merge account info onto the existing card
-              this._mergeAccountOnExistingCard(uriToCard.get(displayPost.canonicalUri), p);
-              continue;
-            }
+            if (displayPost.canonicalUri && existingKeys.has(`uri:${displayPost.canonicalUri}`)) continue;
           }
           newPosts.push(p);
         }
@@ -620,30 +637,6 @@ export const DataLoadingMixin = {
       }
     }
     return deduped;
-  },
-
-  /**
-   * Merge a new account onto an existing DOM card (incremental dedup).
-   * When the same post appears from a different account during refresh,
-   * update the existing card's border to show both account colors.
-   */
-  _mergeAccountOnExistingCard(card, post) {
-    if (!card) return;
-    const cacheKey = `${card.dataset.platform}:${card.dataset.postId}`;
-    const cachedPost = this.postCache?.get(cacheKey);
-    if (!cachedPost) return;
-
-    const newAcct = { id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor };
-    if (!cachedPost.mergedAccounts) {
-      cachedPost.mergedAccounts = [{ id: cachedPost.accountId, platform: cachedPost.accountPlatform || cachedPost.platform, themeColor: cachedPost.themeColor }];
-    }
-    // Already merged?
-    if (cachedPost.mergedAccounts.some(a => a.id === newAcct.id)) return;
-
-    cachedPost.mergedAccounts.push(newAcct);
-    // Re-render the card with updated mergedAccounts
-    const newCard = renderPost(cachedPost);
-    card.replaceWith(newCard);
   },
 
   _deduplicateNotifications(notifs) {
