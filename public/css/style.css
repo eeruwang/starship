@@ -3381,6 +3381,19 @@ textarea.input {
     var(--merged-gradient) border-box;
 }
 
+/* Thread target with merged border: combine highlight background + gradient border */
+.thread-content .post-card.thread-target.merged-border {
+  background:
+    linear-gradient(rgba(99, 100, 255, 0.08), rgba(99, 100, 255, 0.08)) padding-box,
+    var(--merged-gradient) border-box;
+}
+
+.thread-content .post-card.thread-target.merged-border:hover {
+  background:
+    linear-gradient(var(--bg-hover), var(--bg-hover)) padding-box,
+    var(--merged-gradient) border-box;
+}
+
 /* Quote post inside notification card — full-width */
 .notif-card .quote-post {
   width: 100%;
