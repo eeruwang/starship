@@ -1044,7 +1044,15 @@ export const DataLoadingMixin = {
 
   cachePosts(posts) {
     for (const post of posts) {
-      this.postCache.set(`${post.platform}:${post.id}`, post);
+      const key = `${post.platform}:${post.id}`;
+      // Preserve mergedAccounts from a previous multi-account dedup so that
+      // a later single-account column load doesn't erase them from the cache
+      const existing = this.postCache.get(key);
+      if (existing?.mergedAccounts && existing.mergedAccounts.length > 1 &&
+          (!post.mergedAccounts || post.mergedAccounts.length <= 1)) {
+        post.mergedAccounts = existing.mergedAccounts;
+      }
+      this.postCache.set(key, post);
     }
     // Evict oldest entries if over limit
     if (this.postCache.size > this.POST_CACHE_MAX) {
