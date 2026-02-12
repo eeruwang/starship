@@ -7,6 +7,7 @@ import {
   iconRefresh, iconClose, iconWarning, iconImage,
   iconQuote, iconSmile, iconTrash, iconEdit,
   iconHeartSmall, iconStarSmall,
+  iconReplyNotif, iconBoostNotif,
   iconVisPublic, iconVisHome, iconVisFollowers, iconVisDirect,
   getNotifIcon,
 } from './icons.js';
@@ -370,15 +371,24 @@ export function renderNotification(notif) {
   const displayPost = notif.post;
   let html = '';
 
-  // Mention / Quote notifications: render as full post-card style
-  const isMentionStyle = (notif.type === 'mention' || notif.type === 'quote') && displayPost;
+  // Mention / Quote / Boost notifications: render as full post-card style
+  const isMentionStyle = (notif.type === 'mention' || notif.type === 'quote' || notif.type === 'reblog') && displayPost;
   if (isMentionStyle) {
     card.classList.add('notif-mention');
 
-    // Mention / Quote indicator
-    const indicatorIcon = notif.type === 'quote' ? '📌' : '💬';
-    const indicatorLabel = notif.type === 'quote' ? '인용' : '멘션';
-    html += `<div class="renote-indicator"><span class="icon-inline" style="font-size:0.85em">${indicatorIcon}</span> ${notif.actor ? (notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)) : ''}님이 ${indicatorLabel}</div>`;
+    // Unified indicator: actor avatar with type badge + label
+    const indicatorLabels = { quote: '인용', mention: '멘션', reblog: notif.platform === 'mastodon' ? '부스트' : '리노트' };
+    const indicatorIcons = { quote: iconReplyNotif, mention: iconReplyNotif, reblog: iconBoostNotif };
+    const indicatorTypeClass = `notif-type-${notif.type}`;
+    const actorName = notif.actor ? (notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)) : '';
+    const actorAvatar = notif.actor?.avatarUrl || '';
+    html += `<div class="notif-indicator">
+      <div class="notif-actor-wrap notif-indicator-actor">
+        <img class="notif-avatar" src="${escapeHtml(actorAvatar)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+        <span class="notif-type-badge ${indicatorTypeClass}"><span class="notif-svg-icon">${indicatorIcons[notif.type] || iconReplyNotif}</span></span>
+      </div>
+      <span class="notif-indicator-label">${actorName} 님이 ${indicatorLabels[notif.type] || notif.type}</span>
+    </div>`;
 
     // Reply context
     if (displayPost.replyTo) {
@@ -596,20 +606,10 @@ export function renderNotification(notif) {
     }
   }
 
-  // Boosted post: show original post author header (like timeline boost display)
-  if (notif.type === 'reblog' && displayPost?.author) {
-    html += `<div class="notif-parent-context notif-parent-context-full">
-      <div class="notif-parent-header">
-        <img class="notif-parent-avatar" src="${displayPost.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-        <span class="notif-parent-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName || '')}</span>
-        <span class="notif-parent-handle" style="font-size:0.68rem;color:var(--text-muted);margin-left:0.1rem">@${escapeHtml(displayPost.author.acct || '')}</span>
-      </div>
-    </div>`;
-  }
-
   // Post content area (with CW toggle, media, quote, reactions, link card)
   const hasDisplayContent = displayPost && (displayPost.content || (displayPost.media && displayPost.media.length > 0) || displayPost.quotePost || displayPost.linkCard);
   if (hasDisplayContent) {
+    html += `<div class="notif-content-wrap">`;
     const notifCwId = `notif-cw-${notif.id}`;
 
     // CW (Content Warning) toggle
@@ -729,6 +729,8 @@ export function renderNotification(notif) {
         ${isMisskey ? `<button class="notif-action-btn${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션 선택">${iconSmile}</button>` : ''}
       </div>`;
     }
+
+    html += '</div>'; // close notif-content-wrap
   }
   card.innerHTML = html;
   return card;
