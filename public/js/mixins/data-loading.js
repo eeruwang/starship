@@ -688,6 +688,10 @@ export const DataLoadingMixin = {
           dstDisplay.reactions = srcDisplay.reactions;
           dstDisplay.reactionEmojis = srcDisplay.reactionEmojis || dstDisplay.reactionEmojis;
           dstDisplay.emojis = srcDisplay.emojis || dstDisplay.emojis;
+          if (srcDisplay.id && (post.accountPlatform || post.platform) !== 'mastodon') {
+            dstDisplay._misskeyNoteId = srcDisplay.id;
+            dstDisplay._misskeyAccountId = post.accountId;
+          }
           this._adjustFavouritesForReactions(dstDisplay);
         }
         if (srcDisplay.myReaction && !dstDisplay.myReaction) {
@@ -730,6 +734,11 @@ export const DataLoadingMixin = {
         dp.reactionEmojis = cached.reactionEmojis || dp.reactionEmojis;
         dp.emojis = cached.emojis || dp.emojis;
         if (cached.myReaction && !dp.myReaction) dp.myReaction = cached.myReaction;
+        if (cached._misskeyNoteId) dp._misskeyNoteId = cached._misskeyNoteId;
+        if (cached._misskeyAccountId) dp._misskeyAccountId = cached._misskeyAccountId;
+        if (cached.id && cached.platform && cached.platform !== 'mastodon') {
+          dp._misskeyNoteId = dp._misskeyNoteId || cached.id;
+        }
         this._adjustFavouritesForReactions(dp);
       }
     }
@@ -769,6 +778,8 @@ export const DataLoadingMixin = {
         dp.emojis = rdp.emojis || dp.emojis;
         if (rdp.instanceUrl) dp.instanceUrl = dp.instanceUrl || rdp.instanceUrl;
         if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
+        dp._misskeyNoteId = rdp.id;
+        dp._misskeyAccountId = misskeyAccount.id;
         this._adjustFavouritesForReactions(dp);
         this.postCache.set(`${post.platform}:${post.id}`, post);
 

@@ -187,6 +187,12 @@ export const ThreadViewMixin = {
       if (!tDp.reactions || Object.keys(tDp.reactions).length === 0) {
         // Target has no reactions: take source reactions directly
         tDp.reactions = { ...sDp.reactions };
+        if (sDp._misskeyNoteId) tDp._misskeyNoteId = sDp._misskeyNoteId;
+        if (sDp._misskeyAccountId) tDp._misskeyAccountId = sDp._misskeyAccountId;
+        if (sDp.id && source.platform !== 'mastodon' && !tDp._misskeyNoteId) {
+          tDp._misskeyNoteId = sDp.id;
+          tDp._misskeyAccountId = source.accountId;
+        }
       }
       // Don't spread-merge if target already has reactions (avoids key format duplication)
     }

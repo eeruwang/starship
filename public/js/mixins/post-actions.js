@@ -260,6 +260,8 @@ export const PostActionsMixin = {
             udp.reactionEmojis = cdp.reactionEmojis || udp.reactionEmojis;
             udp.emojis = cdp.emojis || udp.emojis;
             if (cdp.myReaction && !udp.myReaction) udp.myReaction = cdp.myReaction;
+            if (cdp._misskeyNoteId) udp._misskeyNoteId = cdp._misskeyNoteId;
+            if (cdp._misskeyAccountId) udp._misskeyAccountId = cdp._misskeyAccountId;
           }
           // Adjust favourites: Mastodon counts custom reactions as favourites
           if (udp.reactions && Object.keys(udp.reactions).length > 0 && udp.stats?.favourites > 0) {
@@ -332,6 +334,8 @@ export const PostActionsMixin = {
       // Merge reactions
       if (adp.reactions && Object.keys(adp.reactions).length > 0) {
         dp.reactions = { ...(dp.reactions || {}), ...adp.reactions };
+        dp._misskeyNoteId = adp.id;
+        dp._misskeyAccountId = actingAccountId;
       }
       if (adp.reactionEmojis) dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...adp.reactionEmojis };
       if (adp.emojis) dp.emojis = { ...(dp.emojis || {}), ...adp.emojis };
@@ -860,7 +864,54 @@ export const PostActionsMixin = {
     try {
       let users = [];
 
-      if (platform === 'mastodon') {
+      // Check if this Mastodon post has a Misskey note ID (reactions fetched from Misskey)
+      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      const displayPost = cachedPost ? (cachedPost.reblog || cachedPost) : null;
+      const misskeyNoteId = displayPost?._misskeyNoteId;
+      const misskeyAccountId = displayPost?._misskeyAccountId;
+
+      if (platform === 'mastodon' && misskeyNoteId) {
+        // Mastodon post with Misskey reactions: use Misskey API for reaction user list
+        const mkClient = this.store.getClient(misskeyAccountId) ||
+          this.store.getClient(this.store.getAll().find(a => a.platform !== 'mastodon')?.id);
+        if (mkClient) {
+          let reactions = await mkClient.getReactions(misskeyNoteId, reaction || undefined);
+          if (reactions.length === 0 && reaction) {
+            const allReactions = await mkClient.getReactions(misskeyNoteId);
+            const normalize = (r) => r ? r.replace(/@\.:$/, ':').replace(/@\.$/, '') : '';
+            const target = normalize(reaction);
+            reactions = allReactions.filter(r => {
+              const rType = normalize(r.type || '');
+              return rType === target || r.type === reaction;
+            });
+          }
+          users = reactions.map(r => {
+            const normalized = r.user ? mkClient.normalizeUser(r.user) : null;
+            return {
+              displayNameHtml: normalized?.displayNameHtml || this.escapeHtml(r.user?.name || r.user?.username || '?'),
+              username: normalized?.username || r.user?.username || '?',
+              avatarUrl: normalized?.avatarUrl || r.user?.avatarUrl || '',
+              reaction: r.type || '',
+            };
+          });
+        }
+        if (users.length === 0) {
+          popup.innerHTML = '<div class="reaction-users-loading">리액션한 사용자가 없습니다.</div>';
+        } else {
+          let html = '<div class="reaction-users-list">';
+          for (const user of users) {
+            html += `
+              <div class="reaction-user-item">
+                <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+                <span class="reaction-user-name">${user.displayNameHtml}</span>
+                <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
+              </div>
+            `;
+          }
+          html += '</div>';
+          popup.innerHTML = html;
+        }
+      } else if (platform === 'mastodon') {
         // Mastodon: fetch favourited_by users
         const favUsers = await client.getFavouritedBy(postId);
         if (!favUsers || favUsers.length === 0) {
