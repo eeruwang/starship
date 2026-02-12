@@ -477,10 +477,25 @@ export const PostActionsMixin = {
   },
 
   getReplyMention(postId, accountId) {
-    const account = this.store.getById(accountId);
-    const myUsername = account?.profile?.username;
+    // Build a set of all "my" account identifiers to exclude from mentions
+    const myIdentifiers = new Set();
+    for (const acc of this.store.getAll()) {
+      if (acc.profile?.username) {
+        myIdentifiers.add(acc.profile.username.toLowerCase());
+        if (acc.instanceUrl) {
+          try {
+            const domain = new URL(acc.instanceUrl).hostname;
+            myIdentifiers.add(`${acc.profile.username.toLowerCase()}@${domain}`);
+          } catch {}
+        }
+      }
+    }
+    const isSelf = (acct) => {
+      if (!acct) return true;
+      return myIdentifiers.has(acct.toLowerCase());
+    };
 
-    // Walk up the reply chain to collect non-self mentions
+    // Walk up the reply chain to collect all non-self mentions
     const findPost = (id) => {
       for (const [, post] of this.postCache) {
         const dp = post.reblog || post;
@@ -491,28 +506,42 @@ export const PostActionsMixin = {
 
     const mentions = [];
     const seen = new Set();
+    const addMention = (acct) => {
+      if (!acct || isSelf(acct)) return;
+      const lower = acct.toLowerCase();
+      if (seen.has(lower)) return;
+      seen.add(lower);
+      mentions.push(`@${acct}`);
+    };
+
     let currentId = postId;
     let depth = 0;
+    let isFirst = true;
 
-    while (currentId && depth < 10) {
+    while (currentId && depth < 20) {
       const dp = findPost(currentId);
       if (!dp) break;
 
-      const author = dp.author;
-      if (author) {
-        const acct = author.acct || author.username;
-        // Add non-self, non-duplicate mentions
-        if ((!myUsername || author.username !== myUsername) && !seen.has(acct)) {
-          seen.add(acct);
-          mentions.push(`@${acct}`);
+      // Collect author of this post
+      if (dp.author) {
+        addMention(dp.author.acct || dp.author.username);
+      }
+
+      // On the first post (the one we're replying to), also collect its @mentions
+      if (isFirst) {
+        // Mastodon: raw.mentions array
+        const rawMentions = dp.raw?.mentions || dp.raw?.renote?.mentions;
+        if (Array.isArray(rawMentions)) {
+          for (const m of rawMentions) {
+            if (m.acct) addMention(m.acct);
+          }
         }
+        isFirst = false;
       }
 
       // Walk up to parent
       currentId = dp.replyTo?.id || dp.replyToId || null;
       depth++;
-      // Stop after finding the first non-self mention
-      if (mentions.length > 0) break;
     }
 
     return mentions.length > 0 ? mentions.join(' ') : null;
