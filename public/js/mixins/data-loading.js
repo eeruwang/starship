@@ -615,6 +615,8 @@ export const DataLoadingMixin = {
       }
       // Fetch missing reaction details from Misskey for notification posts
       this._fetchMissingReactions(allNotifs, container, { isNotification: true });
+      // Resolve Mastodon favourite notifications that are actually Misskey reactions
+      this._resolveReactionNotifications(allNotifs, container);
     } catch (err) {
       if (isFirstLoad) {
         container.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
@@ -792,6 +794,107 @@ export const DataLoadingMixin = {
           const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
           for (const card of cards) {
             card.replaceWith(renderPost(item));
+          }
+        }
+      }).catch(() => {});
+    }
+  },
+
+  // For Mastodon 'favourite' notifications, check if the actor actually sent a Misskey
+  // emoji reaction. Uses notes/reactions to match actor → emoji, then re-renders as
+  // 'reaction' type. Fire-and-forget.
+  _resolveReactionNotifications(notifs, container) {
+    const misskeyAccount = this.store.getAll().find(a => a.platform !== 'mastodon');
+    if (!misskeyAccount) return;
+    const client = this.store.getClient(misskeyAccount.id);
+    if (!client) return;
+
+    // Collect favourite notifications from Mastodon accounts that have a post
+    const favNotifs = notifs.filter(n =>
+      n.type === 'favourite' && n.platform === 'mastodon' && n.post
+    );
+    if (favNotifs.length === 0) return;
+
+    // Group by post canonical URI
+    const byUri = new Map();
+    for (const notif of favNotifs) {
+      const dp = notif.post.reblog || notif.post;
+      const uri = dp.canonicalUri;
+      if (!uri) continue;
+      if (!byUri.has(uri)) byUri.set(uri, []);
+      byUri.get(uri).push(notif);
+    }
+
+    const misskeyHost = (() => {
+      try { return new URL(misskeyAccount.instanceUrl).hostname; } catch { return ''; }
+    })();
+
+    for (const [uri, groupNotifs] of [...byUri.entries()].slice(0, 5)) {
+      client.resolveUrl(uri).then(async resolved => {
+        if (!resolved) return;
+        const rdp = resolved.reblog || resolved;
+        const noteId = rdp.id;
+        if (!noteId) return;
+
+        let reactions;
+        try { reactions = await client.getReactions(noteId); } catch { return; }
+        if (!reactions || reactions.length === 0) return;
+
+        // Build lookup: "username@host" → reaction type
+        const reactionByUser = new Map();
+        for (const r of reactions) {
+          if (!r.user) continue;
+          const host = r.user.host || misskeyHost;
+          const acct = `${r.user.username}@${host}`.toLowerCase();
+          reactionByUser.set(acct, r.type);
+        }
+
+        const reactionEmojis = rdp.reactionEmojis || rdp.emojis || {};
+        let changed = false;
+
+        for (const notif of groupNotifs) {
+          const actorAcct = notif.actor?.acct
+            ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl).toLowerCase()
+            : null;
+          if (!actorAcct) continue;
+
+          const emoji = reactionByUser.get(actorAcct);
+          if (!emoji) continue;
+
+          // Convert favourite → reaction
+          notif.type = 'reaction';
+          notif.label = '리액션';
+          notif.reactionEmoji = emoji;
+          notif.icon = emoji;
+
+          // Resolve custom emoji URL (:name: format)
+          const customMatch = emoji.match(/^:(.+):$/);
+          if (customMatch) {
+            const name = customMatch[1];
+            const url = reactionEmojis[name] || reactionEmojis[name + '@.'] || null;
+            if (url) {
+              notif.reactionEmojiUrl = url;
+            } else {
+              const baseName = name.replace(/@\.$/, '');
+              notif.reactionEmojiUrl = `${misskeyAccount.instanceUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+            }
+          }
+
+          // Update dedup key to reflect the new type
+          const actorKey = notif.actor?.acct || notif.actor?.id || '';
+          const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+          notif._dedupKey = `reaction:${actorKey}:${postKey}:${emoji}`;
+
+          changed = true;
+        }
+
+        if (changed) {
+          for (const notif of groupNotifs) {
+            if (notif.type !== 'reaction') continue;
+            const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
+            for (const card of cards) {
+              card.replaceWith(renderNotification(notif));
+            }
           }
         }
       }).catch(() => {});
