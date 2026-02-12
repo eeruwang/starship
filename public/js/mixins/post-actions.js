@@ -735,6 +735,11 @@ export const PostActionsMixin = {
   // ===== Account Picker =====
 
   showAccountPicker(anchorElement, accounts, onSelect, preferredAccountId = null) {
+    // Toggle: if picker is already open for this anchor, just close it
+    if (this._activePickerAnchor === anchorElement && document.getElementById('account-picker-popup')) {
+      this.closeAccountPicker();
+      return;
+    }
     this.closeAccountPicker();
 
     const picker = document.createElement('div');
@@ -784,6 +789,7 @@ export const PostActionsMixin = {
     // Re-adjust after DOM append (now offsetWidth is real)
     positionAccountPicker(anchorElement.getBoundingClientRect());
     this._trackPopupScroll('accountPicker', picker, anchorElement, positionAccountPicker);
+    this._activePickerAnchor = anchorElement;
 
     picker.addEventListener('click', (e) => {
       const item = e.target.closest('.account-picker-item');
@@ -812,6 +818,7 @@ export const PostActionsMixin = {
       document.removeEventListener('click', this._pickerOutsideClick);
       this._pickerOutsideClick = null;
     }
+    this._activePickerAnchor = null;
     this._removeScrollTracker('accountPicker');
   },
 

@@ -580,6 +580,17 @@ export function renderNotification(notif) {
     }
   }
 
+  // Boosted post: show original post author header (like timeline boost display)
+  if (notif.type === 'reblog' && displayPost?.author) {
+    html += `<div class="notif-parent-context notif-parent-context-full">
+      <div class="notif-parent-header">
+        <img class="notif-parent-avatar" src="${displayPost.author.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+        <span class="notif-parent-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName || '')}</span>
+        <span class="notif-parent-handle" style="font-size:0.68rem;color:var(--text-muted);margin-left:0.1rem">@${escapeHtml(displayPost.author.acct || '')}</span>
+      </div>
+    </div>`;
+  }
+
   // Post content area (with CW toggle, media, quote, reactions, link card)
   if (displayPost && displayPost.content) {
     const notifCwId = `notif-cw-${notif.id}`;
