@@ -141,6 +141,10 @@ export class MisskeyClient {
     return this.request('notes/create', { renoteId: noteId });
   }
 
+  async unrenote(noteId) {
+    return this.request('notes/unrenote', { noteId });
+  }
+
   async updateFile(fileId, params = {}) {
     return this.request('drive/files/update', { fileId, ...params });
   }

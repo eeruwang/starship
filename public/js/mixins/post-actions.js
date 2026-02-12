@@ -122,13 +122,17 @@ export const PostActionsMixin = {
       btnElement.classList.add('processing');
 
       if (action === 'fav') {
-        const alreadyFaved = cachedPost?.favourited || cachedPost?.myReaction;
+        const displayPost = cachedPost?.reblog || cachedPost;
+        const alreadyFaved = cachedPost?.favourited || displayPost?.myReaction;
         if (alreadyFaved) {
-          // Unlike / unreact
           if (accountPlatform === 'mastodon') {
             await client.unfavourite(actionPostId);
           } else {
             await client.deleteReaction(actionPostId);
+          }
+          if (cachedPost) {
+            cachedPost.favourited = false;
+            if (displayPost) { displayPost.favourited = false; displayPost.myReaction = null; }
           }
           btnElement.classList.remove('processing', 'active');
         } else {
@@ -136,6 +140,10 @@ export const PostActionsMixin = {
             await client.favourite(actionPostId);
           } else {
             await client.createReaction(actionPostId, '❤');
+          }
+          if (cachedPost) {
+            cachedPost.favourited = true;
+            if (displayPost) displayPost.favourited = true;
           }
           btnElement.classList.remove('processing');
           btnElement.classList.add('active', 'just-activated');
@@ -146,21 +154,21 @@ export const PostActionsMixin = {
         if (alreadyBoosted) {
           if (accountPlatform === 'mastodon') {
             await client.unreblog(actionPostId);
+          } else {
+            await client.unrenote(actionPostId);
           }
-          btnElement.classList.remove('processing', 'active');
-          // Update cache
           if (cachedPost) cachedPost.reblogged = false;
+          btnElement.classList.remove('processing', 'active');
         } else {
           if (accountPlatform === 'mastodon') {
             await client.reblog(actionPostId);
           } else {
             await client.renote(actionPostId);
           }
+          if (cachedPost) cachedPost.reblogged = true;
           btnElement.classList.remove('processing');
           btnElement.classList.add('active', 'just-activated');
           setTimeout(() => btnElement.classList.remove('just-activated'), 600);
-          // Update cache
-          if (cachedPost) cachedPost.reblogged = true;
         }
       } else if (action === 'reply') {
         btnElement.classList.remove('processing');
@@ -240,28 +248,31 @@ export const PostActionsMixin = {
         const cdp = cachedPost.reblog || cachedPost;
         // Update interactive state
         cdp.favourited = udp.favourited;
-        cdp.reblogged = udp.reblogged;
-        cdp.myReaction = udp.myReaction || cdp.myReaction;
+        cdp.myReaction = udp.myReaction;
+        // Misskey API always returns reblogged:false — trust cache set by executePostAction
+        if (account.platform === 'mastodon') {
+          cdp.reblogged = udp.reblogged;
+        }
         // Update stats
         if (udp.stats) {
           cdp.stats = { ...cdp.stats, ...udp.stats };
-          // Adjust favourites: Mastodon counts custom reactions as favourites
           if (cdp.reactions && Object.keys(cdp.reactions).length > 0 && cdp.stats.favourites > 0) {
             const totalReactions = Object.values(cdp.reactions).reduce((sum, c) => sum + c, 0);
             cdp.stats.favourites = Math.max(0, cdp.stats.favourites - totalReactions);
           }
         }
-        // Update reactions if new data is richer
-        if (udp.reactions && Object.keys(udp.reactions).length > 0) {
+        // Update reactions (always sync — clears correctly on unreact)
+        if (udp.reactions) {
           cdp.reactions = udp.reactions;
           cdp.reactionEmojis = udp.reactionEmojis || cdp.reactionEmojis;
         }
-        // Preserve reblogged state for Misskey
-        if (account.platform !== 'mastodon' && cachedPost.reblogged) {
-          cachedPost.reblogged = true;
+        // Sync wrapper state for reblogs (wrapper and inner post differ)
+        if (cachedPost !== cdp) {
+          cachedPost.favourited = updatedPost.favourited;
+          if (account.platform === 'mastodon') {
+            cachedPost.reblogged = updatedPost.reblogged;
+          }
         }
-        cachedPost.favourited = updatedPost.favourited;
-        cachedPost.reblogged = updatedPost.reblogged ?? cachedPost.reblogged;
       } else {
         // No cache — store normalized post directly
         updatedPost.accountId = accountId;
@@ -406,12 +417,10 @@ export const PostActionsMixin = {
       const dp = basePost.reblog || basePost;
       const adp = actingPost.reblog || actingPost;
 
-      // Merge reactions
-      if (adp.reactions && Object.keys(adp.reactions).length > 0) {
-        dp.reactions = { ...(dp.reactions || {}), ...adp.reactions };
-        dp._misskeyNoteId = adp.id;
-        dp._misskeyAccountId = actingAccountId;
-      }
+      // Merge reactions (always sync — empty means unreacted)
+      dp.reactions = { ...(dp.reactions || {}), ...(adp.reactions || {}) };
+      dp._misskeyNoteId = adp.id;
+      dp._misskeyAccountId = actingAccountId;
       if (adp.reactionEmojis) dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...adp.reactionEmojis };
       if (adp.emojis) dp.emojis = { ...(dp.emojis || {}), ...adp.emojis };
       if (adp.instanceUrl) dp.instanceUrl = dp.instanceUrl || adp.instanceUrl;
@@ -422,12 +431,12 @@ export const PostActionsMixin = {
         dp.stats.favourites = Math.max(0, dp.stats.favourites - totalReactions);
       }
 
-      // Merge fav/reaction state
+      // Merge fav/reaction state — acting account is the truth for myReaction
       if (actingPost.favourited) basePost.favourited = true;
-      if (actingPost.myReaction) basePost.myReaction = actingPost.myReaction;
+      basePost.myReaction = actingPost.myReaction;
     }
 
-    // Preserve reblogged state
+    // Preserve reblogged state (set by executePostAction, not reliable from API)
     if (cachedPost?.reblogged) basePost.reblogged = true;
 
     // Merge updated stats/state back into cache (preserve replyTo, enrichments)
@@ -436,16 +445,15 @@ export const PostActionsMixin = {
       const bdp = basePost.reblog || basePost;
       cdp.favourited = bdp.favourited;
       cdp.reblogged = bdp.reblogged;
-      cdp.myReaction = bdp.myReaction || cdp.myReaction;
+      cdp.myReaction = bdp.myReaction;
       if (bdp.stats) cdp.stats = { ...cdp.stats, ...bdp.stats };
-      if (bdp.reactions && Object.keys(bdp.reactions).length > 0) {
-        cdp.reactions = bdp.reactions;
-        cdp.reactionEmojis = bdp.reactionEmojis || cdp.reactionEmojis;
-        cdp.emojis = bdp.emojis || cdp.emojis;
-        cdp._misskeyNoteId = bdp._misskeyNoteId || cdp._misskeyNoteId;
-        cdp._misskeyAccountId = bdp._misskeyAccountId || cdp._misskeyAccountId;
-        cdp.instanceUrl = bdp.instanceUrl || cdp.instanceUrl;
-      }
+      // Always sync reactions (clears correctly on unreact)
+      if (bdp.reactions) cdp.reactions = bdp.reactions;
+      if (bdp.reactionEmojis) cdp.reactionEmojis = bdp.reactionEmojis;
+      if (bdp.emojis) cdp.emojis = { ...(cdp.emojis || {}), ...bdp.emojis };
+      if (bdp._misskeyNoteId) cdp._misskeyNoteId = bdp._misskeyNoteId;
+      if (bdp._misskeyAccountId) cdp._misskeyAccountId = bdp._misskeyAccountId;
+      if (bdp.instanceUrl) cdp.instanceUrl = cdp.instanceUrl || bdp.instanceUrl;
       cachedPost.favourited = basePost.favourited;
       cachedPost.reblogged = basePost.reblogged;
     } else {
