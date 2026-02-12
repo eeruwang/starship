@@ -476,7 +476,7 @@ class StarShipApp {
       const badge = e.target.closest('.reaction-badge');
       if (!badge) return;
       e.stopPropagation();
-      const card = badge.closest('.post-card');
+      const card = badge.closest('.post-card') || badge.closest('.notif-card');
       if (!card) return;
       const postId = card.dataset.postId;
       const platform = card.dataset.platform;
