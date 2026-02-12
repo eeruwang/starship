@@ -6,7 +6,7 @@ import { renderPost, renderNotification, renderLoading, renderLoadingText } from
 
 export const DataLoadingMixin = {
 
-  async refreshAll(fullReload = false) {
+  async refreshAll(fullReload = false, { skipColumnTypes = [] } = {}) {
     // Visual feedback on the top refresh button
     this.btnRefreshAll.classList.add('refreshing');
     this.btnRefreshAll.disabled = true;
@@ -23,12 +23,16 @@ export const DataLoadingMixin = {
       const columns = this.columnsContainer.querySelectorAll('.column');
       const promises = [];
       for (const col of columns) {
+        const type = col.dataset.columnType;
+
+        // Skip specified column types (e.g. 'all' after compose to avoid pre-federation duplicates)
+        if (skipColumnTypes.includes(type)) continue;
+
         col.classList.add('refreshing');
         const refreshBtn = col.querySelector('[data-action="refresh-column"]');
         if (refreshBtn) refreshBtn.classList.add('spinning');
 
         const content = col.querySelector('.column-content');
-        const type = col.dataset.columnType;
         const accountId = col.dataset.accountId;
 
         let loadPromise;

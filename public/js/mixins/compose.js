@@ -587,7 +587,10 @@ export const ComposeMixin = {
         this._saveAccountVisibility(accountId, visibility);
       }
       this.closeModal(this.modalCompose);
-      this.refreshAll();
+      // Skip "all" column on post-compose refresh: the new post hasn't federated
+      // to other instances yet, so showing it immediately would display it without
+      // proper account merging. The next auto-refresh will pick it up with dedup.
+      this.refreshAll(false, { skipColumnTypes: ['all'] });
     }
 
     this.btnComposeSubmit.disabled = false;
