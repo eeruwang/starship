@@ -307,6 +307,7 @@ class StarShipApp {
     document.addEventListener('mouseup', onEnd);
     this.toggleBar.addEventListener('touchstart', onStart, { passive: true });
     document.addEventListener('touchmove', onMove, { passive: false });
+    let touchHandled = false;
     document.addEventListener('touchend', (e) => {
       const wasDrag = moved;
       onEnd();
@@ -315,6 +316,7 @@ class StarShipApp {
         const el = document.elementFromPoint(touch.clientX, touch.clientY);
         const toggle = el && el.closest('.col-toggle');
         if (toggle && this.toggleBar.contains(toggle)) {
+          touchHandled = true;
           this.handleToggleClick(toggle);
         }
       }
@@ -324,6 +326,11 @@ class StarShipApp {
       if (moved) {
         e.stopPropagation();
         moved = false;
+        return;
+      }
+      // Prevent duplicate toggle from touchend + click on mobile
+      if (touchHandled) {
+        touchHandled = false;
         return;
       }
       const toggle = e.target.closest('.col-toggle');
