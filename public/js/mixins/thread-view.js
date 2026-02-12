@@ -184,7 +184,11 @@ export const ThreadViewMixin = {
 
     // Merge reactions (Misskey reactions into Mastodon post)
     if (sDp.reactions && Object.keys(sDp.reactions).length > 0) {
-      tDp.reactions = { ...(tDp.reactions || {}), ...sDp.reactions };
+      if (!tDp.reactions || Object.keys(tDp.reactions).length === 0) {
+        // Target has no reactions: take source reactions directly
+        tDp.reactions = { ...sDp.reactions };
+      }
+      // Don't spread-merge if target already has reactions (avoids key format duplication)
     }
     if (sDp.reactionEmojis) tDp.reactionEmojis = { ...(tDp.reactionEmojis || {}), ...sDp.reactionEmojis };
     if (sDp.emojis) tDp.emojis = { ...(tDp.emojis || {}), ...sDp.emojis };
@@ -195,10 +199,15 @@ export const ThreadViewMixin = {
       tDp.stats = tDp.stats || {};
       tDp.stats.replies = Math.max(tDp.stats.replies || 0, sDp.stats.replies || 0);
       tDp.stats.reblogs = Math.max(tDp.stats.reblogs || 0, sDp.stats.reblogs || 0);
-      // Preserve Mastodon favourites count; don't overwrite with Misskey's 0
-      if (sDp.stats.favourites > 0) {
+      // Only keep Mastodon favourites count if no detailed reactions exist
+      if (sDp.stats.favourites > 0 && (!tDp.reactions || Object.keys(tDp.reactions).length === 0)) {
         tDp.stats.favourites = Math.max(tDp.stats.favourites || 0, sDp.stats.favourites);
       }
+    }
+
+    // If reactions include ❤, clear stats.favourites to prevent heart badge + ❤ reaction duplication
+    if (tDp.reactions && (tDp.reactions['❤'] || tDp.reactions['❤️'])) {
+      if (tDp.stats) tDp.stats.favourites = 0;
     }
 
     // Merge fav/reaction state

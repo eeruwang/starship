@@ -151,6 +151,9 @@ export const DataLoadingMixin = {
         allPosts.push(...deduped);
       }
 
+      // Merge reaction data from cache (e.g. Misskey reactions into Mastodon-only column posts)
+      this._mergeReactionsFromCache(allPosts);
+
       // Fetch missing reply parents
       await this.fetchMissingReplyParents(allPosts, accounts);
 
@@ -686,6 +689,33 @@ export const DataLoadingMixin = {
       }
     }
     return deduped;
+  },
+
+  _mergeReactionsFromCache(posts) {
+    if (!this.postCache || this.postCache.size === 0) return;
+    // Build a canonicalUri → cached post index for fast lookup
+    const uriToCache = new Map();
+    for (const [, cached] of this.postCache) {
+      const cdp = cached.reblog || cached;
+      if (cdp.canonicalUri && cdp.reactions && Object.keys(cdp.reactions).length > 0) {
+        uriToCache.set(cdp.canonicalUri, cdp);
+      }
+    }
+    if (uriToCache.size === 0) return;
+
+    for (const post of posts) {
+      const dp = post.reblog || post;
+      if (!dp.canonicalUri) continue;
+      // Skip if post already has reaction data
+      if (dp.reactions && Object.keys(dp.reactions).length > 0) continue;
+      const cached = uriToCache.get(dp.canonicalUri);
+      if (cached) {
+        dp.reactions = cached.reactions;
+        dp.reactionEmojis = cached.reactionEmojis || dp.reactionEmojis;
+        dp.emojis = cached.emojis || dp.emojis;
+        if (cached.myReaction && !dp.myReaction) dp.myReaction = cached.myReaction;
+      }
+    }
   },
 
   _deduplicateNotifications(notifs) {
