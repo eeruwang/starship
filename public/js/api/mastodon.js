@@ -128,6 +128,10 @@ export class MastodonClient {
     return this.request('GET', `/api/v1/statuses/${encodeURIComponent(id)}/context`);
   }
 
+  async getFavouritedBy(id) {
+    return this.request('GET', `/api/v1/statuses/${encodeURIComponent(id)}/favourited_by`);
+  }
+
   async favourite(id) {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/favourite`);
   }

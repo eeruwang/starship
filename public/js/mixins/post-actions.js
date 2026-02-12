@@ -809,8 +809,32 @@ export const PostActionsMixin = {
       let users = [];
 
       if (platform === 'mastodon') {
-        // Mastodon doesn't have per-reaction users, skip
-        popup.innerHTML = '<div class="reaction-users-loading">Mastodon은 리액션 사용자 조회를 지원하지 않습니다.</div>';
+        // Mastodon: fetch favourited_by users
+        const favUsers = await client.getFavouritedBy(postId);
+        if (!favUsers || favUsers.length === 0) {
+          popup.innerHTML = '<div class="reaction-users-loading">좋아요한 사용자가 없습니다.</div>';
+        } else {
+          users = favUsers.map(u => {
+            const normalized = client.normalizeUser(u);
+            return {
+              displayNameHtml: normalized.displayNameHtml,
+              username: normalized.acct || normalized.username,
+              avatarUrl: normalized.avatarUrl || '',
+            };
+          });
+          let html = '<div class="reaction-users-list">';
+          for (const user of users) {
+            html += `
+              <div class="reaction-user-item">
+                <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+                <span class="reaction-user-name">${user.displayNameHtml}</span>
+                <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
+              </div>
+            `;
+          }
+          html += '</div>';
+          popup.innerHTML = html;
+        }
       } else {
         // Misskey: notes/reactions
         let reactions = await client.getReactions(postId, reaction || undefined);
