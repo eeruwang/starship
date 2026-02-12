@@ -424,15 +424,16 @@ class StarShipApp {
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;
+      const columnType = card.closest('.column')?.dataset.columnType;
       // Quote post inside notification: open quote's thread
       const quotePart = e.target.closest('.quote-post');
       if (quotePart && quotePart.dataset.quoteId) {
-        this.openThreadView(quotePart.dataset.quoteId, platform, accountId);
+        this.openThreadView(quotePart.dataset.quoteId, platform, accountId, { columnType });
         return;
       }
       const postId = card.dataset.postId;
       if (postId) {
-        this.openThreadView(postId, platform, accountId);
+        this.openThreadView(postId, platform, accountId, { columnType });
       }
     });
 
@@ -499,16 +500,17 @@ class StarShipApp {
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;
+      const columnType = card.closest('.column')?.dataset.columnType;
 
       const quotePart = e.target.closest('.quote-post');
       if (quotePart && quotePart.dataset.quoteId) {
-        this.openThreadView(quotePart.dataset.quoteId, platform, accountId);
+        this.openThreadView(quotePart.dataset.quoteId, platform, accountId, { columnType });
         return;
       }
 
       const postId = card.dataset.postId;
       if (postId) {
-        this.openThreadView(postId, platform, accountId);
+        this.openThreadView(postId, platform, accountId, { columnType });
       }
     });
 

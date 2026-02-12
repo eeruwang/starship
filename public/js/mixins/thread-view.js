@@ -7,23 +7,28 @@ import { renderPost } from '../ui/dashboard.js';
 
 export const ThreadViewMixin = {
 
-  async openThreadView(postId, platform, accountId) {
-    // Check if this is a merged post (visible from multiple accounts)
-    const cachedPost = this.postCache.get(`${platform}:${postId}`);
-    if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 1) {
-      return this._openMergedThreadView(postId, platform, cachedPost.mergedAccounts);
-    }
+  async openThreadView(postId, platform, accountId, { columnType } = {}) {
+    // Only use merged view in 'all' or 'notifications' columns (or when column type is unknown)
+    const useMerged = !columnType || columnType === 'all' || columnType === 'notifications';
 
-    // If user has accounts on other platforms, use merged view to properly
-    // separate favourites and reactions (e.g. Mastodon favs vs Misskey reactions)
-    const allAccounts = this.store.getAll();
-    if (allAccounts.length > 1) {
-      const mergedAccounts = allAccounts.map(a => ({
-        id: a.id,
-        platform: a.platform,
-        themeColor: a.themeColor || this._instanceColor(a.instanceUrl),
-      }));
-      return this._openMergedThreadView(postId, platform, mergedAccounts);
+    if (useMerged) {
+      // Check if this is a merged post (visible from multiple accounts)
+      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 1) {
+        return this._openMergedThreadView(postId, platform, cachedPost.mergedAccounts);
+      }
+
+      // If user has accounts on other platforms, use merged view to properly
+      // separate favourites and reactions (e.g. Mastodon favs vs Misskey reactions)
+      const allAccounts = this.store.getAll();
+      if (allAccounts.length > 1) {
+        const mergedAccounts = allAccounts.map(a => ({
+          id: a.id,
+          platform: a.platform,
+          themeColor: a.themeColor || this._instanceColor(a.instanceUrl),
+        }));
+        return this._openMergedThreadView(postId, platform, mergedAccounts);
+      }
     }
 
     const client = this.store.getClient(accountId);
