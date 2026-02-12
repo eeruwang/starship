@@ -506,12 +506,14 @@ export const DataLoadingMixin = {
       allNotifs.sort((a, b) => b.createdAt - a.createdAt);
 
       // Cache notification posts for reply functionality (include mergedAccounts for account filtering)
+      // Mutate n.post directly so fetchMissingReplyParents updates propagate to notification rendering
       const notifPosts = allNotifs
         .filter(n => n.post?.id)
         .map(n => {
-          const post = { ...n.post, accountId: n.accountId, accountPlatform: n.platform };
-          if (n.mergedAccounts) post.mergedAccounts = n.mergedAccounts;
-          return post;
+          n.post.accountId = n.accountId;
+          n.post.accountPlatform = n.platform;
+          if (n.mergedAccounts) n.post.mergedAccounts = n.mergedAccounts;
+          return n.post;
         });
       if (notifPosts.length > 0) this.cachePosts(notifPosts);
 
@@ -818,12 +820,14 @@ export const DataLoadingMixin = {
       }
 
       // Cache and fetch missing parents
+      // Mutate n.post directly so fetchMissingReplyParents updates propagate to notification rendering
       const notifPosts = newNotifs
         .filter(n => n.post?.id)
         .map(n => {
-          const post = { ...n.post, accountId: n.accountId, accountPlatform: n.platform };
-          if (n.mergedAccounts) post.mergedAccounts = n.mergedAccounts;
-          return post;
+          n.post.accountId = n.accountId;
+          n.post.accountPlatform = n.platform;
+          if (n.mergedAccounts) n.post.mergedAccounts = n.mergedAccounts;
+          return n.post;
         });
       if (notifPosts.length > 0) {
         this.cachePosts(notifPosts);

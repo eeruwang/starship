@@ -680,8 +680,8 @@ export function renderNotification(notif) {
       html += '</div>'; // close cw-content
     }
 
-    // Action buttons with counts and active states
-    if (hasPost) {
+    // Action buttons with counts and active states (hide for favourite/reaction notifications)
+    if (hasPost && !['favourite', 'reaction'].includes(notif.type)) {
       const replyCount = displayPost.stats?.replies || 0;
       const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
       let favCount = displayPost.stats?.favourites || 0;
