@@ -250,6 +250,23 @@ export const PostActionsMixin = {
         if (account.platform !== 'mastodon' && cachedPost?.reblogged) {
           updatedPost.reblogged = true;
         }
+        // Preserve Misskey reaction data from cache (Mastodon API doesn't return these)
+        if (cachedPost) {
+          const udp = updatedPost.reblog || updatedPost;
+          const cdp = cachedPost.reblog || cachedPost;
+          if (cdp.reactions && Object.keys(cdp.reactions).length > 0 &&
+              (!udp.reactions || Object.keys(udp.reactions).length === 0)) {
+            udp.reactions = cdp.reactions;
+            udp.reactionEmojis = cdp.reactionEmojis || udp.reactionEmojis;
+            udp.emojis = cdp.emojis || udp.emojis;
+            if (cdp.myReaction && !udp.myReaction) udp.myReaction = cdp.myReaction;
+          }
+          // Adjust favourites: Mastodon counts custom reactions as favourites
+          if (udp.reactions && Object.keys(udp.reactions).length > 0 && udp.stats?.favourites > 0) {
+            const totalReactions = Object.values(udp.reactions).reduce((sum, c) => sum + c, 0);
+            udp.stats.favourites = Math.max(0, udp.stats.favourites - totalReactions);
+          }
+        }
 
         const newCard = renderPost(updatedPost);
         card.replaceWith(newCard);
@@ -319,6 +336,12 @@ export const PostActionsMixin = {
       if (adp.reactionEmojis) dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...adp.reactionEmojis };
       if (adp.emojis) dp.emojis = { ...(dp.emojis || {}), ...adp.emojis };
       if (adp.instanceUrl) dp.instanceUrl = dp.instanceUrl || adp.instanceUrl;
+
+      // Adjust favourites: Mastodon counts custom reactions as favourites
+      if (dp.reactions && Object.keys(dp.reactions).length > 0 && dp.stats?.favourites > 0) {
+        const totalReactions = Object.values(dp.reactions).reduce((sum, c) => sum + c, 0);
+        dp.stats.favourites = Math.max(0, dp.stats.favourites - totalReactions);
+      }
 
       // Merge fav/reaction state
       if (actingPost.favourited) basePost.favourited = true;
