@@ -445,6 +445,38 @@ export class MastodonClient {
       }
     }
 
+    // Parse emoji_reactions from Mastodon-compatible servers (Fedibird, glitch-soc, Pleroma, Akkoma, etc.)
+    let reactions = null;
+    let reactionEmojis = null;
+    let myReaction = null;
+    const emojiReactions = status.emoji_reactions || status.reactions || status.pleroma?.emoji_reactions;
+    if (Array.isArray(emojiReactions) && emojiReactions.length > 0) {
+      reactions = {};
+      reactionEmojis = {};
+      for (const er of emojiReactions) {
+        const name = er.name || er.emoji;
+        if (!name) continue;
+        // Custom emoji: wrap in colons
+        const key = er.url || er.static_url ? `:${name}:` : name;
+        reactions[key] = (reactions[key] || 0) + (er.count || 1);
+        if (er.url || er.static_url) {
+          reactionEmojis[name] = er.url || er.static_url;
+        }
+        if (er.me) myReaction = key;
+      }
+      if (Object.keys(reactions).length === 0) {
+        reactions = null;
+        reactionEmojis = null;
+      }
+    }
+
+    // Adjust favourites: servers that support emoji_reactions may double-count them in favourites_count
+    let favouritesCount = status.favourites_count || 0;
+    if (reactions) {
+      const totalReactions = Object.values(reactions).reduce((sum, c) => sum + c, 0);
+      favouritesCount = Math.max(0, favouritesCount - totalReactions);
+    }
+
     return {
       id: status.id,
       platform: 'mastodon',
@@ -462,14 +494,16 @@ export class MastodonClient {
       stats: {
         replies: status.replies_count || 0,
         reblogs: status.reblogs_count || 0,
-        favourites: status.favourites_count || 0,
+        favourites: favouritesCount,
       },
       reblog: status.reblog ? this.normalizePost(status.reblog) : null,
       rebloggedBy: status.reblog ? this.normalizeUser(acct) : null,
       quotePost,
       favourited: !!status.favourited,
       reblogged: !!status.reblogged,
-      myReaction: null,
+      reactions,
+      reactionEmojis,
+      myReaction,
       emojis: emojiMap,
       linkCard,
       canonicalUri: status.uri || status.url,
@@ -490,6 +524,9 @@ export class MastodonClient {
       'mention': { icon: '💬', label: '멘션' },
       'reblog': { icon: '🔁', label: '부스트' },
       'favourite': { icon: '❤️', label: '좋아요' },
+      'emoji_reaction': { icon: '⭐', label: '리액션' },
+      'reaction': { icon: '⭐', label: '리액션' },
+      'pleroma:emoji_reaction': { icon: '⭐', label: '리액션' },
       'follow': { icon: '👤', label: '팔로우' },
       'follow_request': { icon: '🔔', label: '팔로우 요청' },
       'poll': { icon: '📊', label: '투표 종료' },
@@ -497,16 +534,30 @@ export class MastodonClient {
       'update': { icon: '✏️', label: '수정됨' },
     };
 
+    // Normalize reaction notification types to 'reaction' for consistent handling
+    let type = notif.type;
+    if (type === 'emoji_reaction' || type === 'pleroma:emoji_reaction') {
+      type = 'reaction';
+    }
+
     const info = typeMap[notif.type] || { icon: '🔔', label: notif.type };
     const acct = notif.account;
+
+    // Extract reaction emoji from notification (Fedibird, glitch-soc, Pleroma, Akkoma)
+    let reactionEmoji = null;
+    let reactionEmojiUrl = null;
+    if (notif.type === 'emoji_reaction' || notif.type === 'reaction' || notif.type === 'pleroma:emoji_reaction') {
+      reactionEmoji = notif.emoji || notif.emoji_reaction || null;
+      reactionEmojiUrl = notif.emoji_url || null;
+    }
 
     return {
       id: notif.id,
       platform: 'mastodon',
-      type: notif.type,
-      icon: info.icon,
-      reactionEmoji: null,
-      reactionEmojiUrl: null,
+      type,
+      icon: reactionEmoji || info.icon,
+      reactionEmoji,
+      reactionEmojiUrl,
       label: info.label,
       createdAt: new Date(notif.created_at),
       actor: this.normalizeUser(acct),
