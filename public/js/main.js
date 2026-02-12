@@ -1337,12 +1337,16 @@ class StarShipApp {
   _isFediPostUrl(url) {
     try {
       const u = new URL(url);
-      // Misskey: /notes/xxxx
+      // Misskey/Calckey/Firefish: /notes/xxxx
       if (/^\/notes\/[a-zA-Z0-9]+$/.test(u.pathname)) return true;
       // Mastodon: /@user/123456 or /@user@host/123456
       if (/^\/@[^/]+\/\d+$/.test(u.pathname)) return true;
+      // GoToSocial: /@user/statuses/01XXXX
+      if (/^\/@[^/]+\/statuses\/[a-zA-Z0-9]+$/.test(u.pathname)) return true;
       // Pleroma/Akkoma: /notice/xxxx or /objects/xxxx
       if (/^\/(notice|objects)\/[a-zA-Z0-9\-]+$/.test(u.pathname)) return true;
+      // ActivityPub standard: /users/xxx/statuses/xxx
+      if (/^\/users\/[^/]+\/statuses\/[a-zA-Z0-9]+$/.test(u.pathname)) return true;
       return false;
     } catch { return false; }
   }

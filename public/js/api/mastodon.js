@@ -227,6 +227,20 @@ export class MastodonClient {
     return brightness >= 30 && brightness <= 225;
   }
 
+  _extractFirstContentUrl(html) {
+    if (!html) return null;
+    const regex = /<a\s[^>]*href="([^"]+)"[^>]*>/gi;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      const tag = match[0];
+      // Skip mention and hashtag links
+      if (/class="[^"]*\b(mention|hashtag)\b/i.test(tag)) continue;
+      const url = match[1].replace(/&amp;/g, '&');
+      if (/^https?:\/\//i.test(url)) return url;
+    }
+    return null;
+  }
+
   async createStatus(text, options = {}) {
     const body = { status: text };
     if (options.spoilerText) body.spoiler_text = options.spoilerText;
@@ -306,6 +320,17 @@ export class MastodonClient {
       let siteName = card.provider_name || '';
       if (!siteName) { try { siteName = new URL(card.url).hostname; } catch {} }
       linkCard = { url: card.url, title: card.title || null, description: card.description || null, image: card.image || null, siteName };
+    }
+
+    // Fallback: extract first content URL from HTML if no API card available
+    // (Mastodon doesn't always generate cards, e.g. for fedi post URLs)
+    if (!linkCard && status.content) {
+      const extractedUrl = this._extractFirstContentUrl(status.content);
+      if (extractedUrl) {
+        try {
+          linkCard = { url: extractedUrl, title: null, description: null, image: null, siteName: new URL(extractedUrl).hostname };
+        } catch { /* skip invalid URL */ }
+      }
     }
 
     // Quote post support (Fedibird, Pleroma/Akkoma, etc.)
