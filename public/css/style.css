@@ -359,32 +359,6 @@ body {
   opacity: 0.7;
 }
 
-/* Eye toggle button inside account toggle */
-.eye-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 2px;
-  padding: 1px;
-  border-radius: 50%;
-  opacity: 0.4;
-  transition: opacity 0.2s;
-  flex-shrink: 0;
-}
-.col-toggle:hover .eye-toggle-btn {
-  opacity: 0.8;
-}
-.eye-toggle-btn:hover {
-  opacity: 1 !important;
-  background: rgba(255,255,255,0.1);
-}
-.col-toggle.account-hidden .eye-toggle-btn {
-  opacity: 0.7;
-}
-.eye-toggle-btn .eye-toggle {
-  display: block;
-}
-
 .col-toggle-separator {
   width: 1px;
   height: 20px;
@@ -2722,6 +2696,30 @@ textarea.input {
 .reauth-picker-delete:hover {
   color: var(--accent-danger);
   background: rgba(255,85,85,0.1);
+}
+.reauth-picker-eye {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.4rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.reauth-picker-eye:hover {
+  color: var(--accent-primary);
+  background: rgba(124,125,255,0.1);
+}
+.reauth-picker-row.account-hidden .reauth-picker-item {
+  opacity: 0.4;
+}
+.reauth-picker-row.account-hidden .reauth-picker-eye {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 .reauth-picker-footer {
   padding: 0.5rem 1rem 0.75rem;

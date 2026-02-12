@@ -486,11 +486,16 @@ export const AuthUIMixin = {
       <div class="reauth-picker-modal">
         <div class="reauth-picker-header">
           <h3>계정 관리</h3>
-          <p class="reauth-picker-desc">${accounts.length > 0 ? '재인증하려면 계정을 선택하세요. 삭제하려면 X 버튼을 누르세요.' : '연결된 계정이 없습니다. 아래에서 추가하세요.'}</p>
+          <p class="reauth-picker-desc">${accounts.length > 0 ? '계정을 클릭하면 재인증합니다. 👁 전체/알림 표시 토글, ✕ 삭제' : '연결된 계정이 없습니다. 아래에서 추가하세요.'}</p>
         </div>
         <div class="reauth-picker-list">
-          ${accounts.map(a => `
-            <div class="reauth-picker-row" data-account-id="${a.id}">
+          ${accounts.map(a => {
+            const isHidden = !!a.hidden;
+            const eyeSvg = isHidden
+              ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+              : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+            return `
+            <div class="reauth-picker-row${isHidden ? ' account-hidden' : ''}" data-account-id="${a.id}">
               <button class="reauth-picker-item" data-account-id="${a.id}">
                 <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
                 <div class="reauth-picker-info">
@@ -499,11 +504,14 @@ export const AuthUIMixin = {
                 </div>
                 <span class="platform-dot ${a.platform}"></span>
               </button>
+              <button class="reauth-picker-eye" data-account-id="${a.id}" title="${isHidden ? '전체/알림에 표시' : '전체/알림에서 숨기기'}">
+                ${eyeSvg}
+              </button>
               <button class="reauth-picker-delete" data-account-id="${a.id}" title="계정 삭제">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
-          `).join('')}
+          `}).join('')}
         </div>
         <div class="reauth-picker-footer">
           <button class="btn btn-primary btn-small reauth-picker-add">
@@ -541,6 +549,34 @@ export const AuthUIMixin = {
         if (!account) return;
         close();
         await this.reauthAccount(account);
+      });
+    });
+
+    // Eye toggle click → toggle visibility in all/notifications
+    picker.querySelectorAll('.reauth-picker-eye').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const accountId = btn.dataset.accountId;
+        const account = this.store.toggleHidden(accountId);
+        if (!account) return;
+        const row = btn.closest('.reauth-picker-row');
+        const isHidden = !!account.hidden;
+        // Update row visual state
+        if (row) row.classList.toggle('account-hidden', isHidden);
+        btn.title = isHidden ? '전체/알림에 표시' : '전체/알림에서 숨기기';
+        btn.innerHTML = isHidden
+          ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+          : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        // If hiding, close the account column if open
+        if (isHidden && this.columnState.accounts[accountId]) {
+          this.columnState.accounts[accountId] = false;
+          this.updateColumnOrder(`account:${accountId}`, false);
+          this.saveColumnState();
+          this.toggleColumnSmooth('account', false, accountId);
+        }
+        this.debouncedSaveToCloud();
+        // Full refresh (like adding a new account)
+        this.render();
       });
     });
 

@@ -2,7 +2,6 @@
  * Post Actions Mixin
  * Handles post interactions: fav, boost, reply, quote, reaction, edit, delete
  */
-import { renderPost } from '../ui/dashboard.js';
 import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
 
 export const PostActionsMixin = {
@@ -231,53 +230,121 @@ export const PostActionsMixin = {
       if (!rawPost) return;
 
       const updatedPost = client.normalizePost(rawPost);
-      updatedPost.accountId = accountId;
-      updatedPost.accountPlatform = account.platform;
-      updatedPost.themeColor = account.themeColor || this._instanceColor(account.instanceUrl);
-      const ownerId = updatedPost.rebloggedBy ? updatedPost.rebloggedBy.id : updatedPost.author.id;
-      updatedPost.isOwn = String(ownerId) === String(account.profile.id);
+      const udp = updatedPost.reblog || updatedPost;
 
-      // Find and update all matching cards in the DOM
-      const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
-      for (const card of cards) {
-        // Preserve state from cache
-        const oldCacheKey = `${platform}:${postId}`;
-        const cachedPost = this.postCache.get(oldCacheKey);
-        if (cachedPost?.mergedAccounts) {
-          updatedPost.mergedAccounts = cachedPost.mergedAccounts;
-        }
-        // Preserve reblogged state for Misskey (API doesn't report it)
-        if (account.platform !== 'mastodon' && cachedPost?.reblogged) {
-          updatedPost.reblogged = true;
-        }
-        // Preserve Misskey reaction data from cache (Mastodon API doesn't return these)
-        if (cachedPost) {
-          const udp = updatedPost.reblog || updatedPost;
-          const cdp = cachedPost.reblog || cachedPost;
-          if (cdp.reactions && Object.keys(cdp.reactions).length > 0 &&
-              (!udp.reactions || Object.keys(udp.reactions).length === 0)) {
-            udp.reactions = cdp.reactions;
-            udp.reactionEmojis = cdp.reactionEmojis || udp.reactionEmojis;
-            udp.emojis = cdp.emojis || udp.emojis;
-            if (cdp.myReaction && !udp.myReaction) udp.myReaction = cdp.myReaction;
-            if (cdp._misskeyNoteId) udp._misskeyNoteId = cdp._misskeyNoteId;
-            if (cdp._misskeyAccountId) udp._misskeyAccountId = cdp._misskeyAccountId;
-          }
+      // Merge into cache instead of replacing — preserves replyTo, enrichments, etc.
+      const cacheKey = `${platform}:${postId}`;
+      const cachedPost = this.postCache.get(cacheKey);
+      if (cachedPost) {
+        const cdp = cachedPost.reblog || cachedPost;
+        // Update interactive state
+        cdp.favourited = udp.favourited;
+        cdp.reblogged = udp.reblogged;
+        cdp.myReaction = udp.myReaction || cdp.myReaction;
+        // Update stats
+        if (udp.stats) {
+          cdp.stats = { ...cdp.stats, ...udp.stats };
           // Adjust favourites: Mastodon counts custom reactions as favourites
-          if (udp.reactions && Object.keys(udp.reactions).length > 0 && udp.stats?.favourites > 0) {
-            const totalReactions = Object.values(udp.reactions).reduce((sum, c) => sum + c, 0);
-            udp.stats.favourites = Math.max(0, udp.stats.favourites - totalReactions);
+          if (cdp.reactions && Object.keys(cdp.reactions).length > 0 && cdp.stats.favourites > 0) {
+            const totalReactions = Object.values(cdp.reactions).reduce((sum, c) => sum + c, 0);
+            cdp.stats.favourites = Math.max(0, cdp.stats.favourites - totalReactions);
           }
         }
-
-        const newCard = renderPost(updatedPost);
-        card.replaceWith(newCard);
+        // Update reactions if new data is richer
+        if (udp.reactions && Object.keys(udp.reactions).length > 0) {
+          cdp.reactions = udp.reactions;
+          cdp.reactionEmojis = udp.reactionEmojis || cdp.reactionEmojis;
+        }
+        // Preserve reblogged state for Misskey
+        if (account.platform !== 'mastodon' && cachedPost.reblogged) {
+          cachedPost.reblogged = true;
+        }
+        cachedPost.favourited = updatedPost.favourited;
+        cachedPost.reblogged = updatedPost.reblogged ?? cachedPost.reblogged;
+      } else {
+        // No cache — store normalized post directly
+        updatedPost.accountId = accountId;
+        updatedPost.accountPlatform = account.platform;
+        updatedPost.themeColor = account.themeColor || this._instanceColor(account.instanceUrl);
+        this.postCache.set(cacheKey, updatedPost);
       }
 
-      // Update cache
-      this.postCache.set(`${platform}:${postId}`, updatedPost);
+      // In-place DOM update: only refresh action buttons and counts
+      const postData = cachedPost || updatedPost;
+      const dp = postData.reblog || postData;
+      const selector = `.post-card[data-post-id="${postId}"][data-platform="${platform}"], .notif-card[data-post-id="${postId}"][data-platform="${platform}"]`;
+      const cards = document.querySelectorAll(selector);
+      for (const card of cards) {
+        this._updateCardActions(card, dp, postData);
+      }
     } catch (err) {
       // Silently fail - the action already succeeded
+    }
+  },
+
+  /** Update action buttons and counts in-place without re-rendering the card */
+  _updateCardActions(card, displayPost, wrapperPost) {
+    // Action button selectors work for both post-card and notif-card
+    const favBtn = card.querySelector('[data-action="fav"]');
+    const boostBtn = card.querySelector('[data-action="boost"]');
+
+    const isFaved = wrapperPost.favourited || displayPost.favourited
+      || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
+    const isBoosted = wrapperPost.reblogged || displayPost.reblogged;
+
+    if (favBtn) {
+      favBtn.classList.toggle('active', !!isFaved);
+      const favCount = displayPost.stats?.favourites || 0;
+      const countEl = favBtn.querySelector('.action-count, .notif-action-count');
+      if (countEl) {
+        countEl.textContent = favCount > 0 ? String(favCount) : '';
+        if (favCount <= 0) countEl.remove();
+      } else if (favCount > 0) {
+        const span = document.createElement('span');
+        span.className = card.classList.contains('notif-card') ? 'notif-action-count' : 'action-count';
+        span.textContent = String(favCount);
+        favBtn.appendChild(span);
+      }
+    }
+
+    if (boostBtn) {
+      boostBtn.classList.toggle('active', !!isBoosted);
+      const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
+      const countEl = boostBtn.querySelector('.action-count, .notif-action-count');
+      if (countEl) {
+        countEl.textContent = boostCount > 0 ? String(boostCount) : '';
+        if (boostCount <= 0) countEl.remove();
+      } else if (boostCount > 0) {
+        const span = document.createElement('span');
+        span.className = card.classList.contains('notif-card') ? 'notif-action-count' : 'action-count';
+        span.textContent = String(boostCount);
+        boostBtn.appendChild(span);
+      }
+    }
+
+    // Update reply count too
+    const replyBtn = card.querySelector('[data-action="reply"]');
+    if (replyBtn) {
+      const replyCount = displayPost.stats?.replies || 0;
+      const countEl = replyBtn.querySelector('.action-count, .notif-action-count');
+      if (countEl) {
+        countEl.textContent = replyCount > 0 ? String(replyCount) : '';
+        if (replyCount <= 0) countEl.remove();
+      } else if (replyCount > 0) {
+        const span = document.createElement('span');
+        span.className = card.classList.contains('notif-card') ? 'notif-action-count' : 'action-count';
+        span.textContent = String(replyCount);
+        replyBtn.appendChild(span);
+      }
+    }
+
+    // Update reaction badges (favourite count in reactions area)
+    const favBadge = card.querySelector('.reaction-badge[data-reaction="favourite"]');
+    if (favBadge) {
+      const favCount = displayPost.stats?.favourites || 0;
+      const badgeCount = favBadge.querySelector('.reaction-count');
+      if (badgeCount) badgeCount.textContent = String(favCount);
+      favBadge.classList.toggle('reacted', !!isFaved);
     }
   },
 
@@ -355,15 +422,35 @@ export const PostActionsMixin = {
     // Preserve reblogged state
     if (cachedPost?.reblogged) basePost.reblogged = true;
 
-    // Re-render all matching cards
-    const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
-    for (const card of cards) {
-      const newCard = renderPost(basePost);
-      card.replaceWith(newCard);
+    // Merge updated stats/state back into cache (preserve replyTo, enrichments)
+    if (cachedPost && basePost !== cachedPost) {
+      const cdp = cachedPost.reblog || cachedPost;
+      const bdp = basePost.reblog || basePost;
+      cdp.favourited = bdp.favourited;
+      cdp.reblogged = bdp.reblogged;
+      cdp.myReaction = bdp.myReaction || cdp.myReaction;
+      if (bdp.stats) cdp.stats = { ...cdp.stats, ...bdp.stats };
+      if (bdp.reactions && Object.keys(bdp.reactions).length > 0) {
+        cdp.reactions = bdp.reactions;
+        cdp.reactionEmojis = bdp.reactionEmojis || cdp.reactionEmojis;
+        cdp.emojis = bdp.emojis || cdp.emojis;
+        cdp._misskeyNoteId = bdp._misskeyNoteId || cdp._misskeyNoteId;
+        cdp._misskeyAccountId = bdp._misskeyAccountId || cdp._misskeyAccountId;
+        cdp.instanceUrl = bdp.instanceUrl || cdp.instanceUrl;
+      }
+      cachedPost.favourited = basePost.favourited;
+      cachedPost.reblogged = basePost.reblogged;
+    } else {
+      this.postCache.set(`${platform}:${postId}`, basePost);
     }
 
-    // Update cache
-    this.postCache.set(`${platform}:${postId}`, basePost);
+    // In-place DOM update: only refresh action buttons and counts
+    const postData = cachedPost || basePost;
+    const dp = postData.reblog || postData;
+    const cards = document.querySelectorAll(`.post-card[data-post-id="${postId}"][data-platform="${platform}"]`);
+    for (const card of cards) {
+      this._updateCardActions(card, dp, postData);
+    }
   },
 
   async handleDeletePost(postId, platform, accountId, btnElement) {
