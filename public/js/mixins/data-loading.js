@@ -273,6 +273,10 @@ export const DataLoadingMixin = {
 
       // Cache posts AFTER incremental merge so Phase 1 can compare against old cache
       this.cachePosts(allPosts);
+
+      // Asynchronously fetch reaction details from Misskey for Mastodon posts
+      // that only show favourites (fire-and-forget, cards re-render as results arrive)
+      this._fetchMissingReactions(allPosts, container);
     } catch (err) {
       if (isFirstLoad) {
         container.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
@@ -609,6 +613,8 @@ export const DataLoadingMixin = {
           this.enrichLinkCards(container);
         }
       }
+      // Fetch missing reaction details from Misskey for notification posts
+      this._fetchMissingReactions(allNotifs, container, { isNotification: true });
     } catch (err) {
       if (isFirstLoad) {
         container.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
@@ -726,6 +732,58 @@ export const DataLoadingMixin = {
         if (cached.myReaction && !dp.myReaction) dp.myReaction = cached.myReaction;
         this._adjustFavouritesForReactions(dp);
       }
+    }
+  },
+
+  // Asynchronously fetch reaction details from Misskey for Mastodon posts that have
+  // favourites but no detailed reactions. Uses ap/show to look up the post on Misskey.
+  // Fire-and-forget: cards are re-rendered in-place as results arrive.
+  _fetchMissingReactions(items, container, { isNotification = false } = {}) {
+    const misskeyAccount = this.store.getAll().find(a => a.platform !== 'mastodon');
+    if (!misskeyAccount) return;
+    const client = this.store.getClient(misskeyAccount.id);
+    if (!client) return;
+
+    const seenUris = new Set();
+    const toFetch = [];
+    for (const item of items) {
+      const post = isNotification ? item.post : item;
+      if (!post) continue;
+      const dp = post.reblog || post;
+      if (dp.reactions && Object.keys(dp.reactions).length > 0) continue;
+      if (!dp.stats?.favourites || dp.stats.favourites <= 0) continue;
+      if (!dp.canonicalUri) continue;
+      if (seenUris.has(dp.canonicalUri)) continue;
+      seenUris.add(dp.canonicalUri);
+      toFetch.push({ item, post, dp });
+    }
+    if (toFetch.length === 0) return;
+
+    for (const { item, post, dp } of toFetch.slice(0, 5)) {
+      client.resolveUrl(dp.canonicalUri).then(resolved => {
+        if (!resolved) return;
+        const rdp = resolved.reblog || resolved;
+        if (!rdp.reactions || Object.keys(rdp.reactions).length === 0) return;
+        dp.reactions = rdp.reactions;
+        dp.reactionEmojis = rdp.reactionEmojis || dp.reactionEmojis;
+        dp.emojis = rdp.emojis || dp.emojis;
+        if (rdp.instanceUrl) dp.instanceUrl = dp.instanceUrl || rdp.instanceUrl;
+        if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
+        this._adjustFavouritesForReactions(dp);
+        this.postCache.set(`${post.platform}:${post.id}`, post);
+
+        if (isNotification) {
+          const cards = container.querySelectorAll(`.notif-card[data-post-id="${post.id}"]`);
+          for (const card of cards) {
+            card.replaceWith(renderNotification(item));
+          }
+        } else {
+          const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
+          for (const card of cards) {
+            card.replaceWith(renderPost(item));
+          }
+        }
+      }).catch(() => {});
     }
   },
 
