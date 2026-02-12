@@ -24,7 +24,7 @@ export const PostActionsMixin = {
       if (isMultiAccountColumn) {
         const cachedPost = this.postCache.get(`${platform}:${originalPostId}`) || this.postCache.get(`${platform}:${postId}`);
         const relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
-        this.openComposeModal(originalPostId, null, relevantAccounts);
+        this.openComposeModal(originalPostId, accountId, relevantAccounts);
       } else {
         this.openComposeModal(originalPostId, accountId);
       }
@@ -34,7 +34,7 @@ export const PostActionsMixin = {
       if (isMultiAccountColumn) {
         const cachedPost = this.postCache.get(`${platform}:${originalPostId}`) || this.postCache.get(`${platform}:${postId}`);
         const relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
-        this.openQuoteModal(originalPostId, platform, null, relevantAccounts);
+        this.openQuoteModal(originalPostId, platform, accountId, relevantAccounts);
       } else {
         this.openQuoteModal(originalPostId, platform, accountId);
       }
