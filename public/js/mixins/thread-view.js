@@ -2,36 +2,29 @@
  * Thread View Mixin
  * Handles loading and displaying conversation threads (ancestors + descendants)
  * with tree-structured replies and visual hierarchy.
+ *
+ * Architecture:
+ *   openThreadView (entry point)
+ *     → _fetchThreadForAccount (per-account fetching)
+ *     → _mergePostData / _deduplicateThreadPosts (cross-account merge)
+ *     → _renderThread / _renderDescendantTree (rendering)
+ *
+ * All thread views fetch from ALL visible accounts for complete engagement
+ * data (reactions, favourites, renotes). The merged-account border UI is
+ * controlled via DOM manipulation after rendering — never by mutating post
+ * data — so the post cache stays consistent across views.
  */
 import { renderPost } from '../ui/dashboard.js';
 
 export const ThreadViewMixin = {
 
+  /**
+   * Entry point for all thread views.
+   * Always fetches from all visible accounts for complete data.
+   * Merged-account borders are shown only in 'all' / 'notifications' columns.
+   */
   async openThreadView(postId, platform, accountId, { columnType } = {}) {
-    // Show merged account border UI only in 'all' or 'notifications' columns
     const showMergedUI = !columnType || columnType === 'all' || columnType === 'notifications';
-
-    // Always use merged data fetching when multiple accounts exist
-    // (for complete engagement data from all platforms), but control
-    // whether merged account borders are shown via showMergedUI flag
-    const cachedPost = this.postCache.get(`${platform}:${postId}`);
-    if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 1) {
-      return this._openMergedThreadView(postId, platform, cachedPost.mergedAccounts, { showMergedUI });
-    }
-
-    const allAccounts = this.store.getVisible();
-    if (allAccounts.length > 1) {
-      const mergedAccounts = allAccounts.map(a => ({
-        id: a.id,
-        platform: a.platform,
-        themeColor: a.themeColor || this._instanceColor(a.instanceUrl),
-      }));
-      return this._openMergedThreadView(postId, platform, mergedAccounts, { showMergedUI });
-    }
-
-    const client = this.store.getClient(accountId);
-    const account = this.store.getById(accountId);
-    if (!client || !account) return;
 
     const modal = document.getElementById('modal-thread');
     const content = document.getElementById('thread-content');
@@ -39,48 +32,83 @@ export const ThreadViewMixin = {
     this.openModal(modal);
 
     try {
+      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      const canonicalUri = cachedPost ? (cachedPost.reblog || cachedPost).canonicalUri : null;
+
+      // Determine accounts to fetch from
+      const visibleAccounts = this.store.getVisible();
+      const accounts = visibleAccounts.map(a => ({
+        id: a.id,
+        platform: a.platform,
+        themeColor: a.themeColor || this._instanceColor(a.instanceUrl),
+      }));
+
+      // Fetch thread data from all accounts in parallel
       let ancestors = [];
       let targetPost = null;
       let descendants = [];
 
-      if (account.platform === 'mastodon') {
-        const [status, context] = await Promise.all([
-          client.getStatus(postId),
-          client.getStatusContext(postId),
-        ]);
-        targetPost = status ? client.normalizePost(status) : null;
-        ancestors = (context.ancestors || []).map(s => client.normalizePost(s));
-        descendants = (context.descendants || []).map(s => client.normalizePost(s));
+      if (accounts.length <= 1) {
+        // Single account: straightforward fetch
+        const result = await this._fetchThreadForAccount(
+          postId, platform, accountId, null
+        );
+        if (result) {
+          ancestors = result.ancestors;
+          targetPost = result.target;
+          descendants = result.descendants;
+        }
       } else {
-        const [note, conversation, children] = await Promise.all([
-          client.getNote(postId),
-          client.getNoteConversation(postId, 30).catch(() => []),
-          client.getNoteChildren(postId, 30).catch(() => []),
-        ]);
-        targetPost = note ? client.normalizePost(note) : null;
-        ancestors = (conversation || []).map(n => client.normalizePost(n)).reverse();
-        descendants = (children || []).map(n => client.normalizePost(n));
+        // Multi-account: fetch from all, merge and deduplicate
+        const results = await Promise.allSettled(
+          accounts.map(async (ma) => {
+            // Only the clicked account can use the original postId directly;
+            // other accounts (even same platform) may be on different instances
+            const localPostId = (ma.id === accountId) ? postId : null;
+            return this._fetchThreadForAccount(
+              localPostId, platform, ma.id, canonicalUri
+            );
+          })
+        );
+
+        for (const result of results) {
+          if (result.status !== 'fulfilled' || !result.value) continue;
+          const r = result.value;
+          ancestors.push(...r.ancestors);
+          if (r.target) {
+            if (!targetPost) {
+              targetPost = r.target;
+            } else {
+              this._mergePostData(targetPost, r.target);
+            }
+          }
+          descendants.push(...r.descendants);
+        }
+
+        ancestors = this._deduplicateThreadPosts(ancestors);
+        descendants = this._deduplicateThreadPosts(descendants);
+
+        // Preserve mergedAccounts from cache on target
+        if (targetPost && cachedPost?.mergedAccounts) {
+          targetPost.mergedAccounts = cachedPost.mergedAccounts;
+        }
       }
 
-      // Add account info to all posts
-      const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
-      const addMeta = (post) => {
-        post.accountId = accountId;
-        post.accountPlatform = account.platform;
-        post.themeColor = effectiveColor;
-        const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
-        post.isOwn = String(ownerId) === String(account.profile.id);
-        return post;
-      };
-      ancestors.forEach(addMeta);
-      if (targetPost) addMeta(targetPost);
-      descendants.forEach(addMeta);
-
-      // Cache all posts
+      // Cache all posts (always with mergedAccounts intact for cache consistency)
       const allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
       this.cachePosts(allPosts);
 
+      // Render
       this._renderThread(content, ancestors, targetPost, descendants);
+
+      // Control merged-account border via DOM, not data mutation
+      // This keeps the post cache clean and consistent across views
+      if (!showMergedUI) {
+        for (const el of content.querySelectorAll('.merged-border')) {
+          el.classList.remove('merged-border');
+          el.style.removeProperty('--merged-gradient');
+        }
+      }
 
       // Enrich posts with reaction data from Misskey (fire-and-forget)
       this._fetchMissingReactions(allPosts, content);
@@ -90,123 +118,73 @@ export const ThreadViewMixin = {
     }
   },
 
-  async _openMergedThreadView(postId, platform, mergedAccounts, { showMergedUI = true } = {}) {
-    const modal = document.getElementById('modal-thread');
-    const content = document.getElementById('thread-content');
-    content.innerHTML = '<div class="thread-loading"><div class="spinner"></div></div>';
-    this.openModal(modal);
+  /**
+   * Fetch thread data for a single account.
+   * @param {string|null} postId - Post ID on this account's platform (null if needs resolution)
+   * @param {string} originalPlatform - Platform of the originally clicked post
+   * @param {string} accountId - Account to fetch from
+   * @param {string|null} canonicalUri - AP URI for cross-platform resolution
+   * @returns {{ ancestors, target, descendants } | null}
+   */
+  async _fetchThreadForAccount(postId, originalPlatform, accountId, canonicalUri) {
+    const account = this.store.getById(accountId);
+    const client = this.store.getClient(accountId);
+    if (!client || !account) return null;
 
-    const cachedPost = this.postCache.get(`${platform}:${postId}`);
-    const canonicalUri = cachedPost ? (cachedPost.reblog || cachedPost).canonicalUri : null;
+    let localPostId = postId;
 
-    try {
-      let allAncestors = [];
-      let targetPost = null;
-      let allDescendants = [];
-
-      // Fetch threads from all merged accounts in parallel
-      const results = await Promise.allSettled(
-        mergedAccounts.map(async (ma) => {
-          const account = this.store.getById(ma.id);
-          const client = this.store.getClient(ma.id);
-          if (!client || !account) return null;
-
-          let localPostId = postId;
-
-          // For different platforms: resolve the post first
-          if (account.platform !== platform) {
-            if (!canonicalUri) return null;
-            try {
-              const resolved = await client.resolveUrl(canonicalUri);
-              if (!resolved) return null;
-              localPostId = resolved.id;
-            } catch { return null; }
-          }
-
-          let ancestors = [], target = null, descendants = [];
-
-          if (account.platform === 'mastodon') {
-            const [status, ctx] = await Promise.all([
-              client.getStatus(localPostId),
-              client.getStatusContext(localPostId),
-            ]);
-            target = status ? client.normalizePost(status) : null;
-            ancestors = (ctx.ancestors || []).map(s => client.normalizePost(s));
-            descendants = (ctx.descendants || []).map(s => client.normalizePost(s));
-          } else {
-            const [note, conversation, children] = await Promise.all([
-              client.getNote(localPostId),
-              client.getNoteConversation(localPostId, 30).catch(() => []),
-              client.getNoteChildren(localPostId, 30).catch(() => []),
-            ]);
-            target = note ? client.normalizePost(note) : null;
-            ancestors = (conversation || []).map(n => client.normalizePost(n)).reverse();
-            descendants = (children || []).map(n => client.normalizePost(n));
-          }
-
-          const effectiveColor = ma.themeColor || account.themeColor || this._instanceColor(account.instanceUrl);
-          const addMeta = (post) => {
-            post.accountId = ma.id;
-            post.accountPlatform = account.platform;
-            post.themeColor = effectiveColor;
-            const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
-            post.isOwn = String(ownerId) === String(account.profile.id);
-            return post;
-          };
-          ancestors.forEach(addMeta);
-          if (target) addMeta(target);
-          descendants.forEach(addMeta);
-
-          return { ancestors, target, descendants };
-        })
-      );
-
-      // Merge results from all accounts
-      for (const result of results) {
-        if (result.status !== 'fulfilled' || !result.value) continue;
-        const { ancestors, target, descendants } = result.value;
-        allAncestors.push(...ancestors);
-        if (target) {
-          if (!targetPost) {
-            targetPost = target;
-          } else {
-            this._mergePostData(targetPost, target);
-          }
-        }
-        allDescendants.push(...descendants);
-      }
-
-      // Deduplicate ancestors and descendants by canonical URI, merging data
-      allAncestors = this._deduplicateThreadPosts(allAncestors);
-      allDescendants = this._deduplicateThreadPosts(allDescendants);
-
-      // Preserve mergedAccounts on target
-      if (targetPost && cachedPost?.mergedAccounts) {
-        targetPost.mergedAccounts = cachedPost.mergedAccounts;
-      }
-
-      // Cache all posts (always with full merged data for cache benefit)
-      const allPosts = [...allAncestors, ...(targetPost ? [targetPost] : []), ...allDescendants];
-      this.cachePosts(allPosts);
-
-      // Strip merged account UI indicators for individual column threads
-      // (data is still merged for complete stats, just no colored borders)
-      if (!showMergedUI) {
-        for (const p of allPosts) {
-          delete p.mergedAccounts;
-        }
-      }
-
-      this._renderThread(content, allAncestors, targetPost, allDescendants);
-
-      // Enrich posts with reaction data from Misskey (fire-and-forget)
-      this._fetchMissingReactions(allPosts, content);
-    } catch (err) {
-      console.error('Merged thread load failed:', err);
-      content.innerHTML = `<div class="thread-loading">스레드를 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+    // Cross-platform: resolve the post URI to get the local ID
+    if (!localPostId) {
+      if (!canonicalUri) return null;
+      try {
+        const resolved = await client.resolveUrl(canonicalUri);
+        if (!resolved) return null;
+        localPostId = resolved.id;
+      } catch { return null; }
     }
+
+    let ancestors = [], target = null, descendants = [];
+
+    if (account.platform === 'mastodon') {
+      const [status, ctx] = await Promise.all([
+        client.getStatus(localPostId),
+        client.getStatusContext(localPostId),
+      ]);
+      target = status ? client.normalizePost(status) : null;
+      ancestors = (ctx.ancestors || []).map(s => client.normalizePost(s));
+      descendants = (ctx.descendants || []).map(s => client.normalizePost(s));
+    } else {
+      const [note, conversation, children] = await Promise.all([
+        client.getNote(localPostId),
+        client.getNoteConversation(localPostId, 30).catch(() => []),
+        client.getNoteChildren(localPostId, 30).catch(() => []),
+      ]);
+      target = note ? client.normalizePost(note) : null;
+      ancestors = (conversation || []).map(n => client.normalizePost(n)).reverse();
+      descendants = (children || []).map(n => client.normalizePost(n));
+    }
+
+    // Add account metadata to all posts
+    const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
+    const addMeta = (post) => {
+      post.accountId = accountId;
+      post.accountPlatform = account.platform;
+      post.themeColor = effectiveColor;
+      const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
+      post.isOwn = String(ownerId) === String(account.profile.id);
+      return post;
+    };
+    ancestors.forEach(addMeta);
+    if (target) addMeta(target);
+    descendants.forEach(addMeta);
+
+    return { ancestors, target, descendants };
   },
 
+  /**
+   * Merge engagement data from source post into target post.
+   * Takes the best data from each platform (reactions, stats, emoji URLs).
+   */
   _mergePostData(target, source) {
     const tDp = target.reblog || target;
     const sDp = source.reblog || source;
@@ -214,7 +192,6 @@ export const ThreadViewMixin = {
     // Merge reactions (Misskey reactions into Mastodon post)
     if (sDp.reactions && Object.keys(sDp.reactions).length > 0) {
       if (!tDp.reactions || Object.keys(tDp.reactions).length === 0) {
-        // Target has no reactions: take source reactions directly
         tDp.reactions = { ...sDp.reactions };
         if (sDp._misskeyNoteId) tDp._misskeyNoteId = sDp._misskeyNoteId;
         if (sDp._misskeyAccountId) tDp._misskeyAccountId = sDp._misskeyAccountId;
@@ -223,7 +200,6 @@ export const ThreadViewMixin = {
           tDp._misskeyAccountId = source.accountId;
         }
       }
-      // Don't spread-merge if target already has reactions (avoids key format duplication)
     }
     if (sDp.reactionEmojis) tDp.reactionEmojis = { ...(tDp.reactionEmojis || {}), ...sDp.reactionEmojis };
     if (sDp.emojis) tDp.emojis = { ...(tDp.emojis || {}), ...sDp.emojis };
@@ -234,6 +210,7 @@ export const ThreadViewMixin = {
       tDp.stats = tDp.stats || {};
       tDp.stats.replies = Math.max(tDp.stats.replies || 0, sDp.stats.replies || 0);
       tDp.stats.reblogs = Math.max(tDp.stats.reblogs || 0, sDp.stats.reblogs || 0);
+      tDp.stats.renotes = Math.max(tDp.stats.renotes || 0, sDp.stats.renotes || 0);
       if (sDp.stats.favourites > 0) {
         tDp.stats.favourites = Math.max(tDp.stats.favourites || 0, sDp.stats.favourites);
       }
@@ -257,6 +234,9 @@ export const ThreadViewMixin = {
     }
   },
 
+  /**
+   * Deduplicate posts by canonical URI, merging data from duplicates.
+   */
   _deduplicateThreadPosts(posts) {
     const seen = new Map();
     const result = [];
@@ -267,7 +247,6 @@ export const ThreadViewMixin = {
         seen.set(key, result.length);
         result.push(post);
       } else {
-        // Merge into existing
         const idx = seen.get(key);
         this._mergePostData(result[idx], post);
       }
@@ -275,6 +254,9 @@ export const ThreadViewMixin = {
     return result;
   },
 
+  /**
+   * Render the thread: ancestors → target → descendant tree.
+   */
   _renderThread(content, ancestors, targetPost, descendants) {
     content.innerHTML = '';
 
@@ -318,7 +300,6 @@ export const ThreadViewMixin = {
    * Build a tree from descendants based on replyToId and render with indentation.
    */
   _renderDescendantTree(container, descendants, targetPostId) {
-    // Build lookup: postId → children
     const childrenMap = new Map();
     const postMap = new Map();
 
@@ -329,7 +310,6 @@ export const ThreadViewMixin = {
       childrenMap.get(parentId).push(post);
     }
 
-    // Render tree recursively with depth tracking (no margin, use border color only)
     const maxDepth = 4;
     const renderNode = (postId, depth) => {
       const children = childrenMap.get(String(postId)) || [];
@@ -345,7 +325,7 @@ export const ThreadViewMixin = {
 
     renderNode(targetPostId, 1);
 
-    // Any orphaned descendants (replyToId doesn't match any known post or target)
+    // Orphaned descendants (replyToId doesn't match any known post)
     const rendered = new Set();
     const collectRendered = (pid) => {
       const children = childrenMap.get(String(pid)) || [];
