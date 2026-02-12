@@ -682,6 +682,7 @@ export const DataLoadingMixin = {
           dstDisplay.reactions = srcDisplay.reactions;
           dstDisplay.reactionEmojis = srcDisplay.reactionEmojis || dstDisplay.reactionEmojis;
           dstDisplay.emojis = srcDisplay.emojis || dstDisplay.emojis;
+          this._adjustFavouritesForReactions(dstDisplay);
         }
         if (srcDisplay.myReaction && !dstDisplay.myReaction) {
           dstDisplay.myReaction = srcDisplay.myReaction;
@@ -689,6 +690,15 @@ export const DataLoadingMixin = {
       }
     }
     return deduped;
+  },
+
+  // Mastodon counts all Misskey reactions (including custom emoji) as favourites.
+  // After merging reaction data, subtract the reaction total from favourites
+  // so that custom emoji reactions don't also appear as hearts.
+  _adjustFavouritesForReactions(dp) {
+    if (!dp.reactions || !dp.stats || !dp.stats.favourites) return;
+    const totalReactions = Object.values(dp.reactions).reduce((sum, c) => sum + c, 0);
+    dp.stats.favourites = Math.max(0, dp.stats.favourites - totalReactions);
   },
 
   _mergeReactionsFromCache(posts) {
@@ -714,6 +724,7 @@ export const DataLoadingMixin = {
         dp.reactionEmojis = cached.reactionEmojis || dp.reactionEmojis;
         dp.emojis = cached.emojis || dp.emojis;
         if (cached.myReaction && !dp.myReaction) dp.myReaction = cached.myReaction;
+        this._adjustFavouritesForReactions(dp);
       }
     }
   },

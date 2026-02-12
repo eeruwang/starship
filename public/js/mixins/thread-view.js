@@ -203,6 +203,11 @@ export const ThreadViewMixin = {
         tDp.stats.favourites = Math.max(tDp.stats.favourites || 0, sDp.stats.favourites);
       }
     }
+    // Mastodon counts custom reactions as favourites — adjust to avoid double-counting
+    if (tDp.reactions && Object.keys(tDp.reactions).length > 0 && tDp.stats && tDp.stats.favourites > 0) {
+      const totalReactions = Object.values(tDp.reactions).reduce((sum, c) => sum + c, 0);
+      tDp.stats.favourites = Math.max(0, tDp.stats.favourites - totalReactions);
+    }
 
     // Merge fav/reaction state
     if (source.favourited) target.favourited = true;
