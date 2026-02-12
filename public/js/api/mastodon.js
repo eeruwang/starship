@@ -401,20 +401,36 @@ export class MastodonClient {
       }
     }
 
-    // Quote post support (Fedibird, Pleroma/Akkoma, etc.)
+    // Quote post support (Fedibird, Pleroma/Akkoma, Mastodon 4.3+, etc.)
     let quotePost = null;
     const quoteSource = status.quote || status.reblog_quote;
     if (quoteSource && quoteSource.account) {
-      const qContent = quoteSource.content || '';
+      // Process custom emojis in quote content
+      let qContent = quoteSource.content || '';
+      if (quoteSource.emojis && quoteSource.emojis.length > 0) {
+        for (const emoji of quoteSource.emojis) {
+          qContent = qContent.replaceAll(`:${emoji.shortcode}:`,
+            `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+        }
+      }
+      qContent = this.enhanceHtml(qContent);
       const qAuthor = this.normalizeUser(quoteSource.account);
       // Nested quote
       let nestedQuote = null;
       const nqs = quoteSource.quote || quoteSource.reblog_quote;
       if (nqs && nqs.account) {
+        let nqContent = nqs.content || '';
+        if (nqs.emojis && nqs.emojis.length > 0) {
+          for (const emoji of nqs.emojis) {
+            nqContent = nqContent.replaceAll(`:${emoji.shortcode}:`,
+              `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+          }
+        }
+        nqContent = this.enhanceHtml(nqContent);
         nestedQuote = {
           id: nqs.id,
           platform: 'mastodon',
-          content: nqs.content || '',
+          content: nqContent,
           contentWarning: nqs.spoiler_text || null,
           author: this.normalizeUser(nqs.account),
           media: (nqs.media_attachments || []).map(m => ({
@@ -440,8 +456,29 @@ export class MastodonClient {
         quotePost: nestedQuote,
       };
       // Suppress link card if it points to the quoted post
-      if (linkCard && quotePost.url && linkCard.url.includes(quotePost.url)) {
-        linkCard = null;
+      if (linkCard && quotePost.url) {
+        try {
+          const lcUrl = new URL(linkCard.url);
+          const qpUrl = new URL(quotePost.url);
+          if (lcUrl.origin === qpUrl.origin && lcUrl.pathname === qpUrl.pathname) {
+            linkCard = null;
+          }
+        } catch {
+          if (linkCard.url === quotePost.url) linkCard = null;
+        }
+      }
+      // Strip the quote URL from post content to avoid duplicate display
+      // Mastodon embeds the quote URL as <a> tag in the HTML content
+      if (quotePost.url && content) {
+        content = content.replace(
+          new RegExp(`<p>\\s*<a[^>]*href="${quotePost.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>[^<]*</a>\\s*</p>`, 'g'),
+          ''
+        );
+        // Also strip if it's the last link in a paragraph (not the only content)
+        content = content.replace(
+          new RegExp(`\\s*<a[^>]*href="${quotePost.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*class="[^"]*quote-inline[^"]*"[^>]*>[^<]*</a>`, 'g'),
+          ''
+        );
       }
     }
 
@@ -532,6 +569,7 @@ export class MastodonClient {
       'poll': { icon: '📊', label: '투표 종료' },
       'status': { icon: '📝', label: '새 게시물' },
       'update': { icon: '✏️', label: '수정됨' },
+      'quote': { icon: '📌', label: '인용' },
     };
 
     // Normalize reaction notification types to 'reaction' for consistent handling

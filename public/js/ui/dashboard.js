@@ -354,13 +354,15 @@ export function renderNotification(notif) {
   const displayPost = notif.post;
   let html = '';
 
-  // Mention notifications: render as full post-card style
-  const isMentionStyle = notif.type === 'mention' && displayPost;
+  // Mention / Quote notifications: render as full post-card style
+  const isMentionStyle = (notif.type === 'mention' || notif.type === 'quote') && displayPost;
   if (isMentionStyle) {
     card.classList.add('notif-mention');
 
-    // Mention indicator
-    html += `<div class="renote-indicator"><span class="icon-inline" style="font-size:0.85em">💬</span> ${notif.actor ? (notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)) : ''}님이 멘션</div>`;
+    // Mention / Quote indicator
+    const indicatorIcon = notif.type === 'quote' ? '📌' : '💬';
+    const indicatorLabel = notif.type === 'quote' ? '인용' : '멘션';
+    html += `<div class="renote-indicator"><span class="icon-inline" style="font-size:0.85em">${indicatorIcon}</span> ${notif.actor ? (notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)) : ''}님이 ${indicatorLabel}</div>`;
 
     // Reply context
     if (displayPost.replyTo) {
