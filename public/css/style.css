@@ -3381,10 +3381,13 @@ textarea.input {
     var(--merged-gradient) border-box;
 }
 
-/* Thread target with merged border: combine highlight background + gradient border */
+/* Thread target with merged border: combine highlight background + gradient border.
+   Three layers: semi-transparent highlight on top, opaque bg-card to block gradient
+   from bleeding through, gradient only visible in the border area. */
 .thread-content .post-card.thread-target.merged-border {
   background:
     linear-gradient(rgba(99, 100, 255, 0.08), rgba(99, 100, 255, 0.08)) padding-box,
+    linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
     var(--merged-gradient) border-box;
 }
 
