@@ -205,7 +205,7 @@ export class MastodonClient {
         if (!res.ok) return null;
         const html = await res.text();
         // Try CSS variable --color-accent first (Mastodon 4.x injects this)
-        const cssMatch = html.match(/--color-accent:\s*([^;}\s]+)/);
+        const cssMatch = html.match(/--color-accent:\s*([^;}]+)/);
         if (cssMatch) color = cssMatch[1].trim();
         // Fall back to theme-color meta tag
         if (!color) {
@@ -214,16 +214,27 @@ export class MastodonClient {
           color = metaMatch ? metaMatch[1] : null;
         }
       }
+      // Normalize rgb() to hex for consistent brightness checks
+      if (color) color = this._normalizeToHex(color);
       if (color && this._isUsableColor(color)) return color;
       return null;
     } catch { return null; }
   }
 
+  _normalizeToHex(color) {
+    if (!color) return color;
+    const m = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
+    if (m) {
+      const toHex = v => parseInt(v).toString(16).padStart(2, '0');
+      return `#${toHex(m[1])}${toHex(m[2])}${toHex(m[3])}`;
+    }
+    return color;
+  }
+
   _isUsableColor(color) {
     if (!color) return false;
-    if (!/^#?[0-9a-f]{3,8}$/i.test(color)) return true; // non-hex (e.g. named color) — let it through
     const hex = color.replace(/^#/, '');
-    if (hex.length < 6) return true; // short hex — let it through
+    if (!/^[0-9a-f]{6}$/i.test(hex)) return true; // non-standard format — let it through
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);

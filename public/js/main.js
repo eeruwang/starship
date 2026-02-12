@@ -961,7 +961,8 @@ class StarShipApp {
         toggle.className = `col-toggle ${isActive ? 'active' : ''}`;
         toggle.dataset.toggleType = 'account';
         toggle.dataset.accountId = account.id;
-        const dotStyle = account.themeColor ? `style="background:${account.themeColor}"` : '';
+        const dotColor = account.themeColor || this._instanceColor(account.instanceUrl);
+        const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
         toggle.innerHTML = `<span class="platform-dot ${account.platform}" ${dotStyle}></span>${this.escapeHtml(account.label || account.profile.displayName)}`;
         this.toggleBar.appendChild(toggle);
       }
@@ -1145,7 +1146,8 @@ class StarShipApp {
     if (type === 'account' && accountId) {
       const account = this.store.getById(accountId);
       if (account?.profile?.avatarUrl) {
-        const borderStyle = account.themeColor ? `style="border-color:${account.themeColor}"` : '';
+        const acColor = account.themeColor || this._instanceColor(account.instanceUrl);
+        const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
         avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
       }
     } else if (type === 'all' || type === 'notifications') {
@@ -1154,7 +1156,8 @@ class StarShipApp {
       if (accounts.length > 0) {
         const avatars = accounts.map(a => {
           if (!a.profile?.avatarUrl) return '';
-          const borderStyle = a.themeColor ? `style="border-color:${a.themeColor}"` : '';
+          const acColor = a.themeColor || this._instanceColor(a.instanceUrl);
+          const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
           return `<img class="column-header-avatar stacked" ${borderStyle} src="${this.escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
         }).filter(Boolean).join('');
         avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
@@ -1192,7 +1195,8 @@ class StarShipApp {
           const name = this.escapeHtml(account.label || account.profile.displayName);
           let avatarHtml = '';
           if (account.profile?.avatarUrl) {
-            const borderStyle = account.themeColor ? `style="border-color:${account.themeColor}"` : '';
+            const acColor = account.themeColor || this._instanceColor(account.instanceUrl);
+            const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
             avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${this.escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
           }
           h2.innerHTML = `${avatarHtml}${name}`;
@@ -1204,7 +1208,8 @@ class StarShipApp {
         if (accounts.length > 0) {
           const avatars = accounts.map(a => {
             if (!a.profile?.avatarUrl) return '';
-            const borderStyle = a.themeColor ? `style="border-color:${a.themeColor}"` : '';
+            const acColor = a.themeColor || this._instanceColor(a.instanceUrl);
+            const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
             return `<img class="column-header-avatar stacked" ${borderStyle} src="${this.escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
           }).filter(Boolean).join('');
           avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;

@@ -82,10 +82,11 @@ export const DataLoadingMixin = {
           if (!client) return [];
 
           try {
+            const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
             const addMeta = (post) => {
               post.accountId = account.id;
               post.accountPlatform = account.platform;
-              post.themeColor = account.themeColor || null;
+              post.themeColor = effectiveColor;
               const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
               post.isOwn = String(ownerId) === String(account.profile.id);
               return post;
@@ -299,10 +300,11 @@ export const DataLoadingMixin = {
           if (!untilId) return [];
 
           try {
+            const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
             const addMeta = (post) => {
               post.accountId = account.id;
               post.accountPlatform = account.platform;
-              post.themeColor = account.themeColor || null;
+              post.themeColor = effectiveColor;
               const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
               post.isOwn = String(ownerId) === String(account.profile.id);
               return post;
@@ -424,9 +426,10 @@ export const DataLoadingMixin = {
           try {
             const sinceId = !isFirstLoad ? prevNewestIds?.get(account.id) || null : null;
             const notifs = await client.getNotifications(this.settings.postsCount, null, sinceId);
+            const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
             return notifs.map(n => {
               const notif = client.normalizeNotification(n);
-              notif.themeColor = account.themeColor || null;
+              notif.themeColor = effectiveColor;
               notif.accountId = account.id;
               notif.instanceUrl = account.instanceUrl;
               return notif;
@@ -610,6 +613,33 @@ export const DataLoadingMixin = {
     try { return `${acct}@${new URL(instanceUrl).hostname}`; } catch { return acct; }
   },
 
+  // Generate a deterministic color from instance hostname when themeColor is unavailable
+  _instanceColor(instanceUrl) {
+    try {
+      const hostname = new URL(instanceUrl).hostname;
+      let hash = 0;
+      for (let i = 0; i < hostname.length; i++) {
+        hash = ((hash << 5) - hash) + hostname.charCodeAt(i);
+        hash |= 0;
+      }
+      const hue = Math.abs(hash) % 360;
+      // HSL → hex (s=55%, l=55%)
+      const s = 0.55, l = 0.55;
+      const c = (1 - Math.abs(2 * l - 1)) * s;
+      const x = c * (1 - Math.abs((hue / 60) % 2 - 1));
+      const m = l - c / 2;
+      let r, g, b;
+      if (hue < 60) { r = c; g = x; b = 0; }
+      else if (hue < 120) { r = x; g = c; b = 0; }
+      else if (hue < 180) { r = 0; g = c; b = x; }
+      else if (hue < 240) { r = 0; g = x; b = c; }
+      else if (hue < 300) { r = x; g = 0; b = c; }
+      else { r = c; g = 0; b = x; }
+      const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    } catch { return null; }
+  },
+
   _deduplicatePosts(posts) {
     const seen = new Map();
     const deduped = [];
@@ -694,9 +724,10 @@ export const DataLoadingMixin = {
 
           try {
             const notifs = await client.getNotifications(this.settings.postsCount, maxId, null);
+            const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
             return notifs.map(n => {
               const notif = client.normalizeNotification(n);
-              notif.themeColor = account.themeColor || null;
+              notif.themeColor = effectiveColor;
               notif.accountId = account.id;
               notif.instanceUrl = account.instanceUrl;
               return notif;

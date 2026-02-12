@@ -536,9 +536,17 @@ async function handleInstanceTheme(url) {
     const html = await readPartial(res, 32768);
     // Try CSS --color-accent variable first (Mastodon 4.x accent color)
     let color = null;
-    const cssMatch = html.match(/--color-accent:\s*([^;}\s]+)/);
+    const cssMatch = html.match(/--color-accent:\s*([^;}]+)/);
     if (cssMatch) {
       color = cssMatch[1].trim();
+    }
+    // Normalize rgb() to hex
+    if (color) {
+      const rgbMatch = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
+      if (rgbMatch) {
+        const toHex = v => parseInt(v).toString(16).padStart(2, '0');
+        color = `#${toHex(rgbMatch[1])}${toHex(rgbMatch[2])}${toHex(rgbMatch[3])}`;
+      }
     }
     // Fall back to theme-color meta tag
     if (!color) {

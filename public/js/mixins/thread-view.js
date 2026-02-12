@@ -48,10 +48,11 @@ export const ThreadViewMixin = {
       }
 
       // Add account info to all posts
+      const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
       const addMeta = (post) => {
         post.accountId = accountId;
         post.accountPlatform = account.platform;
-        post.themeColor = account.themeColor || null;
+        post.themeColor = effectiveColor;
         const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
         post.isOwn = String(ownerId) === String(account.profile.id);
         return post;
@@ -125,10 +126,11 @@ export const ThreadViewMixin = {
             descendants = (children || []).map(n => client.normalizePost(n));
           }
 
+          const effectiveColor = ma.themeColor || account.themeColor || this._instanceColor(account.instanceUrl);
           const addMeta = (post) => {
             post.accountId = ma.id;
             post.accountPlatform = account.platform;
-            post.themeColor = ma.themeColor || account.themeColor || null;
+            post.themeColor = effectiveColor;
             const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
             post.isOwn = String(ownerId) === String(account.profile.id);
             return post;

@@ -233,7 +233,7 @@ export const PostActionsMixin = {
       const updatedPost = client.normalizePost(rawPost);
       updatedPost.accountId = accountId;
       updatedPost.accountPlatform = account.platform;
-      updatedPost.themeColor = account.themeColor || null;
+      updatedPost.themeColor = account.themeColor || this._instanceColor(account.instanceUrl);
       const ownerId = updatedPost.rebloggedBy ? updatedPost.rebloggedBy.id : updatedPost.author.id;
       updatedPost.isOwn = String(ownerId) === String(account.profile.id);
 
@@ -699,10 +699,10 @@ export const PostActionsMixin = {
     for (const account of sortedAccounts) {
       const p = account.profile;
       const isPreferred = account.id === preferredAccountId;
-      const dotColor = account.themeColor || '';
+      const dotColor = account.themeColor || this._instanceColor(account.instanceUrl) || '';
       const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       html += `
-        <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}"${isPreferred && account.themeColor ? ` style="border-left-color:${account.themeColor}"` : ''}>
+        <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}"${isPreferred && dotColor ? ` style="border-left-color:${dotColor}"` : ''}>
           <img src="${p.avatarUrl || ''}" alt="" onerror="this.style.display='none'">
           <span class="picker-name">${this.escapeHtml(p.displayName)}</span>
           <span class="platform-dot ${account.platform}" ${dotStyle}></span>
