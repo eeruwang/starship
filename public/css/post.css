@@ -457,8 +457,6 @@ h4.mfm-heading { font-size: 1em; }
   letter-spacing: 0.03em;
 }
 .quote-post-body {
-  display: flex;
-  gap: 0.6rem;
   padding: 0.25rem 0.7rem 0.5rem;
 }
 .quote-post-text-area {
@@ -557,23 +555,16 @@ h4.mfm-heading { font-size: 1em; }
   width: 14px;
   height: 14px;
 }
-.quote-post-thumb {
-  flex-shrink: 0;
-  width: 64px;
-  height: 64px;
-  border-radius: calc(var(--radius) - 2px);
-  overflow: hidden;
-}
-.quote-post-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
 .quote-post-media {
   display: grid;
   gap: 2px;
   border-top: 1px solid var(--border-color);
+}
+.quote-post-media.media-1 {
+  grid-template-columns: 1fr;
+}
+.quote-post-media.media-1 img {
+  max-height: 120px;
 }
 .quote-post-media.media-2 {
   grid-template-columns: 1fr 1fr;
@@ -608,10 +599,6 @@ h4.mfm-heading { font-size: 1em; }
 .quote-post .quote-post.quote-depth-1 .quote-post-content {
   -webkit-line-clamp: 2;
 }
-.quote-post .quote-post.quote-depth-1 .quote-post-thumb {
-  width: 48px;
-  height: 48px;
-}
 .quote-post .quote-post.quote-depth-1 .quote-post-media img {
   height: 56px;
 }
@@ -635,10 +622,6 @@ h4.mfm-heading { font-size: 1em; }
 }
 .quote-post .quote-post.quote-depth-2 .quote-post-content {
   -webkit-line-clamp: 1;
-}
-.quote-post .quote-post.quote-depth-2 .quote-post-thumb {
-  width: 36px;
-  height: 36px;
 }
 .quote-post .quote-post.quote-depth-2 .quote-post-media {
   display: none;

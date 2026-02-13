@@ -98,11 +98,8 @@ function renderQuotePost(qp, depth = 0) {
     html += renderQuotePost(qp.quotePost, depth + 1);
   }
   html += `</div>`; // quote-post-text-area
-  if (qpImages.length === 1) {
-    html += `<div class="quote-post-thumb"><img src="${qpImages[0].previewUrl || qpImages[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></div>`;
-  }
   html += `</div>`; // quote-post-body
-  if (qpImages.length > 1) {
+  if (qpImages.length > 0) {
     html += `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>`;
   }
   html += `</div>`; // quote-post
