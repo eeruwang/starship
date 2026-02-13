@@ -453,6 +453,29 @@ export const DataLoadingMixin = {
         });
       if (notifPosts.length > 0) this.cachePosts(notifPosts);
 
+      // Merge cached reaction data into notification posts (e.g. from timeline Misskey lookups)
+      // then promote favourite→reaction on notifications whose post now has non-heart reactions
+      this._mergeReactionsFromCache(notifPosts);
+      for (const n of allNotifs) {
+        if (n.type !== 'favourite' || !n.post) continue;
+        const dp = n.post.reblog || n.post;
+        if (!dp.reactions) continue;
+        const entries = Object.entries(dp.reactions);
+        const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
+        if (nonHeart.length === 0) continue;
+        const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
+        n.type = 'reaction';
+        n.label = '리액션';
+        n.reactionEmoji = emoji;
+        n.icon = emoji;
+        const match = emoji.match(/^:(.+):$/);
+        if (match) {
+          const name = match[1];
+          n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
+                            || dp.emojis?.[name] || dp.emojis?.[name + '@.'] || null;
+        }
+      }
+
       // Fetch missing reply parents for notification posts
       await this.fetchMissingReplyParents(notifPosts, accounts);
 

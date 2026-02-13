@@ -99,6 +99,9 @@ export const ThreadViewMixin = {
       const allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
       this.cachePosts(allPosts);
 
+      // Merge cached reaction data (e.g. from timeline Misskey lookups) into thread posts
+      this._mergeReactionsFromCache(allPosts);
+
       // Render
       this._renderThread(content, ancestors, targetPost, descendants);
 

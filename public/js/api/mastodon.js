@@ -577,37 +577,15 @@ export class MastodonClient {
 
     // Extract reaction emoji from notification (Fedibird, glitch-soc, Pleroma, Akkoma)
     // Some forks include emoji/emoji_url even on 'favourite' notifications
-    let reactionEmoji = notif.emoji || notif.emoji_reaction || null;
-    let reactionEmojiUrl = notif.emoji_url || null;
+    const reactionEmoji = notif.emoji || notif.emoji_reaction || null;
+    const reactionEmojiUrl = notif.emoji_url || null;
     // For favourite type with reaction emoji, normalize to 'reaction' type
     if (type === 'favourite' && reactionEmoji) {
       type = 'reaction';
     }
 
-    // Normalize post early so we can use its reaction data
-    const post = notif.status ? this.normalizePost(notif.status) : null;
-
-    // Infer reaction emoji from post's emoji_reactions when notification doesn't include it
-    // (standard Mastodon sends 'favourite' with no emoji info even for emoji reactions)
-    if (type === 'favourite' && !reactionEmoji && post?.reactions) {
-      const entries = Object.entries(post.reactions);
-      const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
-      if (nonHeart.length > 0) {
-        const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
-        reactionEmoji = emoji;
-        type = 'reaction';
-        // Resolve custom emoji URL from post data
-        const match = emoji.match(/^:(.+):$/);
-        if (match) {
-          const name = match[1];
-          reactionEmojiUrl = (post.reactionEmojis && (post.reactionEmojis[name] || post.reactionEmojis[name + '@.']))
-                          || (post.emojis && (post.emojis[name] || post.emojis[name + '@.']))
-                          || null;
-        }
-      }
-    }
-
-    // Use normalized type for correct label (e.g. 'reaction' → '리액션', not '좋아요')
+    // Reaction enrichment for standard Mastodon (which lacks emoji fields in notifications)
+    // is handled by _mergeReactionsFromCache + _fetchMissingReactions in data-loading.js
     const info = typeMap[type] || { icon: '🔔', label: type };
 
     return {
@@ -620,7 +598,7 @@ export class MastodonClient {
       label: info.label,
       createdAt: new Date(notif.created_at),
       actor: this.normalizeUser(acct),
-      post,
+      post: notif.status ? this.normalizePost(notif.status) : null,
     };
   }
 }
