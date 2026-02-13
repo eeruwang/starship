@@ -573,7 +573,6 @@ export class MastodonClient {
       type = 'reaction';
     }
 
-    const info = typeMap[notif.type] || { icon: '🔔', label: notif.type };
     const acct = notif.account;
 
     // Extract reaction emoji from notification (Fedibird, glitch-soc, Pleroma, Akkoma)
@@ -585,6 +584,32 @@ export class MastodonClient {
       type = 'reaction';
     }
 
+    // Normalize post early so we can use its reaction data
+    const post = notif.status ? this.normalizePost(notif.status) : null;
+
+    // Infer reaction emoji from post's emoji_reactions when notification doesn't include it
+    // (standard Mastodon sends 'favourite' with no emoji info even for emoji reactions)
+    if (type === 'favourite' && !reactionEmoji && post?.reactions) {
+      const entries = Object.entries(post.reactions);
+      const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
+      if (nonHeart.length > 0) {
+        const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
+        reactionEmoji = emoji;
+        type = 'reaction';
+        // Resolve custom emoji URL from post data
+        const match = emoji.match(/^:(.+):$/);
+        if (match) {
+          const name = match[1];
+          reactionEmojiUrl = (post.reactionEmojis && (post.reactionEmojis[name] || post.reactionEmojis[name + '@.']))
+                          || (post.emojis && (post.emojis[name] || post.emojis[name + '@.']))
+                          || null;
+        }
+      }
+    }
+
+    // Use normalized type for correct label (e.g. 'reaction' → '리액션', not '좋아요')
+    const info = typeMap[type] || { icon: '🔔', label: type };
+
     return {
       id: notif.id,
       platform: 'mastodon',
@@ -595,7 +620,7 @@ export class MastodonClient {
       label: info.label,
       createdAt: new Date(notif.created_at),
       actor: this.normalizeUser(acct),
-      post: notif.status ? this.normalizePost(notif.status) : null,
+      post,
     };
   }
 }

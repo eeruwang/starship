@@ -427,8 +427,9 @@ export function renderNotification(notif) {
     // Link card
     html += renderLinkCardHtml(displayPost.linkCard);
 
-    // Reactions (hide for favourite/reaction notifications since the notif itself is about the reaction)
-    if (!['favourite', 'reaction'].includes(notif.type)) {
+    // Reactions (hide for reaction notifications since the notif badge already shows the emoji;
+    // keep visible for favourite so post-level reaction badges remain accessible)
+    if (notif.type !== 'reaction') {
       const reactionsHtml = buildReactionsHtml(displayPost, notif);
       if (reactionsHtml) html += `<div class="post-reactions">${reactionsHtml}</div>`;
     }
@@ -571,8 +572,9 @@ export function renderNotification(notif) {
     }
 
     // Reaction badges — outside CW so always visible
-    // Hide for favourite/reaction notifications since the notif itself is about the reaction
-    if (!['favourite', 'reaction'].includes(notif.type)) {
+    // Hide for reaction notifications since the notif badge already shows the emoji;
+    // keep visible for favourite so post-level reaction badges remain accessible
+    if (notif.type !== 'reaction') {
       const reactionsHtml = buildReactionsHtml(displayPost, notif);
       if (reactionsHtml) html += `<div class="post-reactions notif-reactions">${reactionsHtml}</div>`;
     }
