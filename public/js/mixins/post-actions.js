@@ -748,16 +748,24 @@ export const PostActionsMixin = {
         ${COMMON_EMOJIS.map(r => `<button class="reaction-picker-item" data-reaction="${r}">${r}</button>`).join('')}
       </div>
       ${isMisskeyType ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
-      <div class="reaction-picker-custom">
-        <input type="text" class="reaction-picker-input" placeholder=":emoji: 또는 이모지 입력" />
-      </div>
     `;
 
     if (isMisskeyType) setupPickerSearch(picker, 'reaction');
 
-    // Position near button
+    // Position near button: prefer above, fall back to below if not enough space
     const positionReactionPicker = (r) => {
-      picker.style.bottom = `${window.innerHeight - r.top + 4}px`;
+      const pickerHeight = picker.offsetHeight || 420;
+      const spaceAbove = r.top;
+      const spaceBelow = window.innerHeight - r.bottom;
+      if (spaceAbove >= pickerHeight + 4 || spaceAbove >= spaceBelow) {
+        // Place above
+        picker.style.bottom = `${window.innerHeight - r.top + 4}px`;
+        picker.style.top = '';
+      } else {
+        // Place below
+        picker.style.top = `${r.bottom + 4}px`;
+        picker.style.bottom = '';
+      }
       picker.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 330))}px`;
     };
     const rect = anchorElement.getBoundingClientRect();
@@ -765,6 +773,8 @@ export const PostActionsMixin = {
     positionReactionPicker(rect);
 
     document.body.appendChild(picker);
+    // Re-position after DOM insert so offsetHeight is accurate
+    positionReactionPicker(anchorElement.getBoundingClientRect());
     this._trackPopupScroll('reactionPicker', picker, anchorElement, positionReactionPicker);
 
     // Handle emoji click (delegated, works for dynamically added instance emojis too)
@@ -778,18 +788,6 @@ export const PostActionsMixin = {
       const emojiUrl = img ? img.src : null;
       this.closeReactionPicker();
       await this.sendReaction(actionPostId, platform, accountId, reaction, anchorElement, originalPostId, emojiUrl);
-    });
-
-    // Handle custom emoji input
-    const input = picker.querySelector('.reaction-picker-input');
-    input.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        const value = input.value.trim();
-        if (value) {
-          this.closeReactionPicker();
-          await this.sendReaction(actionPostId, platform, accountId, value, anchorElement, originalPostId);
-        }
-      }
     });
 
     // Close on outside click (persistent listener)

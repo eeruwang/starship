@@ -372,13 +372,21 @@ export const ComposeMixin = {
 
     if (emojiAccountId) setupPickerSearch(picker, 'emoji');
 
-    // Position above the emoji button
+    // Position near the emoji button: prefer above, fall back to below
     const btnRect = this.btnComposeEmoji.getBoundingClientRect();
     picker.style.position = 'fixed';
-    picker.style.bottom = `${window.innerHeight - btnRect.top + 4}px`;
     picker.style.left = `${Math.max(8, Math.min(btnRect.left, window.innerWidth - 330))}px`;
 
     document.body.appendChild(picker);
+
+    const pickerHeight = picker.offsetHeight || 420;
+    const spaceAbove = btnRect.top;
+    const spaceBelow = window.innerHeight - btnRect.bottom;
+    if (spaceAbove >= pickerHeight + 4 || spaceAbove >= spaceBelow) {
+      picker.style.bottom = `${window.innerHeight - btnRect.top + 4}px`;
+    } else {
+      picker.style.top = `${btnRect.bottom + 4}px`;
+    }
 
     // Insert emoji into textarea
     const insertEmoji = (text) => {

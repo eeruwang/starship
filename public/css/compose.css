@@ -704,31 +704,6 @@
   overflow: hidden;
 }
 
-.reaction-picker-custom {
-  border-top: 1px solid var(--border-color);
-  padding: 0.4rem;
-}
-
-.reaction-picker-input {
-  width: 100%;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  font-family: inherit;
-  padding: 0.35rem 0.5rem;
-  outline: none;
-}
-
-.reaction-picker-input:focus {
-  border-color: var(--accent-primary);
-}
-
-.reaction-picker-input::placeholder {
-  color: var(--text-muted);
-}
-
 /* Quote action */
 .post-action[data-action="quote"]:hover {
   color: #9b59b6;
