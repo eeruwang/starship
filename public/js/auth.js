@@ -192,27 +192,63 @@ export function clearPendingAuth() {
 }
 
 /**
- * 메인 페이지에서 호출: 팝업이 완료될 때까지 polling
+ * 메인 페이지에서 호출: postMessage + localStorage 폴링 병행
+ * (COOP 헤더나 팝업 차단으로 window.opener가 끊길 수 있으므로 이중 채널 사용)
  */
 export function waitForAuthCallback() {
   return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = () => {
+      settled = true;
+      window.removeEventListener('message', handleMessage);
+      clearInterval(pollTimer);
+    };
+
+    // Channel 1: postMessage
     const handleMessage = (event) => {
+      if (settled) return;
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'starship_auth_complete') {
-        window.removeEventListener('message', handleMessage);
+        cleanup();
+        localStorage.removeItem('starship_auth_result');
         resolve(event.data.result);
       } else if (event.data?.type === 'starship_auth_error') {
-        window.removeEventListener('message', handleMessage);
+        cleanup();
+        localStorage.removeItem('starship_auth_error');
         reject(new Error(event.data.error));
       }
     };
-
     window.addEventListener('message', handleMessage);
 
-    // 30초 타임아웃
+    // Channel 2: localStorage polling (fallback)
+    const pollTimer = setInterval(() => {
+      if (settled) return;
+      const result = localStorage.getItem('starship_auth_result');
+      if (result) {
+        localStorage.removeItem('starship_auth_result');
+        cleanup();
+        try {
+          resolve(JSON.parse(result));
+        } catch {
+          reject(new Error('인증 결과를 파싱할 수 없습니다.'));
+        }
+        return;
+      }
+      const error = localStorage.getItem('starship_auth_error');
+      if (error) {
+        localStorage.removeItem('starship_auth_error');
+        cleanup();
+        reject(new Error(error));
+      }
+    }, 500);
+
+    // 5분 타임아웃
     setTimeout(() => {
-      window.removeEventListener('message', handleMessage);
-      reject(new Error('인증 시간이 초과되었습니다.'));
-    }, 300000); // 5분
+      if (!settled) {
+        cleanup();
+        reject(new Error('인증 시간이 초과되었습니다.'));
+      }
+    }, 300000);
   });
 }

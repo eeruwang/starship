@@ -133,21 +133,27 @@
         }
 
         localStorage.removeItem(PENDING_AUTH_KEY);
+        // Always save to localStorage as fallback (COOP/popup blocker may break window.opener)
+        localStorage.setItem('starship_auth_result', JSON.stringify(result));
 
         if (window.opener) {
-          window.opener.postMessage({ type: 'starship_auth_complete', result }, window.location.origin);
+          try {
+            window.opener.postMessage({ type: 'starship_auth_complete', result }, window.location.origin);
+          } catch { /* opener access blocked */ }
           showSuccess();
           setTimeout(() => window.close(), 1500);
         } else {
-          localStorage.setItem('starship_auth_result', JSON.stringify(result));
           showSuccess();
           setTimeout(() => { window.location.href = '/'; }, 1500);
         }
 
       } catch (err) {
         localStorage.removeItem(PENDING_AUTH_KEY);
+        localStorage.setItem('starship_auth_error', err.message);
         if (window.opener) {
-          window.opener.postMessage({ type: 'starship_auth_error', error: err.message }, window.location.origin);
+          try {
+            window.opener.postMessage({ type: 'starship_auth_error', error: err.message }, window.location.origin);
+          } catch { /* opener access blocked */ }
         }
         showError(err.message);
       }
