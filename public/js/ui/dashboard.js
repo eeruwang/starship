@@ -714,7 +714,7 @@ export function buildReactionsHtml(displayPost, wrapperPost) {
   if (hasNonHeartReactions) {
     html += `<span class="engagement-reactions">`;
     for (const [reaction, count] of nonHeartReactions) {
-      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
+      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost._reactionInstanceUrl || displayPost.instanceUrl);
       html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
     html += `</span>`;

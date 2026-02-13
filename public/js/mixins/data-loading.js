@@ -698,6 +698,7 @@ export const DataLoadingMixin = {
           if (srcDisplay.id && (post.accountPlatform || post.platform) !== 'mastodon') {
             dstDisplay._misskeyNoteId = srcDisplay.id;
             dstDisplay._misskeyAccountId = post.accountId;
+            if (srcDisplay.instanceUrl) dstDisplay._reactionInstanceUrl = srcDisplay.instanceUrl;
           }
           this._adjustFavouritesForReactions(dstDisplay);
         }
@@ -759,6 +760,7 @@ export const DataLoadingMixin = {
         if (cached.myReaction && !dp.myReaction) dp.myReaction = cached.myReaction;
         if (cached._misskeyNoteId) dp._misskeyNoteId = cached._misskeyNoteId;
         if (cached._misskeyAccountId) dp._misskeyAccountId = cached._misskeyAccountId;
+        if (cached._reactionInstanceUrl) dp._reactionInstanceUrl = cached._reactionInstanceUrl;
         if (cached.id && cached.platform && cached.platform !== 'mastodon') {
           dp._misskeyNoteId = dp._misskeyNoteId || cached.id;
         }
@@ -806,7 +808,10 @@ export const DataLoadingMixin = {
             dp.reactions = rdp.reactions;
             dp.reactionEmojis = rdp.reactionEmojis || dp.reactionEmojis;
             dp.emojis = rdp.emojis || dp.emojis;
-            if (rdp.instanceUrl) dp.instanceUrl = dp.instanceUrl || rdp.instanceUrl;
+            if (rdp.instanceUrl) {
+              dp.instanceUrl = dp.instanceUrl || rdp.instanceUrl;
+              dp._reactionInstanceUrl = rdp.instanceUrl;
+            }
             if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
             dp._misskeyNoteId = rdp.id;
             dp._misskeyAccountId = misskeyAccount.id;

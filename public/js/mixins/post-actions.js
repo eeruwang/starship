@@ -446,7 +446,10 @@ export const PostActionsMixin = {
       dp._misskeyAccountId = actingAccountId;
       if (adp.reactionEmojis) dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...adp.reactionEmojis };
       if (adp.emojis) dp.emojis = { ...(dp.emojis || {}), ...adp.emojis };
-      if (adp.instanceUrl) dp.instanceUrl = dp.instanceUrl || adp.instanceUrl;
+      if (adp.instanceUrl) {
+        dp.instanceUrl = dp.instanceUrl || adp.instanceUrl;
+        dp._reactionInstanceUrl = adp.instanceUrl;
+      }
 
       // Adjust favourites: Mastodon counts custom reactions as favourites
       // Only subtract non-heart reactions — ❤ reactions are equivalent to favourites
@@ -479,6 +482,7 @@ export const PostActionsMixin = {
       if (bdp.emojis) cdp.emojis = { ...(cdp.emojis || {}), ...bdp.emojis };
       if (bdp._misskeyNoteId) cdp._misskeyNoteId = bdp._misskeyNoteId;
       if (bdp._misskeyAccountId) cdp._misskeyAccountId = bdp._misskeyAccountId;
+      if (bdp._reactionInstanceUrl) cdp._reactionInstanceUrl = bdp._reactionInstanceUrl;
       if (bdp.instanceUrl) cdp.instanceUrl = cdp.instanceUrl || bdp.instanceUrl;
       cachedPost.favourited = basePost.favourited;
       cachedPost.reblogged = basePost.reblogged;
