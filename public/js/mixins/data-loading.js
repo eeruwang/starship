@@ -442,6 +442,9 @@ export const DataLoadingMixin = {
         if (n.type !== 'favourite' || !n.post) continue;
         const dp = n.post.reblog || n.post;
         if (!dp.reactions) continue;
+        // Skip reactions merged from Misskey cache — these are other users' reactions,
+        // not this actor's action. Phase 2 handles per-user matching accurately.
+        if (dp._reactionsFromCache) continue;
         const entries = Object.entries(dp.reactions);
         const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
         if (nonHeart.length === 0) continue;
@@ -735,6 +738,7 @@ export const DataLoadingMixin = {
       const cached = uriToCache.get(dp.canonicalUri);
       if (cached) {
         dp.reactions = cached.reactions;
+        dp._reactionsFromCache = true;
         dp.reactionEmojis = cached.reactionEmojis || dp.reactionEmojis;
         dp.emojis = cached.emojis || dp.emojis;
         if (cached.myReaction && !dp.myReaction) dp.myReaction = cached.myReaction;
@@ -828,7 +832,7 @@ export const DataLoadingMixin = {
     }
 
     // Shared helper: apply resolved reaction data to notification group
-    const applyReactions = (groupNotifs, reactionByUser, reactionEmojis, aggregateTypes, emojiBaseUrl) => {
+    const applyReactions = (groupNotifs, reactionByUser, reactionEmojis, emojiBaseUrl) => {
       let changed = false;
       for (const notif of groupNotifs) {
         const actorAcct = notif.actor?.acct
@@ -836,21 +840,13 @@ export const DataLoadingMixin = {
           : null;
         if (!actorAcct) continue;
 
-        // Try exact match from notes/reactions
-        let emoji = reactionByUser.get(actorAcct);
-
-        // Fallback: infer from aggregate reactions
-        if (!emoji && aggregateTypes.length > 0) {
-          if (aggregateTypes.length === 1) {
-            emoji = aggregateTypes[0][0];
-          } else {
-            const nonHeart = aggregateTypes.filter(([k]) => k !== '❤' && k !== '❤️');
-            emoji = nonHeart.length > 0
-              ? nonHeart.sort((a, b) => b[1] - a[1])[0][0]
-              : aggregateTypes[0][0];
-          }
-        }
+        // Exact match only — use per-user reaction data from notes/reactions.
+        // No aggregate fallback: if the actor isn't in reactionByUser, they
+        // likely just pressed favourite on Mastodon (recorded as ❤ on Misskey).
+        const emoji = reactionByUser.get(actorAcct);
         if (!emoji) continue;
+        // Heart reactions are federated Mastodon favourites — don't convert
+        if (emoji === '❤' || emoji === '❤️') continue;
 
         notif.type = 'reaction';
         notif.label = '리액션';
@@ -926,10 +922,9 @@ export const DataLoadingMixin = {
             }
 
             const reactionEmojis = rdp.reactionEmojis || rdp.emojis || {};
-            const aggregateTypes = Object.entries(rdp.reactions || {}).filter(([, c]) => c > 0);
-            if (reactionByUser.size === 0 && aggregateTypes.length === 0) return;
+            if (reactionByUser.size === 0) return;
 
-            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, aggregateTypes, misskeyAccount.instanceUrl);
+            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, misskeyAccount.instanceUrl);
             if (changed) rerenderGroup(groupNotifs);
           } catch (e) {
             console.warn('[StarShip] fav→reaction error:', e);
@@ -970,7 +965,6 @@ export const DataLoadingMixin = {
             // Step 2: Get per-user reactions (unauthenticated)
             const reactionByUser = new Map();
             let reactionEmojis = {};
-            let aggregateTypes = [];
             try {
               const reactions = await this._unauthMisskeyRequest(actorInstanceUrl, 'notes/reactions', { noteId, limit: 20 });
               if (!Array.isArray(reactions) || reactions.length === 0) return;
@@ -986,18 +980,17 @@ export const DataLoadingMixin = {
               return;
             }
 
-            // Step 3: Get note details for emoji URLs and aggregate reaction counts
+            // Step 3: Get note details for emoji URLs
             try {
               const note = await this._unauthMisskeyRequest(actorInstanceUrl, 'notes/show', { noteId });
               if (note) {
                 reactionEmojis = note.reactionEmojis || {};
-                aggregateTypes = Object.entries(note.reactions || {}).filter(([, c]) => c > 0);
               }
             } catch { /* proceed with per-user data only */ }
 
-            if (reactionByUser.size === 0 && aggregateTypes.length === 0) return;
+            if (reactionByUser.size === 0) return;
 
-            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, aggregateTypes, actorInstanceUrl);
+            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, actorInstanceUrl);
             if (changed) rerenderGroup(groupNotifs);
           } catch (e) {
             console.warn('[StarShip] unauth fav→reaction error:', e);
@@ -1161,6 +1154,9 @@ export const DataLoadingMixin = {
         if (n.type !== 'favourite' || !n.post) continue;
         const dp = n.post.reblog || n.post;
         if (!dp.reactions) continue;
+        // Skip reactions merged from Misskey cache — these are other users' reactions,
+        // not this actor's action. Phase 2 handles per-user matching accurately.
+        if (dp._reactionsFromCache) continue;
         const entries = Object.entries(dp.reactions);
         const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
         if (nonHeart.length === 0) continue;
