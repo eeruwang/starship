@@ -425,7 +425,41 @@ export const DataLoadingMixin = {
         allNotifs.length = write;
       }
 
+      // Merge cached reaction data BEFORE semantic dedup so favourite→reaction
+      // conversion produces correct dedup keys (prevents duplicates when both
+      // a favourite and a native reaction notification exist for the same actor+post)
+      {
+        const preDedupPosts = allNotifs
+          .filter(n => n.post?.id)
+          .map(n => {
+            n.post.accountId = n.accountId;
+            n.post.accountPlatform = n.platform;
+            return n.post;
+          });
+        if (preDedupPosts.length > 0) this._mergeReactionsFromCache(preDedupPosts);
+      }
+      for (const n of allNotifs) {
+        if (n.type !== 'favourite' || !n.post) continue;
+        const dp = n.post.reblog || n.post;
+        if (!dp.reactions) continue;
+        const entries = Object.entries(dp.reactions);
+        const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
+        if (nonHeart.length === 0) continue;
+        const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
+        n.type = 'reaction';
+        n.label = '리액션';
+        n.reactionEmoji = emoji;
+        n.icon = emoji;
+        const match = emoji.match(/^:(.+):$/);
+        if (match) {
+          const name = match[1];
+          n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
+                            || dp.emojis?.[name] || dp.emojis?.[name + '@.'] || null;
+        }
+      }
+
       // Compute normalized dedup keys for all notifications
+      // (after favourite→reaction conversion so types are final)
       for (const notif of allNotifs) {
         const actorAcct = notif.actor?.acct
           ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl)
@@ -455,29 +489,6 @@ export const DataLoadingMixin = {
           return n.post;
         });
       if (notifPosts.length > 0) this.cachePosts(notifPosts);
-
-      // Merge cached reaction data into notification posts (e.g. from timeline Misskey lookups)
-      // then promote favourite→reaction on notifications whose post now has non-heart reactions
-      this._mergeReactionsFromCache(notifPosts);
-      for (const n of allNotifs) {
-        if (n.type !== 'favourite' || !n.post) continue;
-        const dp = n.post.reblog || n.post;
-        if (!dp.reactions) continue;
-        const entries = Object.entries(dp.reactions);
-        const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
-        if (nonHeart.length === 0) continue;
-        const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
-        n.type = 'reaction';
-        n.label = '리액션';
-        n.reactionEmoji = emoji;
-        n.icon = emoji;
-        const match = emoji.match(/^:(.+):$/);
-        if (match) {
-          const name = match[1];
-          n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
-                            || dp.emojis?.[name] || dp.emojis?.[name + '@.'] || null;
-        }
-      }
 
       // Fetch missing reply parents for notification posts
       await this.fetchMissingReplyParents(notifPosts, accounts);
@@ -765,7 +776,7 @@ export const DataLoadingMixin = {
         toFetch.push({ item, post, dp });
       }
 
-      for (const { item, post, dp } of toFetch.slice(0, 5)) {
+      for (const { item, post, dp } of toFetch.slice(0, 10)) {
         client.resolveUrl(dp.canonicalUri).then(resolved => {
           if (!resolved) return;
           const rdp = resolved.reblog || resolved;
@@ -785,13 +796,13 @@ export const DataLoadingMixin = {
               if (!notif.post || (notif.post.reblog || notif.post).canonicalUri !== dp.canonicalUri) continue;
               const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
               for (const card of cards) {
-                card.replaceWith(renderNotification(notif));
+                if (card.isConnected) card.replaceWith(renderNotification(notif));
               }
             }
           } else {
             const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
             for (const card of cards) {
-              card.replaceWith(renderPost(item));
+              if (card.isConnected) card.replaceWith(renderPost(item));
             }
           }
         }).catch(() => {});
@@ -871,6 +882,15 @@ export const DataLoadingMixin = {
         if (notif.type !== 'reaction') continue;
         const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
         for (const card of cards) {
+          if (!card.isConnected) continue;
+          // After async conversion, check if a native reaction card with same dedupKey already exists
+          if (notif._dedupKey) {
+            const dupCard = container.querySelector(`.notif-card[data-dedup-key="${CSS.escape(notif._dedupKey)}"]`);
+            if (dupCard && dupCard !== card && dupCard.isConnected) {
+              card.remove();
+              continue;
+            }
+          }
           card.replaceWith(renderNotification(notif));
         }
       }
@@ -878,7 +898,7 @@ export const DataLoadingMixin = {
 
     if (client) {
       // --- Authenticated approach using Misskey account ---
-      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 5)) {
+      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 10)) {
         (async () => {
           try {
             let resolved;
@@ -918,7 +938,7 @@ export const DataLoadingMixin = {
       }
     } else {
       // --- Unauthenticated approach via actor's Misskey instance ---
-      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 5)) {
+      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 10)) {
         (async () => {
           try {
             // Find an actor whose instance is Misskey-compatible
@@ -1126,7 +1146,38 @@ export const DataLoadingMixin = {
         allNotifs.length = write;
       }
 
-      // Compute dedup keys
+      // Merge cached reaction data BEFORE semantic dedup (same as loadNotificationsForColumn)
+      {
+        const preDedupPosts = allNotifs
+          .filter(n => n.post?.id)
+          .map(n => {
+            n.post.accountId = n.accountId;
+            n.post.accountPlatform = n.platform;
+            return n.post;
+          });
+        if (preDedupPosts.length > 0) this._mergeReactionsFromCache(preDedupPosts);
+      }
+      for (const n of allNotifs) {
+        if (n.type !== 'favourite' || !n.post) continue;
+        const dp = n.post.reblog || n.post;
+        if (!dp.reactions) continue;
+        const entries = Object.entries(dp.reactions);
+        const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
+        if (nonHeart.length === 0) continue;
+        const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
+        n.type = 'reaction';
+        n.label = '리액션';
+        n.reactionEmoji = emoji;
+        n.icon = emoji;
+        const match = emoji.match(/^:(.+):$/);
+        if (match) {
+          const name = match[1];
+          n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
+                            || dp.emojis?.[name] || dp.emojis?.[name + '@.'] || null;
+        }
+      }
+
+      // Compute dedup keys (after favourite→reaction conversion so types are final)
       for (const notif of allNotifs) {
         const actorAcct = notif.actor?.acct
           ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl)
@@ -1180,29 +1231,6 @@ export const DataLoadingMixin = {
         });
       if (notifPosts.length > 0) {
         this.cachePosts(notifPosts);
-
-        // Merge cached reaction data into older notification posts
-        this._mergeReactionsFromCache(notifPosts);
-        for (const n of newNotifs) {
-          if (n.type !== 'favourite' || !n.post) continue;
-          const dp = n.post.reblog || n.post;
-          if (!dp.reactions) continue;
-          const entries = Object.entries(dp.reactions);
-          const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
-          if (nonHeart.length === 0) continue;
-          const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
-          n.type = 'reaction';
-          n.label = '리액션';
-          n.reactionEmoji = emoji;
-          n.icon = emoji;
-          const match = emoji.match(/^:(.+):$/);
-          if (match) {
-            const name = match[1];
-            n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
-                              || dp.emojis?.[name] || dp.emojis?.[name + '@.'] || null;
-          }
-        }
-
         await this.fetchMissingReplyParents(notifPosts, accounts);
       }
 
