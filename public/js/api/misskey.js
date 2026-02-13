@@ -387,6 +387,17 @@ export class MisskeyClient {
       }
     }
 
+    // Suppress link card if it points to the reply parent's URL
+    if (linkCard && actualNote.reply) {
+      const replyUrls = [
+        actualNote.reply.uri,
+        `${this.instanceUrl}/notes/${actualNote.reply.id}`,
+      ].filter(Boolean);
+      if (replyUrls.some(u => linkCard.url.includes(u) || u.includes(linkCard.url))) {
+        linkCard = null;
+      }
+    }
+
     return {
       id: note.id,
       platform: this.platformType,

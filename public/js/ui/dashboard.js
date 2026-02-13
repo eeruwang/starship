@@ -73,6 +73,29 @@ function isFediPostUrl(url) {
   } catch { return false; }
 }
 
+/**
+ * Strip fedi post URL link from content HTML when it will be shown as a card/embed.
+ * Prevents duplicate display of the URL as both inline text and link card.
+ */
+function stripFediLinkFromContent(content, linkCard) {
+  if (!content || !linkCard?.url || !isFediPostUrl(linkCard.url)) return content;
+  const escaped = linkCard.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedAmp = linkCard.url.replace(/&/g, '&amp;').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const urlPattern = escaped === escapedAmp ? escaped : `(?:${escaped}|${escapedAmp})`;
+  let result = content;
+  // Remove <a> link in its own <p> paragraph
+  result = result.replace(
+    new RegExp(`<p>\\s*<a[^>]*href="${urlPattern}"[^>]*>[^<]*</a>\\s*</p>`, 'g'),
+    ''
+  );
+  // Remove <a> link preceded by <br> (e.g. Misskey MFM → HTML conversion)
+  result = result.replace(
+    new RegExp(`\\s*<br\\s*/?>\\s*<a[^>]*href="${urlPattern}"[^>]*>[^<]*</a>`, 'g'),
+    ''
+  );
+  return result;
+}
+
 function renderQuotePost(qp, depth = 0) {
   const maxDepth = 2;
   const depthClass = depth > 0 ? ` quote-depth-${Math.min(depth, maxDepth)}` : '';
@@ -291,8 +314,9 @@ export function renderPost(post) {
     html += `<div class="cw-content" id="${cwId}">`;
   }
 
-  // Content
-  html += `<div class="post-content">${displayPost.content}</div>`;
+  // Content — strip fedi link URL from text when it will be shown as a card
+  const postContentHtml = stripFediLinkFromContent(displayPost.content, displayPost.linkCard);
+  html += `<div class="post-content">${postContentHtml}</div>`;
 
   // Quote post (embedded) — supports nested quotes
   if (displayPost.quotePost) {
@@ -304,8 +328,13 @@ export function renderPost(post) {
     html += renderMediaGridHtml(displayPost.media, displayPost.sensitive || displayPost.media.some(m => m.sensitive));
   }
 
-  // Link card
-  html += renderLinkCardHtml(displayPost.linkCard);
+  // Link card — suppress fedi link card when reply/quote context already shows the referenced post
+  const suppressPostLinkCard = displayPost.linkCard?.url
+    && isFediPostUrl(displayPost.linkCard.url)
+    && (displayPost.replyTo || displayPost.quotePost);
+  if (!suppressPostLinkCard) {
+    html += renderLinkCardHtml(displayPost.linkCard);
+  }
 
   if (displayPost.contentWarning) {
     html += '</div>'; // close cw-content
@@ -446,8 +475,9 @@ export function renderNotification(notif) {
       html += `<div class="cw-content" id="${cwId}">`;
     }
 
-    // Content
-    html += `<div class="post-content">${displayPost.content}</div>`;
+    // Content — strip fedi link URL from text when it will be shown as a card
+    const notifMentionContentHtml = stripFediLinkFromContent(displayPost.content, displayPost.linkCard);
+    html += `<div class="post-content">${notifMentionContentHtml}</div>`;
 
     // Quote post
     if (displayPost.quotePost) {
@@ -459,7 +489,7 @@ export function renderNotification(notif) {
       html += renderMediaGridHtml(displayPost.media.slice(0, 4), displayPost.sensitive || displayPost.media.some(m => m.sensitive));
     }
 
-    // Link card
+    // Link card (notifications column: always show card)
     html += renderLinkCardHtml(displayPost.linkCard);
 
     // Reactions — always show post-level reaction badges so the full reaction
@@ -579,11 +609,12 @@ export function renderNotification(notif) {
       html += `<div class="cw-content" id="${notifCwId}">`;
     }
 
-    // Post text content
-    const notifText = stripHtml(displayPost.content);
+    // Post text content — strip fedi link URL from text when it will be shown as a card
+    const notifStdContentHtml = stripFediLinkFromContent(displayPost.content, displayPost.linkCard);
+    const notifText = stripHtml(notifStdContentHtml);
     const isLongNotif = notifText.length > 200;
     const notifCtxId = `notif-ctx-${notif.id}`;
-    html += `<div class="notif-post-content${isLongNotif ? ' collapsed' : ''}" id="${notifCtxId}">${displayPost.content}</div>`;
+    html += `<div class="notif-post-content${isLongNotif ? ' collapsed' : ''}" id="${notifCtxId}">${notifStdContentHtml}</div>`;
     if (isLongNotif) {
       html += `<button class="expand-toggle" data-expand-target="${notifCtxId}">더보기</button>`;
     }
