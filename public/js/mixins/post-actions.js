@@ -97,24 +97,44 @@ export const PostActionsMixin = {
     if (isCrossInstance) {
       const originalCached = this.postCache.get(`${platform}:${actionPostId}`) || cachedPost;
       const displayPost = originalCached?.reblog || originalCached;
-      const canonicalUri = displayPost?.canonicalUri || displayPost?.url;
-      if (!canonicalUri) {
-        this.showToast('이 게시물의 원본 URL을 찾을 수 없습니다.');
-        return;
+
+      // Try cached Misskey note ID first (avoids ap/show API call, prevents 429)
+      let resolved = false;
+      const cachedNoteId = displayPost?._misskeyNoteId;
+      const cachedAccountId = displayPost?._misskeyAccountId;
+      if (cachedNoteId && cachedAccountId) {
+        const cachedAccount = this.store.getById(cachedAccountId);
+        if (cachedAccount && cachedAccount.instanceUrl === account.instanceUrl) {
+          actionPostId = cachedNoteId;
+          resolved = true;
+        }
       }
-      try {
-        btnElement.classList.add('processing');
-        const resolved = await client.resolveUrl(canonicalUri);
-        if (!resolved) {
-          this.showToast('이 게시물을 해당 계정에서 찾을 수 없습니다.');
+
+      if (!resolved) {
+        const canonicalUri = displayPost?.canonicalUri || displayPost?.url;
+        if (!canonicalUri) {
+          this.showToast('이 게시물의 원본 URL을 찾을 수 없습니다.');
+          return;
+        }
+        try {
+          btnElement.classList.add('processing');
+          const resolvedPost = await client.resolveUrl(canonicalUri);
+          if (!resolvedPost) {
+            this.showToast('이 게시물을 해당 계정에서 찾을 수 없습니다.');
+            btnElement.classList.remove('processing');
+            return;
+          }
+          actionPostId = resolvedPost.id;
+          // Cache the resolved note ID for future use
+          if (displayPost) {
+            displayPost._misskeyNoteId = resolvedPost.id;
+            displayPost._misskeyAccountId = accountId;
+          }
+        } catch (err) {
+          this.showToast('게시물 조회 실패: ' + err.message);
           btnElement.classList.remove('processing');
           return;
         }
-        actionPostId = resolved.id;
-      } catch (err) {
-        this.showToast('게시물 조회 실패: ' + err.message);
-        btnElement.classList.remove('processing');
-        return;
       }
     }
 
