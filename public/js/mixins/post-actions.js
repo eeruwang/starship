@@ -287,7 +287,9 @@ export const PostActionsMixin = {
         // Update reactions (always sync — clears correctly on unreact)
         if (udp.reactions) {
           cdp.reactions = udp.reactions;
-          cdp.reactionEmojis = udp.reactionEmojis || cdp.reactionEmojis;
+          // Merge rather than replace — preserves pre-populated emoji URLs
+          // (Misskey may not return reactionEmojis immediately after creating a reaction)
+          cdp.reactionEmojis = { ...(cdp.reactionEmojis || {}), ...(udp.reactionEmojis || {}) };
         }
         // Sync wrapper state for reblogs (wrapper and inner post differ)
         if (cachedPost !== cdp) {
@@ -478,7 +480,7 @@ export const PostActionsMixin = {
       if (bdp.stats) cdp.stats = { ...cdp.stats, ...bdp.stats };
       // Always sync reactions (clears correctly on unreact)
       if (bdp.reactions) cdp.reactions = bdp.reactions;
-      if (bdp.reactionEmojis) cdp.reactionEmojis = bdp.reactionEmojis;
+      if (bdp.reactionEmojis) cdp.reactionEmojis = { ...(cdp.reactionEmojis || {}), ...bdp.reactionEmojis };
       if (bdp.emojis) cdp.emojis = { ...(cdp.emojis || {}), ...bdp.emojis };
       if (bdp._misskeyNoteId) cdp._misskeyNoteId = bdp._misskeyNoteId;
       if (bdp._misskeyAccountId) cdp._misskeyAccountId = bdp._misskeyAccountId;
@@ -749,8 +751,12 @@ export const PostActionsMixin = {
       const item = e.target.closest('.reaction-picker-item');
       if (!item) return;
       const reaction = item.dataset.reaction;
+      // Capture emoji URL from <img> tag — needed because Misskey's notes/show
+      // may not include reactionEmojis immediately after creating a reaction
+      const img = item.querySelector('img');
+      const emojiUrl = img ? img.src : null;
       this.closeReactionPicker();
-      await this.sendReaction(actionPostId, platform, accountId, reaction, anchorElement, originalPostId);
+      await this.sendReaction(actionPostId, platform, accountId, reaction, anchorElement, originalPostId, emojiUrl);
     });
 
     // Handle custom emoji input
@@ -800,7 +806,7 @@ export const PostActionsMixin = {
     this._removeScrollTracker('reactionPicker');
   },
 
-  async sendReaction(actionPostId, platform, accountId, reaction, btnElement, originalPostId) {
+  async sendReaction(actionPostId, platform, accountId, reaction, btnElement, originalPostId, emojiUrl) {
     const client = this.store.getClient(accountId);
     if (!client) return;
     const refreshPostId = originalPostId || actionPostId;
@@ -813,6 +819,21 @@ export const PostActionsMixin = {
         await client.deleteReaction(actionPostId);
       }
       await client.createReaction(actionPostId, reaction);
+
+      // Pre-populate emoji URL in cache so the badge renders immediately,
+      // even if Misskey's notes/show hasn't propagated reactionEmojis yet
+      if (emojiUrl && cachedPost) {
+        const dp = cachedPost.reblog || cachedPost;
+        const match = reaction.match(/^:(.+):$/);
+        if (match) {
+          const name = match[1];
+          const nameBase = name.replace(/@\.$/, '');
+          if (!dp.reactionEmojis) dp.reactionEmojis = {};
+          dp.reactionEmojis[nameBase] = emojiUrl;
+          dp.reactionEmojis[nameBase + '@.'] = emojiUrl;
+        }
+      }
+
       btnElement.classList.remove('processing');
       btnElement.classList.add('active', 'just-activated');
       setTimeout(() => btnElement.classList.remove('just-activated'), 600);
