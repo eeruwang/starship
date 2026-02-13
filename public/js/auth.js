@@ -62,18 +62,17 @@ export async function startMastodonOAuth(instanceUrl) {
 }
 
 export async function completeMastodonOAuth(code, pending) {
-  // code → access_token 교환
+  // code → access_token 교환 (OAuth 2.0 spec: application/x-www-form-urlencoded)
   const tokenRes = await fetch(buildFetchUrl(`${pending.instanceUrl}/oauth/token`), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
       grant_type: 'authorization_code',
       client_id: pending.clientId,
       client_secret: pending.clientSecret,
       redirect_uri: CALLBACK_URL,
       code,
-      scope: MASTODON_SCOPES,
-    }),
+    }).toString(),
   });
 
   if (!tokenRes.ok) {

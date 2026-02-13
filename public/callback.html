@@ -86,15 +86,14 @@
 
           const tokenRes = await fetch(buildFetchUrl(`${pending.instanceUrl}/oauth/token`), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
               grant_type: 'authorization_code',
               client_id: pending.clientId,
               client_secret: pending.clientSecret,
               redirect_uri: `${window.location.origin}/callback.html`,
               code,
-              scope: 'read write follow push',
-            }),
+            }).toString(),
           });
 
           if (!tokenRes.ok) {
