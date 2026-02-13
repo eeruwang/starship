@@ -319,6 +319,7 @@
 .notif-content-wrap .notif-reactions {
   padding: 0.3rem 0.55rem;
   border-top: 1px solid var(--border-color);
+  margin-top: 0;
 }
 .notif-content-wrap .notif-reactions .reaction-badge {
   font-size: 0.78rem;
@@ -327,6 +328,14 @@
 .notif-content-wrap .notif-reactions .reaction-badge .custom-emoji {
   width: 17px;
   height: 17px;
+}
+.notif-content-wrap .notif-reactions .reaction-badge .reaction-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.notif-content-wrap .notif-reactions .reaction-badge .reaction-unicode {
+  height: 17px;
+  font-size: 1rem;
 }
 .notif-content-wrap .notif-reactions .reaction-count {
   font-size: 0.72rem;
