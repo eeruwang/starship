@@ -395,10 +395,56 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 2em;
+  height: 2.5em;
   background: linear-gradient(transparent, var(--bg-primary));
   pointer-events: none;
   border-radius: 0;
+}
+
+/* "더보기" button inside notification content wrap */
+.notif-content-wrap .expand-toggle {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  border-top: 1px dashed var(--border-color);
+  border-bottom: none;
+  border-left: none;
+  border-right: none;
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0.7;
+  transition: all 0.15s;
+  letter-spacing: 0.03em;
+}
+.notif-content-wrap .expand-toggle:hover {
+  opacity: 1;
+  background: rgba(124, 125, 255, 0.06);
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+/* "더보기" button inside parent context */
+.notif-parent-context .expand-toggle {
+  display: inline-block;
+  font-size: 0.68rem;
+  margin-top: 0.2rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(124, 125, 255, 0.06);
+  border: 1px solid rgba(124, 125, 255, 0.12);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.notif-parent-context .expand-toggle:hover {
+  background: rgba(124, 125, 255, 0.12);
+  color: var(--accent-primary);
+  text-decoration: none;
 }
 
 .notif-post-content a {
@@ -605,7 +651,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 1.5em;
+  height: 2em;
   background: linear-gradient(transparent, rgba(124, 125, 255, 0.04));
   pointer-events: none;
 }
