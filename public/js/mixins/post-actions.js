@@ -1078,8 +1078,10 @@ export const PostActionsMixin = {
           popup.innerHTML = this._renderReactionUsersHtml(users);
         }
       }
-    } catch {
-      popup.innerHTML = '<div class="reaction-users-loading">불러오기 실패</div>';
+    } catch (e) {
+      const msg = e?.message || '';
+      const is429 = msg.includes('429') || msg.includes('RATE_LIMIT');
+      popup.innerHTML = `<div class="reaction-users-loading">${is429 ? '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' : '게시물 조회 실패'}</div>`;
     }
 
     // Close on outside click (persistent listener)

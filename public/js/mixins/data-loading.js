@@ -712,6 +712,16 @@ export const DataLoadingMixin = {
   // Mastodon counts all Misskey reactions (including custom emoji) as favourites.
   // After merging reaction data, subtract the reaction total from favourites
   // so that custom emoji reactions don't also appear as hearts.
+  // Cached resolveUrl to avoid redundant ap/show API calls (5-min TTL)
+  async _cachedResolveUrl(client, uri) {
+    if (!this._resolveCache) this._resolveCache = new Map();
+    const cached = this._resolveCache.get(uri);
+    if (cached && Date.now() - cached.time < 5 * 60 * 1000) return cached.result;
+    const result = await client.resolveUrl(uri);
+    this._resolveCache.set(uri, { result, time: Date.now() });
+    return result;
+  },
+
   _adjustFavouritesForReactions(dp) {
     if (!dp.reactions || !dp.stats || !dp.stats.favourites) return;
     const totalReactions = Object.values(dp.reactions).reduce((sum, c) => sum + c, 0);
@@ -780,37 +790,41 @@ export const DataLoadingMixin = {
         toFetch.push({ item, post, dp });
       }
 
-      for (const { item, post, dp } of toFetch.slice(0, 10)) {
-        client.resolveUrl(dp.canonicalUri).then(resolved => {
-          if (!resolved) return;
-          const rdp = resolved.reblog || resolved;
-          if (!rdp.reactions || Object.keys(rdp.reactions).length === 0) return;
-          dp.reactions = rdp.reactions;
-          dp.reactionEmojis = rdp.reactionEmojis || dp.reactionEmojis;
-          dp.emojis = rdp.emojis || dp.emojis;
-          if (rdp.instanceUrl) dp.instanceUrl = dp.instanceUrl || rdp.instanceUrl;
-          if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
-          dp._misskeyNoteId = rdp.id;
-          dp._misskeyAccountId = misskeyAccount.id;
-          this._adjustFavouritesForReactions(dp);
-          this.postCache.set(`${post.platform}:${post.id}`, post);
+      // Sequential processing to avoid Misskey rate limits (was: all 10 concurrent)
+      (async () => {
+        for (const { item, post, dp } of toFetch.slice(0, 10)) {
+          try {
+            const resolved = await this._cachedResolveUrl(client, dp.canonicalUri);
+            if (!resolved) continue;
+            const rdp = resolved.reblog || resolved;
+            if (!rdp.reactions || Object.keys(rdp.reactions).length === 0) continue;
+            dp.reactions = rdp.reactions;
+            dp.reactionEmojis = rdp.reactionEmojis || dp.reactionEmojis;
+            dp.emojis = rdp.emojis || dp.emojis;
+            if (rdp.instanceUrl) dp.instanceUrl = dp.instanceUrl || rdp.instanceUrl;
+            if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
+            dp._misskeyNoteId = rdp.id;
+            dp._misskeyAccountId = misskeyAccount.id;
+            this._adjustFavouritesForReactions(dp);
+            this.postCache.set(`${post.platform}:${post.id}`, post);
 
-          if (isNotification) {
-            for (const notif of items) {
-              if (!notif.post || (notif.post.reblog || notif.post).canonicalUri !== dp.canonicalUri) continue;
-              const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
+            if (isNotification) {
+              for (const notif of items) {
+                if (!notif.post || (notif.post.reblog || notif.post).canonicalUri !== dp.canonicalUri) continue;
+                const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
+                for (const card of cards) {
+                  if (card.isConnected) card.replaceWith(renderNotification(notif));
+                }
+              }
+            } else {
+              const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
               for (const card of cards) {
-                if (card.isConnected) card.replaceWith(renderNotification(notif));
+                if (card.isConnected) card.replaceWith(renderPost(item));
               }
             }
-          } else {
-            const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
-            for (const card of cards) {
-              if (card.isConnected) card.replaceWith(renderPost(item));
-            }
-          }
-        }).catch(() => {});
-      }
+          } catch { /* skip failed resolution */ }
+        }
+      })();
     }
 
     // --- Phase 2: Convert Mastodon favourite notifications to reactions ---
@@ -893,20 +907,20 @@ export const DataLoadingMixin = {
     };
 
     if (client) {
-      // --- Authenticated approach using Misskey account ---
-      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 10)) {
-        (async () => {
+      // --- Authenticated approach using Misskey account (sequential to avoid rate limits) ---
+      (async () => {
+        for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 10)) {
           try {
             let resolved;
             try {
-              resolved = await client.resolveUrl(uri);
+              resolved = await this._cachedResolveUrl(client, uri);
             } catch (e) {
               console.warn('[StarShip] fav→reaction: resolveUrl failed for', uri, e.message || e);
-              return;
+              continue;
             }
-            if (!resolved) return;
+            if (!resolved) continue;
             const rdp = resolved.reblog || resolved;
-            if (!rdp.id) return;
+            if (!rdp.id) continue;
 
             const reactionByUser = new Map();
             try {
@@ -922,19 +936,19 @@ export const DataLoadingMixin = {
             }
 
             const reactionEmojis = rdp.reactionEmojis || rdp.emojis || {};
-            if (reactionByUser.size === 0) return;
+            if (reactionByUser.size === 0) continue;
 
             const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, misskeyAccount.instanceUrl);
             if (changed) rerenderGroup(groupNotifs);
           } catch (e) {
             console.warn('[StarShip] fav→reaction error:', e);
           }
-        })();
-      }
+        }
+      })();
     } else {
-      // --- Unauthenticated approach via actor's Misskey instance ---
-      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 10)) {
-        (async () => {
+      // --- Unauthenticated approach via actor's Misskey instance (sequential to avoid rate limits) ---
+      (async () => {
+        for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 10)) {
           try {
             // Find an actor whose instance is Misskey-compatible
             let actorInstanceUrl = null;
@@ -949,17 +963,17 @@ export const DataLoadingMixin = {
                 break;
               }
             }
-            if (!actorInstanceUrl) return;
+            if (!actorInstanceUrl) continue;
 
             // Step 1: Resolve the post URI via unauthenticated ap/show
             let noteId;
             try {
               const resolved = await this._unauthMisskeyRequest(actorInstanceUrl, 'ap/show', { uri });
-              if (!resolved || resolved.type !== 'Note' || !resolved.object) return;
+              if (!resolved || resolved.type !== 'Note' || !resolved.object) continue;
               noteId = resolved.object.id;
             } catch (e) {
               console.warn('[StarShip] unauth fav→reaction: ap/show failed for', uri, e.message || e);
-              return;
+              continue;
             }
 
             // Step 2: Get per-user reactions (unauthenticated)
@@ -967,7 +981,7 @@ export const DataLoadingMixin = {
             let reactionEmojis = {};
             try {
               const reactions = await this._unauthMisskeyRequest(actorInstanceUrl, 'notes/reactions', { noteId, limit: 20 });
-              if (!Array.isArray(reactions) || reactions.length === 0) return;
+              if (!Array.isArray(reactions) || reactions.length === 0) continue;
               const actorHost = new URL(actorInstanceUrl).hostname;
               for (const r of reactions) {
                 if (!r.user) continue;
@@ -977,7 +991,7 @@ export const DataLoadingMixin = {
               }
             } catch (e) {
               console.warn('[StarShip] unauth fav→reaction: notes/reactions failed for', noteId, e.message || e);
-              return;
+              continue;
             }
 
             // Step 3: Get note details for emoji URLs
@@ -988,15 +1002,15 @@ export const DataLoadingMixin = {
               }
             } catch { /* proceed with per-user data only */ }
 
-            if (reactionByUser.size === 0) return;
+            if (reactionByUser.size === 0) continue;
 
             const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, actorInstanceUrl);
             if (changed) rerenderGroup(groupNotifs);
           } catch (e) {
             console.warn('[StarShip] unauth fav→reaction error:', e);
           }
-        })();
-      }
+        }
+      })();
     }
   },
 
