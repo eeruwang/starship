@@ -503,10 +503,13 @@ export class MastodonClient {
     }
 
     // Adjust favourites: servers that support emoji_reactions may double-count them in favourites_count
+    // Only subtract non-heart reactions — ❤ reactions are equivalent to favourites
     let favouritesCount = status.favourites_count || 0;
     if (reactions) {
-      const totalReactions = Object.values(reactions).reduce((sum, c) => sum + c, 0);
-      favouritesCount = Math.max(0, favouritesCount - totalReactions);
+      const nonHeartReactions = Object.entries(reactions)
+        .filter(([k]) => k !== '❤' && k !== '❤️')
+        .reduce((sum, [, c]) => sum + c, 0);
+      favouritesCount = Math.max(0, favouritesCount - nonHeartReactions);
     }
 
     return {

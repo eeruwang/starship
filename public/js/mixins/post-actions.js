@@ -258,8 +258,10 @@ export const PostActionsMixin = {
         if (udp.stats) {
           cdp.stats = { ...cdp.stats, ...udp.stats };
           if (cdp.reactions && Object.keys(cdp.reactions).length > 0 && cdp.stats.favourites > 0) {
-            const totalReactions = Object.values(cdp.reactions).reduce((sum, c) => sum + c, 0);
-            cdp.stats.favourites = Math.max(0, cdp.stats.favourites - totalReactions);
+            const nonHeartReactions = Object.entries(cdp.reactions)
+              .filter(([k]) => k !== '❤' && k !== '❤️')
+              .reduce((sum, [, c]) => sum + c, 0);
+            cdp.stats.favourites = Math.max(0, cdp.stats.favourites - nonHeartReactions);
           }
         }
         // Update reactions (always sync — clears correctly on unreact)
@@ -427,9 +429,12 @@ export const PostActionsMixin = {
       if (adp.instanceUrl) dp.instanceUrl = dp.instanceUrl || adp.instanceUrl;
 
       // Adjust favourites: Mastodon counts custom reactions as favourites
+      // Only subtract non-heart reactions — ❤ reactions are equivalent to favourites
       if (dp.reactions && Object.keys(dp.reactions).length > 0 && dp.stats?.favourites > 0) {
-        const totalReactions = Object.values(dp.reactions).reduce((sum, c) => sum + c, 0);
-        dp.stats.favourites = Math.max(0, dp.stats.favourites - totalReactions);
+        const nonHeartReactions = Object.entries(dp.reactions)
+          .filter(([k]) => k !== '❤' && k !== '❤️')
+          .reduce((sum, [, c]) => sum + c, 0);
+        dp.stats.favourites = Math.max(0, dp.stats.favourites - nonHeartReactions);
       }
 
       // Merge fav/reaction state — acting account is the truth for myReaction

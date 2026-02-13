@@ -688,17 +688,32 @@ export { iconRefresh, iconClose, iconImage };
 /** Build inner HTML for the .post-reactions section */
 export function buildReactionsHtml(displayPost, wrapperPost) {
   const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
-  const hasFavs = displayPost.stats?.favourites > 0;
-  if (!hasReactions && !hasFavs) return '';
+
+  // Merge ❤ reactions into favourites count (Misskey ❤ reactions = Mastodon favourites)
+  let favCount = displayPost.stats?.favourites || 0;
+  let nonHeartReactions = [];
+  if (hasReactions) {
+    for (const [reaction, count] of Object.entries(displayPost.reactions)) {
+      if (reaction === '❤' || reaction === '❤️') {
+        favCount += count;
+      } else {
+        nonHeartReactions.push([reaction, count]);
+      }
+    }
+  }
+
+  const hasFavs = favCount > 0;
+  const hasNonHeartReactions = nonHeartReactions.length > 0;
+  if (!hasNonHeartReactions && !hasFavs) return '';
   let html = '';
   if (hasFavs) {
     const isFaved = wrapperPost.favourited || displayPost.favourited
       || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
-    html += `<span class="engagement-likes"><span class="reaction-badge like-badge${isFaved ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span></span>`;
+    html += `<span class="engagement-likes"><span class="reaction-badge like-badge${isFaved ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${favCount}</span></span></span>`;
   }
-  if (hasReactions) {
+  if (hasNonHeartReactions) {
     html += `<span class="engagement-reactions">`;
-    for (const [reaction, count] of Object.entries(displayPost.reactions)) {
+    for (const [reaction, count] of nonHeartReactions) {
       const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
       html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
@@ -745,8 +760,9 @@ function resolveReactionHtml(reaction, reactionEmojis, emojis, instanceUrl) {
   const match = reaction.match(/^:(.+):$/);
   if (match) {
     const name = match[1];
-    const url = (reactionEmojis && (reactionEmojis[name] || reactionEmojis[name + '@.']))
-             || (emojis && (emojis[name] || emojis[name + '@.']))
+    const nameBase = name.replace(/@\.$/, '');
+    const url = (reactionEmojis && (reactionEmojis[nameBase] || reactionEmojis[nameBase + '@.']))
+             || (emojis && (emojis[nameBase] || emojis[nameBase + '@.']))
              || null;
     if (url) {
       return `<img class="custom-emoji" src="${escapeHtml(url)}" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}" referrerpolicy="no-referrer">`;

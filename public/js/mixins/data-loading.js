@@ -724,8 +724,13 @@ export const DataLoadingMixin = {
 
   _adjustFavouritesForReactions(dp) {
     if (!dp.reactions || !dp.stats || !dp.stats.favourites) return;
-    const totalReactions = Object.values(dp.reactions).reduce((sum, c) => sum + c, 0);
-    dp.stats.favourites = Math.max(0, dp.stats.favourites - totalReactions);
+    // Only subtract non-heart reactions: ❤ reactions are equivalent to favourites
+    // and should remain in the favourite count. Custom emoji reactions are federated
+    // as Likes by Misskey, so Mastodon double-counts them — subtract those only.
+    const nonHeartReactions = Object.entries(dp.reactions)
+      .filter(([k]) => k !== '❤' && k !== '❤️')
+      .reduce((sum, [, c]) => sum + c, 0);
+    dp.stats.favourites = Math.max(0, dp.stats.favourites - nonHeartReactions);
   },
 
   _mergeReactionsFromCache(posts) {
