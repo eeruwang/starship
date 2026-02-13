@@ -211,7 +211,8 @@ export const ThreadViewMixin = {
       tDp._misskeyAccountId = source.accountId;
       if (sDp.instanceUrl) tDp._reactionInstanceUrl = tDp._reactionInstanceUrl || sDp.instanceUrl;
     }
-    if (sDp.id && source.platform !== 'mastodon' && sDp.instanceUrl) {
+    // Per-instance ID cache: all platforms
+    if (sDp.id && sDp.instanceUrl) {
       if (!tDp._noteIdsByInstance) tDp._noteIdsByInstance = {};
       tDp._noteIdsByInstance[sDp.instanceUrl] = sDp.id;
     }

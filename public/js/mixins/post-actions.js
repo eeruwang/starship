@@ -133,10 +133,13 @@ export const PostActionsMixin = {
             return;
           }
           actionPostId = resolvedPost.id;
-          // Cache the resolved note ID for future use
+          // Cache the resolved ID for future use
           if (displayPost) {
-            displayPost._misskeyNoteId = resolvedPost.id;
-            displayPost._misskeyAccountId = accountId;
+            // Only set _misskeyNoteId for Misskey-type accounts (used by _fetchMissingReactions)
+            if (accountPlatform !== 'mastodon') {
+              displayPost._misskeyNoteId = resolvedPost.id;
+              displayPost._misskeyAccountId = accountId;
+            }
             if (!displayPost._noteIdsByInstance) displayPost._noteIdsByInstance = {};
             displayPost._noteIdsByInstance[account.instanceUrl] = resolvedPost.id;
           }

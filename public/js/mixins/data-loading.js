@@ -687,18 +687,18 @@ export const DataLoadingMixin = {
         if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
           existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
         }
-        // Always cache Misskey note ID for cross-instance lookup (avoids ap/show for reactions)
+        // Cache post IDs for cross-instance lookup (avoids ap/show and search API calls)
         const srcDisplay = post.reblog || post;
         const dstDisplay = existing.reblog || existing;
         if (srcDisplay.id && (post.accountPlatform || post.platform) !== 'mastodon') {
           dstDisplay._misskeyNoteId = dstDisplay._misskeyNoteId || srcDisplay.id;
           dstDisplay._misskeyAccountId = dstDisplay._misskeyAccountId || post.accountId;
           if (srcDisplay.instanceUrl) dstDisplay._reactionInstanceUrl = dstDisplay._reactionInstanceUrl || srcDisplay.instanceUrl;
-          // Per-instance cache: supports multiple Misskey-type accounts on different instances
-          if (srcDisplay.instanceUrl) {
-            if (!dstDisplay._noteIdsByInstance) dstDisplay._noteIdsByInstance = {};
-            dstDisplay._noteIdsByInstance[srcDisplay.instanceUrl] = srcDisplay.id;
-          }
+        }
+        // Per-instance ID cache: all platforms (Mastodon, Misskey, Iceshrimp, Hollo, etc.)
+        if (srcDisplay.id && srcDisplay.instanceUrl) {
+          if (!dstDisplay._noteIdsByInstance) dstDisplay._noteIdsByInstance = {};
+          dstDisplay._noteIdsByInstance[srcDisplay.instanceUrl] = srcDisplay.id;
         }
         // Merge Misskey reaction data into the primary post
         if (srcDisplay.reactions && Object.keys(srcDisplay.reactions).length > 0 &&
