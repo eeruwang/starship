@@ -26,9 +26,22 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.35rem;
-  padding-bottom: 0.35rem;
-  border-bottom: 1px dashed var(--border-color);
+  margin-bottom: 0.45rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(124, 125, 255, 0.04);
+  border-bottom: none;
+}
+/* Type-specific indicator tint */
+.notif-type-reblog .notif-indicator,
+.notif-type-renote .notif-indicator {
+  background: rgba(46, 204, 113, 0.06);
+}
+.notif-type-quote .notif-indicator {
+  background: rgba(245, 158, 11, 0.06);
+}
+.notif-type-mention .notif-indicator {
+  background: rgba(59, 130, 246, 0.06);
 }
 .notif-actor-wrap.notif-indicator-actor {
   width: 28px;
@@ -288,7 +301,28 @@
   background: var(--bg-primary);
   border-radius: 8px;
   overflow: hidden;
-  margin-top: 0.25rem;
+  margin-top: 0.35rem;
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--border-color);
+}
+/* Type-specific left accent color on embedded post content */
+.notif-type-favourite .notif-content-wrap,
+.notif-type-reaction .notif-content-wrap {
+  border-left-color: rgba(224, 36, 94, 0.5);
+}
+.notif-type-reblog .notif-content-wrap,
+.notif-type-renote .notif-content-wrap {
+  border-left-color: rgba(46, 204, 113, 0.5);
+}
+.notif-type-follow .notif-content-wrap {
+  border-left-color: rgba(124, 125, 255, 0.5);
+}
+.notif-type-mention .notif-content-wrap,
+.notif-type-reply .notif-content-wrap {
+  border-left-color: rgba(59, 130, 246, 0.5);
+}
+.notif-type-quote .notif-content-wrap {
+  border-left-color: rgba(245, 158, 11, 0.5);
 }
 .notif-content-wrap .notif-cw-warning {
   margin-top: 0;
@@ -314,7 +348,19 @@
   border-top: 1px solid var(--border-color);
 }
 .notif-content-wrap .notif-reactions {
-  padding: 0.25rem 0.55rem 0;
+  padding: 0.3rem 0.55rem;
+  border-top: 1px solid var(--border-color);
+}
+.notif-content-wrap .notif-reactions .reaction-badge {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.4rem;
+}
+.notif-content-wrap .notif-reactions .reaction-badge .custom-emoji {
+  width: 17px;
+  height: 17px;
+}
+.notif-content-wrap .notif-reactions .reaction-count {
+  font-size: 0.72rem;
 }
 
 /* ===== Notification Post Content ===== */
@@ -612,6 +658,10 @@
   margin-top: 4px;
   opacity: 0;
   transition: opacity 0.15s;
+}
+.notif-content-wrap .notif-actions {
+  margin-top: 0;
+  opacity: 0.35;
 }
 .notif-clickable:hover .notif-actions {
   opacity: 1;

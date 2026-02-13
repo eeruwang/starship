@@ -332,7 +332,7 @@ export function renderPost(post) {
 export function renderNotification(notif) {
   const card = document.createElement('div');
   const hasPost = !!notif.post?.id;
-  card.className = `notif-card platform-${notif.platform}${hasPost ? ' notif-clickable' : ''}`;
+  card.className = `notif-card notif-type-${notif.type} platform-${notif.platform}${hasPost ? ' notif-clickable' : ''}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
   // Dedup key for incremental updates (prefer normalized key from dedup)
