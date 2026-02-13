@@ -20,7 +20,7 @@ const VISIBILITY_ICONS = {
   direct: { icon: iconVisDirect, title: '다이렉트' },
 };
 
-const PLATFORM_COLORS = {
+export const PLATFORM_COLORS = {
   misskey: '#96d04a',
   sharkey: '#3ea8ff',
   foundkey: '#71a6d2',
@@ -40,7 +40,7 @@ const PLATFORM_COLORS = {
 
 // Mastodon의 theme-color 메타태그는 배경색(#181820/#ffffff)을 반환하므로
 // 너무 어둡거나 밝은 색은 플랫폼 기본색으로 대체
-function usableColor(color, platform) {
+export function usableColor(color, platform) {
   if (color) {
     const m = color.match(/^#?([0-9a-f]{6})$/i);
     if (m) {

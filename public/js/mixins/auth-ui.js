@@ -3,7 +3,16 @@
  * Handles authentication, user menu, admin UI, and cloud sync
  */
 import { escapeHtml } from '../ui/utils.js';
+import { usableColor } from '../ui/dashboard.js';
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from '../auth.js';
+
+const SOFTWARE_LABELS = {
+  misskey: 'Misskey', sharkey: 'Sharkey', foundkey: 'FoundKey', hajkey: 'Hajkey',
+  iceshrimp: 'Iceshrimp', firefish: 'Firefish', catodon: 'Catodon',
+  cherrypick: 'CherryPick', mastodon: 'Mastodon', hollo: 'Hollo',
+  akkoma: 'Akkoma', pleroma: 'Pleroma', gotosocial: 'GoToSocial',
+  hometown: 'Hometown', glitchcafe: 'Glitch',
+};
 
 export const AuthUIMixin = {
 
@@ -499,18 +508,21 @@ export const AuthUIMixin = {
         <div class="reauth-picker-list">
           ${accounts.map(a => {
             const isHidden = !!a.hidden;
+            const sw = a.software || a.platform;
+            const borderColor = usableColor(a.themeColor, sw);
+            const swLabel = SOFTWARE_LABELS[sw] || sw;
             const eyeSvg = isHidden
               ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
               : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
             return `
-            <div class="reauth-picker-row${isHidden ? ' account-hidden' : ''}" data-account-id="${a.id}">
+            <div class="reauth-picker-row${isHidden ? ' account-hidden' : ''}" data-account-id="${a.id}" style="border-left: 3px solid ${borderColor}; border-radius: var(--radius);">
               <button class="reauth-picker-item" data-account-id="${a.id}">
                 <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
                 <div class="reauth-picker-info">
                   <span class="reauth-picker-name">${escapeHtml(a.profile?.displayName || a.label || '')}</span>
                   <span class="reauth-picker-instance">${escapeHtml(a.instanceUrl.replace('https://', ''))}</span>
                 </div>
-                <span class="platform-dot ${a.platform}"></span>
+                <span class="platform-badge ${sw}" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 8px; white-space: nowrap;">${escapeHtml(swLabel)}</span>
               </button>
               <button class="reauth-picker-eye" data-account-id="${a.id}" title="${isHidden ? '전체/알림에 표시' : '전체/알림에서 숨기기'}">
                 ${eyeSvg}
