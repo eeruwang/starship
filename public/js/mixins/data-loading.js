@@ -687,19 +687,20 @@ export const DataLoadingMixin = {
         if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
           existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
         }
-        // Merge Misskey reaction data into the primary post
+        // Always cache Misskey note ID for cross-instance lookup (avoids ap/show for reactions)
         const srcDisplay = post.reblog || post;
         const dstDisplay = existing.reblog || existing;
+        if (srcDisplay.id && (post.accountPlatform || post.platform) !== 'mastodon') {
+          dstDisplay._misskeyNoteId = dstDisplay._misskeyNoteId || srcDisplay.id;
+          dstDisplay._misskeyAccountId = dstDisplay._misskeyAccountId || post.accountId;
+          if (srcDisplay.instanceUrl) dstDisplay._reactionInstanceUrl = dstDisplay._reactionInstanceUrl || srcDisplay.instanceUrl;
+        }
+        // Merge Misskey reaction data into the primary post
         if (srcDisplay.reactions && Object.keys(srcDisplay.reactions).length > 0 &&
             (!dstDisplay.reactions || Object.keys(dstDisplay.reactions).length === 0)) {
           dstDisplay.reactions = srcDisplay.reactions;
           dstDisplay.reactionEmojis = srcDisplay.reactionEmojis || dstDisplay.reactionEmojis;
           dstDisplay.emojis = srcDisplay.emojis || dstDisplay.emojis;
-          if (srcDisplay.id && (post.accountPlatform || post.platform) !== 'mastodon') {
-            dstDisplay._misskeyNoteId = srcDisplay.id;
-            dstDisplay._misskeyAccountId = post.accountId;
-            if (srcDisplay.instanceUrl) dstDisplay._reactionInstanceUrl = srcDisplay.instanceUrl;
-          }
           this._adjustFavouritesForReactions(dstDisplay);
         }
         if (srcDisplay.myReaction && !dstDisplay.myReaction) {
@@ -801,7 +802,14 @@ export const DataLoadingMixin = {
       (async () => {
         for (const { item, post, dp } of toFetch.slice(0, 10)) {
           try {
-            const resolved = await this._cachedResolveUrl(client, dp.canonicalUri);
+            // Use notes/show (high rate limit) when note ID is cached, fallback to ap/show
+            let resolved;
+            if (dp._misskeyNoteId) {
+              const rawNote = await client.getNote(dp._misskeyNoteId);
+              if (rawNote) resolved = client.normalizePost(rawNote);
+            } else {
+              resolved = await this._cachedResolveUrl(client, dp.canonicalUri);
+            }
             if (!resolved) continue;
             const rdp = resolved.reblog || resolved;
             if (!rdp.reactions || Object.keys(rdp.reactions).length === 0) continue;

@@ -197,18 +197,21 @@ export const ThreadViewMixin = {
     const tDp = target.reblog || target;
     const sDp = source.reblog || source;
 
+    // Always cache Misskey note ID for cross-instance lookup (avoids ap/show for reactions)
+    if (sDp._misskeyNoteId) {
+      tDp._misskeyNoteId = tDp._misskeyNoteId || sDp._misskeyNoteId;
+      tDp._misskeyAccountId = tDp._misskeyAccountId || sDp._misskeyAccountId;
+    }
+    if (sDp._reactionInstanceUrl) tDp._reactionInstanceUrl = tDp._reactionInstanceUrl || sDp._reactionInstanceUrl;
+    if (sDp.id && source.platform !== 'mastodon' && !tDp._misskeyNoteId) {
+      tDp._misskeyNoteId = sDp.id;
+      tDp._misskeyAccountId = source.accountId;
+      if (sDp.instanceUrl) tDp._reactionInstanceUrl = tDp._reactionInstanceUrl || sDp.instanceUrl;
+    }
     // Merge reactions (Misskey reactions into Mastodon post)
     if (sDp.reactions && Object.keys(sDp.reactions).length > 0) {
       if (!tDp.reactions || Object.keys(tDp.reactions).length === 0) {
         tDp.reactions = { ...sDp.reactions };
-        if (sDp._misskeyNoteId) tDp._misskeyNoteId = sDp._misskeyNoteId;
-        if (sDp._misskeyAccountId) tDp._misskeyAccountId = sDp._misskeyAccountId;
-        if (sDp._reactionInstanceUrl) tDp._reactionInstanceUrl = sDp._reactionInstanceUrl;
-        if (sDp.id && source.platform !== 'mastodon' && !tDp._misskeyNoteId) {
-          tDp._misskeyNoteId = sDp.id;
-          tDp._misskeyAccountId = source.accountId;
-          if (sDp.instanceUrl) tDp._reactionInstanceUrl = sDp.instanceUrl;
-        }
       }
     }
     if (sDp.reactionEmojis) tDp.reactionEmojis = { ...(tDp.reactionEmojis || {}), ...sDp.reactionEmojis };
