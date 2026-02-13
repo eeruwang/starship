@@ -3,7 +3,7 @@
  * Handles the compose modal: opening, emoji picker, file attachments, and submission
  */
 import { escapeHtml } from '../ui/utils.js';
-import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
+import { COMMON_EMOJIS, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
 
 export const ComposeMixin = {
 
@@ -362,12 +362,15 @@ export const ComposeMixin = {
     }
 
     picker.innerHTML = `
+      ${emojiAccountId ? '<div class="reaction-picker-search"><input type="text" class="reaction-picker-search-input" placeholder="이모지 검색..." /></div>' : ''}
       <div class="reaction-picker-section-label">이모지</div>
       <div class="reaction-picker-grid reaction-picker-unicode">
         ${COMMON_EMOJIS.map(r => `<button class="reaction-picker-item" data-emoji="${r}">${r}</button>`).join('')}
       </div>
       ${emojiAccountId ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
     `;
+
+    if (emojiAccountId) setupPickerSearch(picker, 'emoji');
 
     // Position above the emoji button
     const btnRect = this.btnComposeEmoji.getBoundingClientRect();

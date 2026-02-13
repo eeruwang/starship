@@ -10,7 +10,7 @@ export const COMMON_EMOJIS = [
 ];
 
 /**
- * Build the instance custom emoji section (categories + search).
+ * Build the instance custom emoji section (categories, no search — search is at picker level).
  * @param {Array} emojis - Array of { name, url, category? }
  * @param {string} itemClass - CSS class(es) for emoji buttons
  * @param {string} dataAttr - Data attribute name ('emoji' or 'reaction')
@@ -27,9 +27,6 @@ export function buildInstanceEmojiSection(emojis, itemClass, dataAttr) {
   const section = document.createElement('div');
   section.className = 'reaction-picker-instance-section';
   section.innerHTML = `
-    <div class="reaction-picker-search">
-      <input type="text" class="reaction-picker-search-input" placeholder="커스텀 이모지 검색..." />
-    </div>
     <div class="reaction-picker-emojis">
       ${Array.from(categories.entries()).map(([cat, catEmojis]) => `
         <div class="reaction-picker-category" data-category="${escapeHtml(cat)}">
@@ -42,25 +39,44 @@ export function buildInstanceEmojiSection(emojis, itemClass, dataAttr) {
     </div>
   `;
 
-  const searchInput = section.querySelector('.reaction-picker-search-input');
-  if (searchInput) {
-    const selectorClass = itemClass.split(' ')[0];
-    searchInput.addEventListener('input', () => {
-      const query = searchInput.value.trim().toLowerCase();
-      const items = section.querySelectorAll(`.${selectorClass}`);
-      const cats = section.querySelectorAll('.reaction-picker-category');
-      for (const item of items) {
-        const name = (item.dataset[dataAttr] || '').toLowerCase();
-        item.style.display = (!query || name.includes(query)) ? '' : 'none';
-      }
-      for (const cat of cats) {
-        const visible = cat.querySelectorAll(`.${selectorClass}:not([style*="display: none"])`);
-        cat.style.display = visible.length > 0 ? '' : 'none';
-      }
-    });
-  }
-
   return section;
+}
+
+/**
+ * Set up the top-level search input to filter all emojis in the picker.
+ * Filters custom emojis by name (substring match, colons stripped).
+ * Hides the common unicode section when there's a search query.
+ * @param {HTMLElement} picker - Picker container element
+ * @param {string} dataAttr - Data attribute name ('emoji' or 'reaction')
+ */
+export function setupPickerSearch(picker, dataAttr) {
+  const searchInput = picker.querySelector('.reaction-picker-search-input');
+  if (!searchInput) return;
+
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.trim().toLowerCase().replace(/:/g, '');
+
+    // Hide common unicode section and label when searching
+    const unicodeSection = picker.querySelector('.reaction-picker-unicode');
+    const sectionLabel = picker.querySelector('.reaction-picker-section-label');
+    if (unicodeSection) unicodeSection.style.display = query ? 'none' : '';
+    if (sectionLabel) sectionLabel.style.display = query ? 'none' : '';
+
+    // Filter custom emoji items (skip unicode items)
+    const allItems = picker.querySelectorAll(`[data-${dataAttr}]`);
+    for (const item of allItems) {
+      if (item.closest('.reaction-picker-unicode')) continue;
+      const name = (item.dataset[dataAttr] || '').toLowerCase().replace(/:/g, '');
+      item.style.display = (!query || name.includes(query)) ? '' : 'none';
+    }
+
+    // Hide empty categories
+    const categories = picker.querySelectorAll('.reaction-picker-category');
+    for (const cat of categories) {
+      const visible = cat.querySelectorAll(`[data-${dataAttr}]:not([style*="display: none"])`);
+      cat.style.display = visible.length > 0 ? '' : 'none';
+    }
+  });
 }
 
 /**

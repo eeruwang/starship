@@ -608,7 +608,7 @@
 
 .reaction-picker-search {
   padding: 0.4rem 0.5rem;
-  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
@@ -697,6 +697,11 @@
 
 .reaction-picker-instance-section {
   border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .reaction-picker-custom {

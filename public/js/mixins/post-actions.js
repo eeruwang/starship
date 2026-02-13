@@ -3,7 +3,7 @@
  * Handles post interactions: fav, boost, reply, quote, reaction, edit, delete
  */
 import { escapeHtml } from '../ui/utils.js';
-import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
+import { COMMON_EMOJIS, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
 import { buildReactionsHtml } from '../ui/dashboard.js';
 
 export const PostActionsMixin = {
@@ -740,8 +740,9 @@ export const PostActionsMixin = {
     const account = this.store.getById(accountId);
     const isMisskeyType = account && account.platform !== 'mastodon';
 
-    // Build initial HTML with unicode emojis + loading placeholder for instance emojis
+    // Build initial HTML with search + unicode emojis + loading placeholder for instance emojis
     picker.innerHTML = `
+      ${isMisskeyType ? '<div class="reaction-picker-search"><input type="text" class="reaction-picker-search-input" placeholder="이모지 검색..." /></div>' : ''}
       <div class="reaction-picker-section-label">이모지</div>
       <div class="reaction-picker-grid reaction-picker-unicode">
         ${COMMON_EMOJIS.map(r => `<button class="reaction-picker-item" data-reaction="${r}">${r}</button>`).join('')}
@@ -751,6 +752,8 @@ export const PostActionsMixin = {
         <input type="text" class="reaction-picker-input" placeholder=":emoji: 또는 이모지 입력" />
       </div>
     `;
+
+    if (isMisskeyType) setupPickerSearch(picker, 'reaction');
 
     // Position near button
     const positionReactionPicker = (r) => {
