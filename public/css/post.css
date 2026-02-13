@@ -867,15 +867,6 @@ h4.mfm-heading { font-size: 1em; }
   margin-right: 0;
 }
 
-.engagement-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted, rgba(255,255,255,0.4));
-  margin-right: 2px;
-}
-
 .reaction-badge {
   background: rgba(124, 125, 255, 0.08);
   border: 1px solid rgba(124, 125, 255, 0.2);
