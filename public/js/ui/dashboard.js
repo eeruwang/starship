@@ -314,9 +314,9 @@ export function renderPost(post) {
       ${isMisskey ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션">
         <span class="action-icon">${iconSmile}</span>
       </button>` : ''}
-      ${post.isOwn ? `<button class="post-action action-edit" data-action="edit" title="수정">
+      ${post.isOwn && !post.rebloggedBy ? `<button class="post-action action-edit" data-action="edit" title="수정">
         <span class="action-icon">${iconEdit}</span>
-      </button><button class="post-action action-delete" data-action="delete" title="삭제">
+      </button>` : ''}${post.isOwn ? `<button class="post-action action-delete" data-action="delete" title="삭제">
         <span class="action-icon">${iconTrash}</span>
       </button>` : ''}
       <button class="post-action action-end" data-action="open" title="원본 열기">

@@ -160,7 +160,7 @@ export class MastodonClient {
 
   async editStatus(id, text, options = {}) {
     const body = { status: text };
-    if (options.spoilerText) body.spoiler_text = options.spoilerText;
+    if (options.spoilerText !== undefined) body.spoiler_text = options.spoilerText;
     if (options.mediaIds) body.media_ids = options.mediaIds;
     return this.request('PUT', `/api/v1/statuses/${encodeURIComponent(id)}`, body);
   }

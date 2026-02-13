@@ -626,12 +626,15 @@ export const PostActionsMixin = {
 
     try {
       if (account.platform === 'mastodon') {
+        const cachedPost = this.postCache.get(`${editPlatform}:${editPostId}`);
+        const mediaIds = cachedPost?.raw?.media_attachments?.map(m => m.id);
         await client.editStatus(editPostId, text, {
-          spoilerText: cw || undefined,
+          spoilerText: cw,
+          mediaIds: mediaIds?.length ? mediaIds : undefined,
         });
       } else {
         await client.editNote(editPostId, text, {
-          cw: cw || undefined,
+          cw: cw,
         });
       }
       this.closeModal(this.modalCompose);
