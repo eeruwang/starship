@@ -215,6 +215,9 @@ async function handleRegister(request, db, env) {
   if (username.length < 2 || username.length > 30) {
     return jsonResponse({ error: '아이디는 2~30자로 입력해주세요' }, 400);
   }
+  if (!/^[a-zA-Z0-9_\-]+$/.test(username)) {
+    return jsonResponse({ error: '아이디는 영문, 숫자, 밑줄(_), 하이픈(-)만 사용할 수 있습니다' }, 400);
+  }
   if (password.length < 6) {
     return jsonResponse({ error: '비밀번호는 6자 이상이어야 합니다' }, 400);
   }
@@ -319,8 +322,21 @@ async function handleSyncSave(request, db) {
   const user = await getSessionUser(request, db);
   if (!user) return jsonResponse({ error: '로그인이 필요합니다' }, 401);
 
+  // Enforce request body size limit (512KB)
+  const contentLength = parseInt(request.headers.get('Content-Length') || '0');
+  if (contentLength > 512 * 1024) {
+    return jsonResponse({ error: '데이터가 너무 큽니다 (최대 512KB)' }, 413);
+  }
+
   const body = await parseJsonBody(request);
   if (!body) return jsonResponse({ error: '잘못된 요청입니다' }, 400);
+
+  // Validate data size after parsing
+  const bodyStr = JSON.stringify(body);
+  if (bodyStr.length > 512 * 1024) {
+    return jsonResponse({ error: '데이터가 너무 큽니다 (최대 512KB)' }, 413);
+  }
+
   // body: { accounts, settings, columnState }
   const stmts = [];
   for (const key of ['accounts', 'settings', 'columnState']) {
@@ -467,6 +483,33 @@ function corsHeaders() {
   };
 }
 
+// ===== Security Helpers =====
+
+function isPrivateHost(hostname) {
+  // Block localhost and loopback
+  const lower = hostname.toLowerCase();
+  if (lower === 'localhost' || lower === '127.0.0.1' || lower === '::1' || lower === '[::1]' || lower === '0.0.0.0') return true;
+  // Block .local domains
+  if (lower.endsWith('.local') || lower.endsWith('.internal')) return true;
+  // Block private IPv4 ranges
+  const ipv4 = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (ipv4) {
+    const [, a, b] = [null, parseInt(ipv4[1]), parseInt(ipv4[2])];
+    if (a === 10) return true;                          // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true;   // 172.16.0.0/12
+    if (a === 192 && b === 168) return true;             // 192.168.0.0/16
+    if (a === 169 && b === 254) return true;             // 169.254.0.0/16 (link-local)
+    if (a === 0) return true;                            // 0.0.0.0/8
+    if (a === 127) return true;                          // 127.0.0.0/8
+  }
+  // Block IPv6 private ranges
+  if (hostname.startsWith('[')) {
+    const ipv6 = hostname.slice(1, -1).toLowerCase();
+    if (ipv6 === '::1' || ipv6 === '::' || ipv6.startsWith('fe80:') || ipv6.startsWith('fc') || ipv6.startsWith('fd')) return true;
+  }
+  return false;
+}
+
 // ===== OG Metadata =====
 
 async function handleOgFetch(url) {
@@ -481,6 +524,9 @@ async function handleOgFetch(url) {
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     return jsonResponse({ error: 'Only HTTP(S) URLs allowed' }, 400);
+  }
+  if (isPrivateHost(parsed.hostname)) {
+    return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
   }
 
   try {
@@ -519,6 +565,9 @@ async function handleInstanceTheme(url) {
   }
   if (parsed.protocol !== 'https:') {
     return jsonResponse({ error: 'Only HTTPS URLs allowed' }, 400);
+  }
+  if (isPrivateHost(parsed.hostname)) {
+    return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
   }
 
   try {
@@ -766,6 +815,14 @@ async function handleProxy(request, url) {
   if (parsed.protocol !== 'https:') {
     return jsonResponse({ error: 'Only HTTPS targets are allowed' }, 400);
   }
+  if (isPrivateHost(parsed.hostname)) {
+    return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
+  }
+  // Prevent self-proxy loops
+  const selfHost = new URL(request.url).hostname;
+  if (parsed.hostname === selfHost) {
+    return jsonResponse({ error: 'Cannot proxy to self' }, 400);
+  }
   if (!isAllowedApiPath(parsed.pathname)) {
     return jsonResponse({ error: 'Blocked: path not in allowlist' }, 403);
   }
@@ -812,9 +869,11 @@ async function handleProxy(request, url) {
 
 function isAllowedApiPath(pathname) {
   const allowed = [
-    /^\/api\/v[12]\//,
-    /^\/oauth\//,
-    /^\/api\//,
+    /^\/api\/v[12]\//,       // Mastodon API
+    /^\/oauth\//,             // Mastodon OAuth
+    /^\/api\//,               // Misskey API (broad, covers all /api/* endpoints)
+    /^\/.well-known\//,       // WebFinger, NodeInfo (platform detection)
+    /^\/nodeinfo\//,          // NodeInfo (platform detection)
   ];
   return allowed.some((re) => re.test(pathname));
 }
