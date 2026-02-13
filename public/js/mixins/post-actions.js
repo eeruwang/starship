@@ -2,6 +2,7 @@
  * Post Actions Mixin
  * Handles post interactions: fav, boost, reply, quote, reaction, edit, delete
  */
+import { escapeHtml } from '../ui/utils.js';
 import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
 import { buildReactionsHtml } from '../ui/dashboard.js';
 
@@ -752,7 +753,6 @@ export const PostActionsMixin = {
         client,
         picker,
         pickerId: 'reaction-picker-popup',
-        escapeHtml: this.escapeHtml.bind(this),
         itemClass: 'reaction-picker-item instance-emoji',
         dataAttr: 'reaction',
         emptyMessage: '커스텀 이모지 없음',
@@ -868,7 +868,7 @@ export const PostActionsMixin = {
       html += `
         <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}"${isPreferred && dotColor ? ` style="border-left-color:${dotColor}"` : ''}>
           <img src="${p.avatarUrl || ''}" alt="" onerror="this.style.display='none'">
-          <span class="picker-name">${this.escapeHtml(p.displayName)}</span>
+          <span class="picker-name">${escapeHtml(p.displayName)}</span>
           <span class="platform-dot ${account.platform}" ${dotStyle}></span>
         </button>
       `;
@@ -1017,7 +1017,7 @@ export const PostActionsMixin = {
           users = reactions.map(r => {
             const normalized = r.user ? mkClient.normalizeUser(r.user) : null;
             return {
-              displayNameHtml: normalized?.displayNameHtml || this.escapeHtml(r.user?.name || r.user?.username || '?'),
+              displayNameHtml: normalized?.displayNameHtml || escapeHtml(r.user?.name || r.user?.username || '?'),
               username: normalized?.username || r.user?.username || '?',
               avatarUrl: normalized?.avatarUrl || r.user?.avatarUrl || '',
               reaction: r.type || '',
@@ -1065,7 +1065,7 @@ export const PostActionsMixin = {
         users = reactions.map(r => {
           const normalized = r.user ? client.normalizeUser(r.user) : null;
           return {
-            displayNameHtml: normalized?.displayNameHtml || this.escapeHtml(r.user?.name || r.user?.username || '?'),
+            displayNameHtml: normalized?.displayNameHtml || escapeHtml(r.user?.name || r.user?.username || '?'),
             username: normalized?.username || r.user?.username || '?',
             avatarUrl: normalized?.avatarUrl || r.user?.avatarUrl || '',
             reaction: r.type || '',
@@ -1099,9 +1099,9 @@ export const PostActionsMixin = {
     for (const user of users) {
       html += `
         <div class="reaction-user-item">
-          <img class="reaction-user-avatar" src="${this.escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <img class="reaction-user-avatar" src="${escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
           <span class="reaction-user-name">${user.displayNameHtml}</span>
-          <span class="reaction-user-handle">@${this.escapeHtml(user.username)}</span>
+          <span class="reaction-user-handle">@${escapeHtml(user.username)}</span>
         </div>
       `;
     }

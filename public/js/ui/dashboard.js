@@ -2,6 +2,7 @@
  * Dashboard UI
  * Renders timeline posts, notifications, and account cards.
  */
+import { escapeHtml } from './utils.js';
 import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
@@ -113,6 +114,81 @@ function renderReplyMedia(media) {
   return html;
 }
 
+function renderLinkCardHtml(lc, extraClass = '') {
+  if (!lc || !lc.url) return '';
+  const hasImage = lc.image;
+  const hasTitle = lc.title;
+  const needsOg = !hasTitle && !hasImage;
+  const isFediUrl = isFediPostUrl(lc.url);
+  const baseClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
+  const cardClass = extraClass ? `${baseClass} ${extraClass}` : baseClass;
+  let extraAttrs = '';
+  if (isFediUrl) {
+    extraAttrs = ` data-fedi-url="${escapeHtml(lc.url)}" data-fedi-pending="true"`;
+  } else if (needsOg) {
+    extraAttrs = ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"`;
+  }
+  return `<a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${extraAttrs}>
+    ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
+    <div class="link-card-info">
+      <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>
+      ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
+      ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
+      ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
+    </div>
+  </a>`;
+}
+
+const SENSITIVE_REVEAL_BTN = `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
+const SENSITIVE_HIDE_BTN = `<button class="sensitive-hide" title="민감한 미디어 숨기기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>숨기기</span></button>`;
+
+function renderMediaGridHtml(mediaItems, isSensitive, extraClass = '') {
+  if (!mediaItems || mediaItems.length === 0) return '';
+  const count = Math.min(mediaItems.length, 4);
+  const sensitiveClass = isSensitive ? ' media-sensitive' : '';
+  const cls = extraClass
+    ? `${extraClass} post-media media-${count}${sensitiveClass}`
+    : `post-media media-${count}${sensitiveClass}`;
+  let html = `<div class="${cls}">`;
+  if (isSensitive) {
+    html += SENSITIVE_REVEAL_BTN + SENSITIVE_HIDE_BTN;
+  }
+  for (const m of mediaItems) {
+    if (m.type === 'video') {
+      html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
+    } else {
+      html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderReplyContextHtml(displayPost, ctxId) {
+  if (displayPost.replyTo) {
+    const replyAuthor = displayPost.replyTo.author;
+    const parentCw = displayPost.replyTo.contentWarning;
+    const parentText = stripHtml(displayPost.replyTo.content);
+    const isLong = !parentCw && parentText.length > 200;
+    return `
+      <div class="reply-context">
+        <div class="reply-context-header">
+          <img class="reply-context-avatar" src="${replyAuthor?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
+        </div>
+        ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${ctxId}">내용 보기</button></div>` : ''}
+        <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${ctxId}">${displayPost.replyTo.content}${renderReplyMedia(displayPost.replyTo.media)}</div>
+        ${isLong ? `<button class="expand-toggle" data-expand-target="${ctxId}">더보기</button>` : ''}
+      </div>
+    `;
+  } else if (displayPost.replyToAcct) {
+    return `<div class="reply-indicator">↩ @${escapeHtml(displayPost.replyToAcct)} 에게 답글</div>`;
+  } else if (displayPost.replyToId) {
+    return `<div class="reply-indicator">↩ 답글</div>`;
+  }
+  return '';
+}
+
 export function renderPost(post) {
   const card = document.createElement('div');
   card.className = `post-card platform-${post.platform}`;
@@ -150,28 +226,7 @@ export function renderPost(post) {
   const displayPost = post.reblog || post;
 
   // Reply context
-  if (displayPost.replyTo) {
-    const replyAuthor = displayPost.replyTo.author;
-    const parentCw = displayPost.replyTo.contentWarning;
-    const parentText = stripHtml(displayPost.replyTo.content);
-    const isLong = !parentCw && parentText.length > 200;
-    const replyCtxId = `reply-ctx-${post.id}`;
-    html += `
-      <div class="reply-context">
-        <div class="reply-context-header">
-          <img class="reply-context-avatar" src="${replyAuthor?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-          <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
-        </div>
-        ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
-        <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}${renderReplyMedia(displayPost.replyTo.media)}</div>
-        ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
-      </div>
-    `;
-  } else if (displayPost.replyToAcct) {
-    html += `<div class="reply-indicator">↩ @${escapeHtml(displayPost.replyToAcct)} 에게 답글</div>`;
-  } else if (displayPost.replyToId) {
-    html += `<div class="reply-indicator">↩ 답글</div>`;
-  }
+  html += renderReplyContextHtml(displayPost, `reply-ctx-${post.id}`);
 
   // Header (always visible, even under CW)
   html += `
@@ -211,52 +266,11 @@ export function renderPost(post) {
 
   // Media
   if (displayPost.media && displayPost.media.length > 0) {
-    const count = Math.min(displayPost.media.length, 4);
-    // Sensitive: post-level (Mastodon) or any file-level (Misskey)
-    const hasSensitive = displayPost.sensitive || displayPost.media.some(m => m.sensitive);
-    const sensitiveClass = hasSensitive ? ' media-sensitive' : '';
-    html += `<div class="post-media media-${count}${sensitiveClass}">`;
-    if (hasSensitive) {
-      html += `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
-      html += `<button class="sensitive-hide" title="민감한 미디어 숨기기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>숨기기</span></button>`;
-    }
-    for (const m of displayPost.media) {
-      if (m.type === 'video') {
-        html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
-      } else {
-        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
-      }
-    }
-    html += '</div>';
+    html += renderMediaGridHtml(displayPost.media, displayPost.sensitive || displayPost.media.some(m => m.sensitive));
   }
 
   // Link card
-  if (displayPost.linkCard && displayPost.linkCard.url) {
-    const lc = displayPost.linkCard;
-    const hasImage = lc.image;
-    const hasTitle = lc.title;
-    const needsOg = !hasTitle && !hasImage;
-    // Detect fediverse post URLs
-    const isFediUrl = isFediPostUrl(lc.url);
-    const cardClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
-    let extraAttrs = '';
-    if (isFediUrl) {
-      extraAttrs = ` data-fedi-url="${escapeHtml(lc.url)}" data-fedi-pending="true"`;
-    } else if (needsOg) {
-      extraAttrs = ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"`;
-    }
-    html += `
-      <a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${extraAttrs}>
-        ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
-        <div class="link-card-info">
-          <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>
-          ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
-          ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
-          ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
-        </div>
-      </a>
-    `;
-  }
+  html += renderLinkCardHtml(displayPost.linkCard);
 
   if (displayPost.contentWarning) {
     html += '</div>'; // close cw-content
@@ -264,21 +278,8 @@ export function renderPost(post) {
 
   // Reactions (Misskey) / Favourites badge (Mastodon) — outside CW so always visible
   {
-    const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
-    const hasFavs = displayPost.stats?.favourites > 0;
-    if (hasReactions || hasFavs) {
-      html += '<div class="post-reactions">';
-      if (hasFavs) {
-        html += `<span class="reaction-badge${post.favourited ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
-      }
-      if (hasReactions) {
-        for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-          const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-          html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
-        }
-      }
-      html += '</div>';
-    }
+    const reactionsHtml = buildReactionsHtml(displayPost, post);
+    if (reactionsHtml) html += `<div class="post-reactions">${reactionsHtml}</div>`;
   }
 
   // Actions
@@ -386,28 +387,7 @@ export function renderNotification(notif) {
     </div>`;
 
     // Reply context
-    if (displayPost.replyTo) {
-      const replyAuthor = displayPost.replyTo.author;
-      const parentCw = displayPost.replyTo.contentWarning;
-      const parentText = stripHtml(displayPost.replyTo.content);
-      const isLong = !parentCw && parentText.length > 200;
-      const replyCtxId = `notif-reply-ctx-${notif.id}`;
-      html += `
-        <div class="reply-context">
-          <div class="reply-context-header">
-            <img class="reply-context-avatar" src="${replyAuthor?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-            <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
-          </div>
-          ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
-          <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}${renderReplyMedia(displayPost.replyTo.media)}</div>
-          ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
-        </div>
-      `;
-    } else if (displayPost.replyToAcct) {
-      html += `<div class="reply-indicator">↩ @${escapeHtml(displayPost.replyToAcct)} 에게 답글</div>`;
-    } else if (displayPost.replyToId) {
-      html += `<div class="reply-indicator">↩ 답글</div>`;
-    }
+    html += renderReplyContextHtml(displayPost, `notif-reply-ctx-${notif.id}`);
 
     // Post header (full avatar + name + handle + time)
     html += `
@@ -441,66 +421,16 @@ export function renderNotification(notif) {
 
     // Media
     if (displayPost.media && displayPost.media.length > 0) {
-      const count = Math.min(displayPost.media.length, 4);
-      const hasSensitive = displayPost.sensitive || displayPost.media.some(m => m.sensitive);
-      const sensitiveClass = hasSensitive ? ' media-sensitive' : '';
-      html += `<div class="post-media media-${count}${sensitiveClass}">`;
-      if (hasSensitive) {
-        html += `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
-        html += `<button class="sensitive-hide" title="민감한 미디어 숨기기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>숨기기</span></button>`;
-      }
-      for (const m of displayPost.media.slice(0, 4)) {
-        if (m.type === 'video') {
-          html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
-        } else {
-          html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
-        }
-      }
-      html += '</div>';
+      html += renderMediaGridHtml(displayPost.media.slice(0, 4), displayPost.sensitive || displayPost.media.some(m => m.sensitive));
     }
 
     // Link card
-    if (displayPost.linkCard && displayPost.linkCard.url) {
-      const lc = displayPost.linkCard;
-      const hasImage = lc.image;
-      const hasTitle = lc.title;
-      const needsOg = !hasTitle && !hasImage;
-      const isFediUrl = isFediPostUrl(lc.url);
-      const cardClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
-      let extraAttrs = '';
-      if (isFediUrl) {
-        extraAttrs = ` data-fedi-url="${escapeHtml(lc.url)}" data-fedi-pending="true"`;
-      } else if (needsOg) {
-        extraAttrs = ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"`;
-      }
-      html += `<a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${extraAttrs}>
-        ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
-        <div class="link-card-info">
-          <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>
-          ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
-          ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
-          ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
-        </div>
-      </a>`;
-    }
+    html += renderLinkCardHtml(displayPost.linkCard);
 
     // Reactions (hide for favourite/reaction notifications since the notif itself is about the reaction)
     if (!['favourite', 'reaction'].includes(notif.type)) {
-      const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
-      const hasFavs = displayPost.stats?.favourites > 0;
-      if (hasReactions || hasFavs) {
-        html += '<div class="post-reactions">';
-        if (hasFavs) {
-          html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
-        }
-        if (hasReactions) {
-          for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-            const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-            html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
-          }
-        }
-        html += '</div>';
-      }
+      const reactionsHtml = buildReactionsHtml(displayPost, notif);
+      if (reactionsHtml) html += `<div class="post-reactions">${reactionsHtml}</div>`;
     }
 
     // Close CW
@@ -629,74 +559,22 @@ export function renderNotification(notif) {
 
     // Media grid with sensitive overlay
     if (displayPost.media && displayPost.media.length > 0) {
-      const count = Math.min(displayPost.media.length, 4);
-      const hasSensitive = displayPost.sensitive || displayPost.media.some(m => m.sensitive);
-      const sensitiveClass = hasSensitive ? ' media-sensitive' : '';
-      html += `<div class="notif-media-grid post-media media-${count}${sensitiveClass}">`;
-      if (hasSensitive) {
-        html += `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
-        html += `<button class="sensitive-hide" title="민감한 미디어 숨기기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>숨기기</span></button>`;
-      }
-      for (const m of displayPost.media.slice(0, 4)) {
-        if (m.type === 'video') {
-          html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
-        } else {
-          html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
-        }
-      }
-      html += '</div>';
+      html += renderMediaGridHtml(displayPost.media.slice(0, 4), displayPost.sensitive || displayPost.media.some(m => m.sensitive), 'notif-media-grid');
     }
 
     // Link card preview (OG metadata)
-    if (displayPost.linkCard && displayPost.linkCard.url) {
-      const lc = displayPost.linkCard;
-      const hasImage = lc.image;
-      const hasTitle = lc.title;
-      const needsOg = !hasTitle && !hasImage;
-      const isFediUrl = isFediPostUrl(lc.url);
-      const cardClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
-      let extraAttrs = '';
-      if (isFediUrl) {
-        extraAttrs = ` data-fedi-url="${escapeHtml(lc.url)}" data-fedi-pending="true"`;
-      } else if (needsOg) {
-        extraAttrs = ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"`;
-      }
-      html += `
-        <a class="${cardClass} notif-link-card" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${extraAttrs}>
-          ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
-          <div class="link-card-info">
-            <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>
-            ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
-            ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
-            ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
-          </div>
-        </a>
-      `;
-    }
+    html += renderLinkCardHtml(displayPost.linkCard, 'notif-link-card');
 
     // Close CW content wrapper
     if (displayPost.contentWarning) {
       html += '</div>'; // close cw-content
     }
 
-    // Reaction badges (Misskey custom emoji / Mastodon favourites) — outside CW so always visible
+    // Reaction badges — outside CW so always visible
     // Hide for favourite/reaction notifications since the notif itself is about the reaction
     if (!['favourite', 'reaction'].includes(notif.type)) {
-      const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
-      const hasFavs = displayPost.stats?.favourites > 0;
-      if (hasReactions || hasFavs) {
-        html += '<div class="post-reactions notif-reactions">';
-        if (hasFavs) {
-          html += `<span class="reaction-badge${notif.favourited ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
-        }
-        if (hasReactions) {
-          for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-            const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-            html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
-          }
-        }
-        html += '</div>';
-      }
+      const reactionsHtml = buildReactionsHtml(displayPost, notif);
+      if (reactionsHtml) html += `<div class="post-reactions notif-reactions">${reactionsHtml}</div>`;
     }
 
     // Action buttons with counts and active states (hide for favourite/reaction notifications)
@@ -827,13 +705,6 @@ export function buildReactionsHtml(displayPost, wrapperPost) {
 }
 
 // Helpers
-
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 function stripHtml(html) {
   if (!html) return '';

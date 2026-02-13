@@ -1,0 +1,296 @@
+/* ===== Column Toggle Bar ===== */
+.column-toggle-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1.5rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+}
+
+.column-toggle-bar::-webkit-scrollbar {
+  height: 0;
+}
+
+.col-toggle {
+  border: none;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  border-radius: 20px;
+  transition: all 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  position: relative;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.col-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.col-toggle.active {
+  background: var(--accent-primary);
+  color: white;
+  box-shadow: 0 2px 8px rgba(124, 125, 255, 0.3);
+}
+
+.col-toggle.fixed {
+  background: linear-gradient(135deg, #3a3b6a, #4a4b7a);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.col-toggle.fixed.active {
+  background: linear-gradient(135deg, var(--accent-primary), #5e5fff);
+  color: white;
+}
+
+.platform-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.col-toggle .toggle-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.2s;
+  margin-left: 2px;
+}
+
+.col-toggle.active .toggle-indicator {
+  background: rgba(255,255,255,0.6);
+}
+
+/* Hidden account toggle — completely hide from toggle bar */
+.col-toggle.account-hidden {
+  display: none;
+}
+
+.col-toggle-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 0.25rem;
+  flex-shrink: 0;
+}
+
+.platform-dot.misskey { background: var(--accent-misskey); }
+.platform-dot.iceshrimp { background: var(--accent-iceshrimp); }
+.platform-dot.cherrypick { background: var(--accent-cherrypick); }
+.platform-dot.mastodon { background: var(--accent-mastodon); }
+
+/* ===== Dashboard ===== */
+.dashboard {
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  text-align: center;
+  gap: 1rem;
+}
+
+.empty-icon {
+  font-size: 4rem;
+}
+
+.empty-state h2 {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.empty-state p {
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+.welcome-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.welcome-logo {
+  filter: drop-shadow(0 0 30px rgba(124, 125, 255, 0.3));
+  margin-bottom: 0.5rem;
+}
+.welcome-title {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #a78bfa, #7c7dff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+.welcome-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted) !important;
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+.welcome-message {
+  font-size: 1rem;
+  color: var(--text-secondary) !important;
+  margin: 0.5rem 0 1rem;
+  line-height: 1.4;
+}
+
+.add-account-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+/* ===== Columns Layout - Horizontal Scroll ===== */
+.columns-container {
+  display: flex;
+  gap: 0.75rem;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.75rem;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+}
+
+.columns-container::-webkit-scrollbar {
+  height: 4px;
+}
+.columns-container::-webkit-scrollbar-track {
+  background: rgba(58, 59, 90, 0.3);
+  border-radius: 4px;
+  margin: 0 0.75rem;
+}
+.columns-container::-webkit-scrollbar-thumb {
+  background: rgba(124, 125, 255, 0.35);
+  border-radius: 4px;
+}
+.columns-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 125, 255, 0.6);
+}
+
+.column {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: var(--column-width);
+  max-width: var(--column-width);
+  flex-shrink: 0;
+  height: 100%;
+  scroll-snap-align: start;
+  transition: box-shadow 0.2s;
+}
+
+.column.focused {
+  box-shadow: 0 0 0 2px var(--accent-primary), var(--shadow);
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
+
+.column-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.column-header-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  border: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+.column-header-avatar:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  opacity: 0.9;
+}
+.column-header-avatars {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.column-header-avatars .column-header-avatar.stacked {
+  margin-right: -6px;
+}
+.column-header-avatars .column-header-avatar.stacked:last-child {
+  margin-right: 0;
+}
+
+.column-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.column-header-actions .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.column-header-actions .btn-icon svg {
+  display: block;
+}
+
+.column-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.5rem;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+

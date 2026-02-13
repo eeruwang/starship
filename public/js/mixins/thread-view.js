@@ -14,6 +14,7 @@
  * controlled via DOM manipulation after rendering — never by mutating post
  * data — so the post cache stays consistent across views.
  */
+import { escapeHtml } from '../ui/utils.js';
 import { renderPost } from '../ui/dashboard.js';
 
 export const ThreadViewMixin = {
@@ -118,7 +119,7 @@ export const ThreadViewMixin = {
       this._fetchMissingReactions(allPosts, content);
     } catch (err) {
       console.error('Thread load failed:', err);
-      content.innerHTML = `<div class="thread-loading">스레드를 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+      content.innerHTML = `<div class="thread-loading">스레드를 불러오는 중 오류가 발생했습니다: ${escapeHtml(err.message)}</div>`;
     }
   },
 

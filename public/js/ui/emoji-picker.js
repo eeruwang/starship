@@ -2,6 +2,7 @@
  * Shared Emoji Picker Utility
  * Common logic for compose emoji picker and reaction picker.
  */
+import { escapeHtml } from './utils.js';
 
 export const COMMON_EMOJIS = [
   '👍', '❤️', '😆', '🎉', '😮', '🤔', '😢', '👀',
@@ -11,12 +12,11 @@ export const COMMON_EMOJIS = [
 /**
  * Build the instance custom emoji section (categories + search).
  * @param {Array} emojis - Array of { name, url, category? }
- * @param {Function} escapeHtml
  * @param {string} itemClass - CSS class(es) for emoji buttons
  * @param {string} dataAttr - Data attribute name ('emoji' or 'reaction')
  * @returns {HTMLElement}
  */
-export function buildInstanceEmojiSection(emojis, escapeHtml, itemClass, dataAttr) {
+export function buildInstanceEmojiSection(emojis, itemClass, dataAttr) {
   const categories = new Map();
   for (const emoji of emojis) {
     const cat = emoji.category || '기타';
@@ -69,13 +69,12 @@ export function buildInstanceEmojiSection(emojis, escapeHtml, itemClass, dataAtt
  * @param {Object} options.client - API client with getInstanceEmojis()
  * @param {HTMLElement} options.picker - Picker container element
  * @param {string} options.pickerId - ID of picker element (to check if still open)
- * @param {Function} options.escapeHtml
  * @param {string} options.itemClass - CSS class(es) for emoji buttons
  * @param {string} options.dataAttr - Data attribute name ('emoji' or 'reaction')
  * @param {string} [options.emptyMessage] - Message when no emojis (null = remove loading)
  * @param {string} [options.errorMessage] - Message on error (null = remove loading)
  */
-export function loadInstanceEmojis({ client, picker, pickerId, escapeHtml, itemClass, dataAttr, emptyMessage, errorMessage }) {
+export function loadInstanceEmojis({ client, picker, pickerId, itemClass, dataAttr, emptyMessage, errorMessage }) {
   client.getInstanceEmojis().then(emojis => {
     if (!document.getElementById(pickerId)) return;
     const loadingEl = picker.querySelector('.reaction-picker-loading');
@@ -89,7 +88,7 @@ export function loadInstanceEmojis({ client, picker, pickerId, escapeHtml, itemC
       }
       return;
     }
-    const section = buildInstanceEmojiSection(emojis, escapeHtml, itemClass, dataAttr);
+    const section = buildInstanceEmojiSection(emojis, itemClass, dataAttr);
     if (loadingEl) loadingEl.replaceWith(section);
   }).catch(() => {
     const loadingEl = picker.querySelector('.reaction-picker-loading');

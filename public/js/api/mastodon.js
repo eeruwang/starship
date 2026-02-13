@@ -3,6 +3,8 @@
  * Handles communication with Mastodon instances.
  * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
+import { escapeHtml } from '../ui/utils.js';
+
 export class MastodonClient {
   constructor(instanceUrl, accessToken) {
     this.instanceUrl = instanceUrl.replace(/\/+$/, '');
@@ -291,7 +293,7 @@ export class MastodonClient {
 
   normalizeUser(acct) {
     const displayName = acct.display_name || acct.username;
-    let displayNameHtml = this.escapeHtml(displayName);
+    let displayNameHtml = escapeHtml(displayName);
     // Resolve custom emojis in display name
     if (acct.emojis && acct.emojis.length > 0) {
       for (const emoji of acct.emojis) {
@@ -307,13 +309,6 @@ export class MastodonClient {
       acct: acct.acct,
       avatarUrl: acct.avatar,
     };
-  }
-
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   /**

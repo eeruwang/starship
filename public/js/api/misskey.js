@@ -4,6 +4,8 @@
  * All use the same base API (Misskey API) with minor variations.
  * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
+import { escapeHtml } from '../ui/utils.js';
+
 export class MisskeyClient {
   constructor(instanceUrl, accessToken, platformType = 'misskey') {
     this.instanceUrl = instanceUrl.replace(/\/+$/, '');
@@ -286,11 +288,11 @@ export class MisskeyClient {
 
   resolveNameEmojis(name, emojis = {}) {
     if (!name) return '';
-    let html = this.escapeHtml(name);
+    let html = escapeHtml(name);
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, emojiName) => {
       const url = emojis[emojiName] || emojis[emojiName + '@.'] || null;
       if (url) {
-        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer">`;
+        return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer">`;
       }
       // Fallback: try instance emoji URL for local emojis
       if (!emojiName.includes('@')) {
@@ -507,7 +509,7 @@ export class MisskeyClient {
 
   mfmToHtml(text, emojis = {}) {
     if (!text) return '';
-    let html = this.escapeHtml(text);
+    let html = escapeHtml(text);
 
     // 1. Extract code blocks ```lang\ncode``` as placeholders
     const codeBlocks = [];
@@ -538,7 +540,7 @@ export class MisskeyClient {
           }
         }
         const speed = params.speed || null;
-        const speedStyle = speed ? `animation-duration:${this.escapeHtml(speed)};` : '';
+        const speedStyle = speed ? `animation-duration:${escapeHtml(speed)};` : '';
 
         switch (func) {
           case 'flip': {
@@ -570,11 +572,11 @@ export class MisskeyClient {
             return face ? `<span style="font-family:${face}">${content}</span>` : content;
           }
           case 'fg': {
-            const c = params.color ? `#${this.escapeHtml(params.color)}` : 'inherit';
+            const c = params.color ? `#${escapeHtml(params.color)}` : 'inherit';
             return `<span style="color:${c}">${content}</span>`;
           }
           case 'bg': {
-            const c = params.color ? `#${this.escapeHtml(params.color)}` : 'inherit';
+            const c = params.color ? `#${escapeHtml(params.color)}` : 'inherit';
             return `<span style="background-color:${c};border-radius:2px;padding:0 2px">${content}</span>`;
           }
           case 'position': {
@@ -658,7 +660,7 @@ export class MisskeyClient {
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
       const url = emojis[name] || emojis[name + '@.'] || null;
       if (url) {
-        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
+        return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
       }
       if (!name.includes('@')) {
         return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
@@ -686,7 +688,7 @@ export class MisskeyClient {
         try {
           const parsed = new URL(displayUrl.replaceAll('&amp;', '&'));
           displayUrl = parsed.hostname + (parsed.pathname.length > 20 ? parsed.pathname.substring(0, 20) + '…' : parsed.pathname);
-          displayUrl = this.escapeHtml(displayUrl);
+          displayUrl = escapeHtml(displayUrl);
         } catch {
           displayUrl = displayUrl.substring(0, 57) + '…';
         }
@@ -711,9 +713,4 @@ export class MisskeyClient {
     return html;
   }
 
-  escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
 }

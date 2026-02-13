@@ -2,6 +2,7 @@
  * Data Loading Mixin
  * Handles timeline loading, notifications, pagination, and caching
  */
+import { escapeHtml } from '../ui/utils.js';
 import { renderPost, renderNotification, renderLoading, renderLoadingText } from '../ui/dashboard.js';
 
 export const DataLoadingMixin = {
@@ -81,49 +82,12 @@ export const DataLoadingMixin = {
       const allPosts = [];
 
       const results = await Promise.allSettled(
-        accounts.map(async (account) => {
-          const client = this.store.getClient(account.id);
-          if (!client) return [];
-
-          try {
-            const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
-            const addMeta = (post) => {
-              post.accountId = account.id;
-              post.accountPlatform = account.platform;
-              post.themeColor = effectiveColor;
-              const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
-              post.isOwn = String(ownerId) === String(account.profile.id);
-              return post;
-            };
-
-            // For Mastodon: also fetch own statuses to ensure own posts/boosts appear
-            // (home timeline may not include own reblogs on some instances)
-            if (account.platform === 'mastodon' && account.profile?.id) {
-              const [homeItems, ownItems] = await Promise.all([
-                client.getHomeTimeline(this.settings.postsCount),
-                client.getUserStatuses(account.profile.id, 15).catch(() => []),
-              ]);
-              const seenIds = new Set();
-              const merged = [];
-              for (const item of homeItems) {
-                seenIds.add(item.id);
-                merged.push(item);
-              }
-              for (const item of ownItems) {
-                if (!seenIds.has(item.id)) {
-                  merged.push(item);
-                }
-              }
-              return merged.map(item => addMeta(client.normalizePost(item)));
-            }
-
-            const items = await client.getHomeTimeline(this.settings.postsCount);
-            return items.map(item => addMeta(client.normalizePost(item)));
-          } catch (err) {
+        accounts.map(account =>
+          this._fetchAccountTimeline(account).catch(err => {
             console.error(`Timeline error for ${account.label}:`, err);
             return [];
-          }
-        })
+          })
+        )
       );
 
       for (const result of results) {
@@ -279,7 +243,7 @@ export const DataLoadingMixin = {
       this._fetchMissingReactions(allPosts, container);
     } catch (err) {
       if (isFirstLoad) {
-        container.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+        container.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${escapeHtml(err.message)}</div>`;
       }
     }
   },
@@ -304,49 +268,13 @@ export const DataLoadingMixin = {
       const allPosts = [];
 
       const results = await Promise.allSettled(
-        accounts.map(async (account) => {
-          const client = this.store.getClient(account.id);
-          if (!client) return [];
+        accounts.map(account => {
           const untilId = oldestIds.get(account.id);
           if (!untilId) return [];
-
-          try {
-            const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
-            const addMeta = (post) => {
-              post.accountId = account.id;
-              post.accountPlatform = account.platform;
-              post.themeColor = effectiveColor;
-              const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
-              post.isOwn = String(ownerId) === String(account.profile.id);
-              return post;
-            };
-
-            // For Mastodon: also fetch own statuses to ensure own posts/boosts appear
-            if (account.platform === 'mastodon' && account.profile?.id) {
-              const [homeItems, ownItems] = await Promise.all([
-                client.getHomeTimeline(this.settings.postsCount, untilId),
-                client.getUserStatuses(account.profile.id, 15, untilId).catch(() => []),
-              ]);
-              const seenIds = new Set();
-              const merged = [];
-              for (const item of homeItems) {
-                seenIds.add(item.id);
-                merged.push(item);
-              }
-              for (const item of ownItems) {
-                if (!seenIds.has(item.id)) {
-                  merged.push(item);
-                }
-              }
-              return merged.map(item => addMeta(client.normalizePost(item)));
-            }
-
-            const items = await client.getHomeTimeline(this.settings.postsCount, untilId);
-            return items.map(item => addMeta(client.normalizePost(item)));
-          } catch (err) {
+          return this._fetchAccountTimeline(account, untilId).catch(err => {
             console.error(`Older posts error for ${account.label}:`, err);
             return [];
-          }
+          });
         })
       );
 
@@ -618,11 +546,49 @@ export const DataLoadingMixin = {
       this._fetchMissingReactions(allNotifs, container, { isNotification: true });
     } catch (err) {
       if (isFirstLoad) {
-        container.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${this.escapeHtml(err.message)}</div>`;
+        container.innerHTML = `<div class="loading-text">알림을 불러오는 중 오류가 발생했습니다: ${escapeHtml(err.message)}</div>`;
       }
     } finally {
       container._notifLoading = false;
     }
+  },
+
+  _addPostMeta(post, account) {
+    post.accountId = account.id;
+    post.accountPlatform = account.platform;
+    post.themeColor = account.themeColor || this._instanceColor(account.instanceUrl);
+    const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
+    post.isOwn = String(ownerId) === String(account.profile.id);
+    return post;
+  },
+
+  async _fetchAccountTimeline(account, untilId = null) {
+    const client = this.store.getClient(account.id);
+    if (!client) return [];
+
+    // For Mastodon: also fetch own statuses to ensure own posts/boosts appear
+    // (home timeline may not include own reblogs on some instances)
+    if (account.platform === 'mastodon' && account.profile?.id) {
+      const [homeItems, ownItems] = await Promise.all([
+        client.getHomeTimeline(this.settings.postsCount, untilId),
+        client.getUserStatuses(account.profile.id, 15, untilId).catch(() => []),
+      ]);
+      const seenIds = new Set();
+      const merged = [];
+      for (const item of homeItems) {
+        seenIds.add(item.id);
+        merged.push(item);
+      }
+      for (const item of ownItems) {
+        if (!seenIds.has(item.id)) {
+          merged.push(item);
+        }
+      }
+      return merged.map(item => this._addPostMeta(client.normalizePost(item), account));
+    }
+
+    const items = await client.getHomeTimeline(this.settings.postsCount, untilId);
+    return items.map(item => this._addPostMeta(client.normalizePost(item), account));
   },
 
   _normalizeAcct(acct, instanceUrl) {

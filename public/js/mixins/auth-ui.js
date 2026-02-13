@@ -2,6 +2,7 @@
  * Auth UI Mixin
  * Handles authentication, user menu, admin UI, and cloud sync
  */
+import { escapeHtml } from '../ui/utils.js';
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from '../auth.js';
 
 export const AuthUIMixin = {
@@ -499,8 +500,8 @@ export const AuthUIMixin = {
               <button class="reauth-picker-item" data-account-id="${a.id}">
                 <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
                 <div class="reauth-picker-info">
-                  <span class="reauth-picker-name">${this.escapeHtml(a.profile?.displayName || a.label || '')}</span>
-                  <span class="reauth-picker-instance">${this.escapeHtml(a.instanceUrl.replace('https://', ''))}</span>
+                  <span class="reauth-picker-name">${escapeHtml(a.profile?.displayName || a.label || '')}</span>
+                  <span class="reauth-picker-instance">${escapeHtml(a.instanceUrl.replace('https://', ''))}</span>
                 </div>
                 <span class="platform-dot ${a.platform}"></span>
               </button>

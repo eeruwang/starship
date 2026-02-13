@@ -2,6 +2,7 @@
  * Profile Modal Mixin
  * Handles the profile modal: opening, profile editing, notes tabs, follow relations
  */
+import { escapeHtml } from '../ui/utils.js';
 import { renderPost } from '../ui/dashboard.js';
 
 export const ProfileModalMixin = {
@@ -52,7 +53,7 @@ export const ProfileModalMixin = {
     banner.style.backgroundSize = '';
     banner.style.background = 'linear-gradient(135deg, var(--accent-primary), #a78bfa)';
     avatar.src = author.avatarUrl || '';
-    nameEl.innerHTML = author.displayNameHtml || this.escapeHtml(author.displayName);
+    nameEl.innerHTML = author.displayNameHtml || escapeHtml(author.displayName);
     handleEl.textContent = `@${author.acct}`;
     bioEl.innerHTML = '';
     statsEl.innerHTML = '';
@@ -72,7 +73,7 @@ export const ProfileModalMixin = {
     // Reset sticky header
     stickyHeader.classList.remove('visible');
     stickyAvatar.src = author.avatarUrl || '';
-    stickyName.innerHTML = author.displayNameHtml || this.escapeHtml(author.displayName);
+    stickyName.innerHTML = author.displayNameHtml || escapeHtml(author.displayName);
     stickyHandle.textContent = `@${author.acct}`;
 
     // Scroll listener for sticky header
@@ -170,7 +171,7 @@ export const ProfileModalMixin = {
       const userEmojis = this._extractUserEmojis(user);
       nameEl.innerHTML = client.resolveNameEmojis(user.name || user.username, userEmojis);
     } else {
-      let nameHtml = this.escapeHtml(user.display_name || user.username);
+      let nameHtml = escapeHtml(user.display_name || user.username);
       if (user.emojis && user.emojis.length > 0) {
         for (const emoji of user.emojis) {
           nameHtml = nameHtml.replaceAll(`:${emoji.shortcode}:`,
@@ -203,7 +204,7 @@ export const ProfileModalMixin = {
         if (user.emojis && user.emojis.length > 0) {
           for (const emoji of user.emojis) {
             bio = bio.replaceAll(`:${emoji.shortcode}:`,
-              `<img class="inline-emoji" src="${this.escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+              `<img class="inline-emoji" src="${escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
           }
         }
         bioEl.innerHTML = bio;
@@ -227,15 +228,15 @@ export const ProfileModalMixin = {
         if (!isMisskey && user.emojis && user.emojis.length > 0) {
           for (const emoji of user.emojis) {
             html = html.replaceAll(`:${emoji.shortcode}:`,
-              `<img class="inline-emoji" src="${this.escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+              `<img class="inline-emoji" src="${escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
           }
         }
         return html;
       };
       fieldsEl.innerHTML = fields.map(f => `
         <div class="profile-field">
-          <span class="profile-field-name">${resolveFieldEmojis(this.escapeHtml(f.name))}</span>
-          <span class="profile-field-value">${resolveFieldEmojis(f.value || this.escapeHtml(f.value))}</span>
+          <span class="profile-field-name">${resolveFieldEmojis(escapeHtml(f.name))}</span>
+          <span class="profile-field-value">${resolveFieldEmojis(f.value || escapeHtml(f.value))}</span>
         </div>
       `).join('');
     }
@@ -349,7 +350,7 @@ export const ProfileModalMixin = {
         this.store.save();
         this.debouncedSaveToCloud();
         nameEl.textContent = myAccount.profile.displayName;
-        bioEl.innerHTML = this.escapeHtml(editBio.value).replace(/\n/g, '<br>');
+        bioEl.innerHTML = escapeHtml(editBio.value).replace(/\n/g, '<br>');
         stickyName.textContent = myAccount.profile.displayName;
         if (myAccount.profile.avatarUrl) avatar.src = myAccount.profile.avatarUrl;
         this._refreshColumnHeaders();

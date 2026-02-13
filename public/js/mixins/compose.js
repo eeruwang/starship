@@ -2,6 +2,7 @@
  * Compose Mixin
  * Handles the compose modal: opening, emoji picker, file attachments, and submission
  */
+import { escapeHtml } from '../ui/utils.js';
 import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
 
 export const ComposeMixin = {
@@ -23,7 +24,7 @@ export const ComposeMixin = {
       const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       btn.innerHTML = `
         <img class="compose-account-avatar" src="${p.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-        <span class="compose-account-name">${this.escapeHtml(p.displayName)}</span>
+        <span class="compose-account-name">${escapeHtml(p.displayName)}</span>
         <span class="platform-dot ${account.platform}" ${dotStyle}></span>
       `;
 
@@ -100,9 +101,9 @@ export const ComposeMixin = {
       const origPost = this.findCachedPost(replyToId);
       if (origPost) {
         const dp = origPost.reblog || origPost;
-        const authorName = dp.author?.displayNameHtml || this.escapeHtml(dp.author?.displayName || '');
+        const authorName = dp.author?.displayNameHtml || escapeHtml(dp.author?.displayName || '');
         const avatarHtml = dp.author?.avatarUrl
-          ? `<img class="compose-reply-context-avatar" src="${this.escapeHtml(dp.author.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+          ? `<img class="compose-reply-context-avatar" src="${escapeHtml(dp.author.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
           : '';
         replyCtx.innerHTML = `
           <div class="compose-reply-context-header">
@@ -283,13 +284,13 @@ export const ComposeMixin = {
     }
 
     // Resolve emojis in text
-    let html = this.escapeHtml(text);
+    let html = escapeHtml(text);
     let hasCustomEmoji = false;
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
       const url = emojiMap[name];
       if (url) {
         hasCustomEmoji = true;
-        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
+        return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
       }
       return match;
     });
@@ -412,7 +413,6 @@ export const ComposeMixin = {
           client,
           picker,
           pickerId: 'compose-emoji-picker-popup',
-          escapeHtml: this.escapeHtml.bind(this),
           itemClass: 'compose-emoji-item',
           dataAttr: 'emoji',
         });
