@@ -514,10 +514,40 @@
   border: 1px solid rgba(150,208,74,0.3);
 }
 
+.detected-platform.detected.platform-sharkey {
+  background: rgba(62,168,255,0.2);
+  color: var(--accent-sharkey);
+  border: 1px solid rgba(62,168,255,0.3);
+}
+
+.detected-platform.detected.platform-foundkey {
+  background: rgba(113,166,210,0.2);
+  color: var(--accent-foundkey);
+  border: 1px solid rgba(113,166,210,0.3);
+}
+
+.detected-platform.detected.platform-hajkey {
+  background: rgba(107,184,122,0.2);
+  color: var(--accent-hajkey);
+  border: 1px solid rgba(107,184,122,0.3);
+}
+
 .detected-platform.detected.platform-iceshrimp {
   background: rgba(227,106,138,0.2);
   color: var(--accent-iceshrimp);
   border: 1px solid rgba(227,106,138,0.3);
+}
+
+.detected-platform.detected.platform-firefish {
+  background: rgba(238,106,0,0.2);
+  color: var(--accent-firefish);
+  border: 1px solid rgba(238,106,0,0.3);
+}
+
+.detected-platform.detected.platform-catodon {
+  background: rgba(176,136,249,0.2);
+  color: var(--accent-catodon);
+  border: 1px solid rgba(176,136,249,0.3);
 }
 
 .detected-platform.detected.platform-cherrypick {
@@ -530,6 +560,42 @@
   background: rgba(99,100,255,0.2);
   color: var(--accent-mastodon);
   border: 1px solid rgba(99,100,255,0.3);
+}
+
+.detected-platform.detected.platform-hollo {
+  background: rgba(62,201,176,0.2);
+  color: var(--accent-hollo);
+  border: 1px solid rgba(62,201,176,0.3);
+}
+
+.detected-platform.detected.platform-akkoma {
+  background: rgba(240,160,48,0.2);
+  color: var(--accent-akkoma);
+  border: 1px solid rgba(240,160,48,0.3);
+}
+
+.detected-platform.detected.platform-pleroma {
+  background: rgba(245,96,64,0.2);
+  color: var(--accent-pleroma);
+  border: 1px solid rgba(245,96,64,0.3);
+}
+
+.detected-platform.detected.platform-gotosocial {
+  background: rgba(255,118,59,0.2);
+  color: var(--accent-gotosocial);
+  border: 1px solid rgba(255,118,59,0.3);
+}
+
+.detected-platform.detected.platform-hometown {
+  background: rgba(139,107,255,0.2);
+  color: var(--accent-hometown);
+  border: 1px solid rgba(139,107,255,0.3);
+}
+
+.detected-platform.detected.platform-glitchcafe {
+  background: rgba(224,77,185,0.2);
+  color: var(--accent-glitchcafe);
+  border: 1px solid rgba(224,77,185,0.3);
 }
 
 .detected-platform.detect-failed {

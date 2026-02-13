@@ -92,9 +92,20 @@
 }
 
 .platform-dot.misskey { background: var(--accent-misskey); }
+.platform-dot.sharkey { background: var(--accent-sharkey); }
+.platform-dot.foundkey { background: var(--accent-foundkey); }
+.platform-dot.hajkey { background: var(--accent-hajkey); }
 .platform-dot.iceshrimp { background: var(--accent-iceshrimp); }
+.platform-dot.firefish { background: var(--accent-firefish); }
+.platform-dot.catodon { background: var(--accent-catodon); }
 .platform-dot.cherrypick { background: var(--accent-cherrypick); }
 .platform-dot.mastodon { background: var(--accent-mastodon); }
+.platform-dot.hollo { background: var(--accent-hollo); }
+.platform-dot.akkoma { background: var(--accent-akkoma); }
+.platform-dot.pleroma { background: var(--accent-pleroma); }
+.platform-dot.gotosocial { background: var(--accent-gotosocial); }
+.platform-dot.hometown { background: var(--accent-hometown); }
+.platform-dot.glitchcafe { background: var(--accent-glitchcafe); }
 
 /* ===== Dashboard ===== */
 .dashboard {

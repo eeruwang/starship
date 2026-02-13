@@ -77,7 +77,7 @@ export const ColumnsMixin = {
         toggle.dataset.accountId = account.id;
         const dotColor = account.themeColor || this._instanceColor(account.instanceUrl);
         const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
-        toggle.innerHTML = `<span class="platform-dot ${account.platform}" ${dotStyle}></span>${escapeHtml(account.label || account.profile.displayName)}`;
+        toggle.innerHTML = `<span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>${escapeHtml(account.label || account.profile.displayName)}`;
         this.toggleBar.appendChild(toggle);
       }
     }

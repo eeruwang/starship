@@ -15,6 +15,7 @@ export const AccountSetupMixin = {
     this.btnConfirmAdd.disabled = false;
     this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
     this.btnOAuthLogin.textContent = '로그인으로 연결';
+    this._detectedSoftware = '';
     this.detectedPlatformEl = document.getElementById('detected-platform');
     this.detectedPlatformEl.style.display = 'none';
     document.getElementById('manual-token-section').removeAttribute('open');
@@ -78,40 +79,43 @@ export const AccountSetupMixin = {
 
     // Iceshrimp family
     if (sw === 'iceshrimp' || sw === 'iceshrimp.net' || signals.includes('iceshrimp')) {
-      return { platform: 'iceshrimp', displayName: 'Iceshrimp' };
+      return { platform: 'iceshrimp', software: 'iceshrimp', displayName: 'Iceshrimp' };
     }
     // CherryPick
     if (sw === 'cherrypick' || signals.includes('cherrypick')) {
-      return { platform: 'cherrypick', displayName: 'CherryPick' };
+      return { platform: 'cherrypick', software: 'cherrypick', displayName: 'CherryPick' };
     }
     // Sharkey (Misskey-compatible)
     if (sw === 'sharkey' || signals.includes('sharkey')) {
-      return { platform: 'misskey', displayName: 'Sharkey (Misskey 호환)' };
+      return { platform: 'misskey', software: 'sharkey', displayName: 'Sharkey' };
     }
     // Firefish / Catodon (Misskey-compatible, iceshrimp-like)
     if (sw === 'firefish' || signals.includes('firefish')) {
-      return { platform: 'iceshrimp', displayName: 'Firefish (Misskey 호환)' };
+      return { platform: 'iceshrimp', software: 'firefish', displayName: 'Firefish' };
     }
     if (sw === 'catodon' || signals.includes('catodon')) {
-      return { platform: 'iceshrimp', displayName: 'Catodon (Misskey 호환)' };
+      return { platform: 'iceshrimp', software: 'catodon', displayName: 'Catodon' };
     }
     // FoundKey / Hajkey (Misskey-compatible)
     if (sw === 'foundkey' || signals.includes('foundkey')) {
-      return { platform: 'misskey', displayName: 'FoundKey (Misskey 호환)' };
+      return { platform: 'misskey', software: 'foundkey', displayName: 'FoundKey' };
     }
     if (sw === 'hajkey' || signals.includes('hajkey')) {
-      return { platform: 'misskey', displayName: 'Hajkey (Misskey 호환)' };
+      return { platform: 'misskey', software: 'hajkey', displayName: 'Hajkey' };
     }
     // Vanilla Misskey
     if (sw === 'misskey' || signals.includes('misskey')) {
-      return { platform: 'misskey', displayName: 'Misskey' };
+      return { platform: 'misskey', software: 'misskey', displayName: 'Misskey' };
     }
+    // Hollo (Mastodon-compatible, single-user)
+    if (sw === 'hollo') return { platform: 'mastodon', software: 'hollo', displayName: 'Hollo' };
     // Mastodon-compatible platforms
-    if (sw === 'akkoma') return { platform: 'mastodon', displayName: 'Akkoma (Mastodon 호환)' };
-    if (sw === 'pleroma') return { platform: 'mastodon', displayName: 'Pleroma (Mastodon 호환)' };
-    if (sw === 'gotosocial') return { platform: 'mastodon', displayName: 'GoToSocial (Mastodon 호환)' };
-    if (sw === 'hometown') return { platform: 'mastodon', displayName: 'Hometown (Mastodon 호환)' };
-    if (sw === 'glitchcafe' || sw === 'mastodon') return { platform: 'mastodon', displayName: 'Mastodon' };
+    if (sw === 'akkoma') return { platform: 'mastodon', software: 'akkoma', displayName: 'Akkoma' };
+    if (sw === 'pleroma') return { platform: 'mastodon', software: 'pleroma', displayName: 'Pleroma' };
+    if (sw === 'gotosocial') return { platform: 'mastodon', software: 'gotosocial', displayName: 'GoToSocial' };
+    if (sw === 'hometown') return { platform: 'mastodon', software: 'hometown', displayName: 'Hometown' };
+    if (sw === 'glitchcafe') return { platform: 'mastodon', software: 'glitchcafe', displayName: 'Glitch' };
+    if (sw === 'mastodon') return { platform: 'mastodon', software: 'mastodon', displayName: 'Mastodon' };
 
     return null;
   },
@@ -156,11 +160,12 @@ export const AccountSetupMixin = {
 
         // Classify using NodeInfo software name + /api/meta fields
         const result = this._classifyPlatform(nodeInfoSw, metaFields)
-          || { platform: 'misskey', displayName: 'Misskey' };
+          || { platform: 'misskey', software: 'misskey', displayName: 'Misskey' };
 
         this.platformSelect.value = result.platform;
+        this._detectedSoftware = result.software;
         detectedEl.textContent = `${result.displayName} 감지됨`;
-        detectedEl.className = `detected-platform detected platform-${result.platform}`;
+        detectedEl.className = `detected-platform detected platform-${result.software}`;
         this.updateOAuthButton();
         return;
       }
@@ -170,8 +175,9 @@ export const AccountSetupMixin = {
         const result = this._classifyPlatform(nodeInfoSw, null);
         if (result) {
           this.platformSelect.value = result.platform;
+          this._detectedSoftware = result.software;
           detectedEl.textContent = `${result.displayName} 감지됨`;
-          detectedEl.className = `detected-platform detected platform-${result.platform}`;
+          detectedEl.className = `detected-platform detected platform-${result.software}`;
           this.updateOAuthButton();
           return;
         }
@@ -185,6 +191,7 @@ export const AccountSetupMixin = {
 
       if (mastodonRes && mastodonRes.ok) {
         this.platformSelect.value = 'mastodon';
+        this._detectedSoftware = 'mastodon';
         detectedEl.textContent = 'Mastodon 감지됨';
         detectedEl.className = 'detected-platform detected platform-mastodon';
         this.updateOAuthButton();
@@ -254,7 +261,7 @@ export const AccountSetupMixin = {
 
       const result = await waitForAuthCallback();
 
-      await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken);
+      await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken, '', this._detectedSoftware);
       this.closeModal(this.modalAddAccount);
       this.debouncedSaveToCloud();
       this.render();
@@ -311,7 +318,7 @@ export const AccountSetupMixin = {
     this.btnConfirmAdd.textContent = '연결 확인 중...';
 
     try {
-      await this.store.addAccount(platform, instanceUrl, accessToken, label);
+      await this.store.addAccount(platform, instanceUrl, accessToken, label, this._detectedSoftware);
       this.closeModal(this.modalAddAccount);
       this.debouncedSaveToCloud();
       this.render();

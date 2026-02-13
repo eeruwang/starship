@@ -22,9 +22,20 @@ const VISIBILITY_ICONS = {
 
 const PLATFORM_COLORS = {
   misskey: '#96d04a',
+  sharkey: '#3ea8ff',
+  foundkey: '#71a6d2',
+  hajkey: '#6bb87a',
   iceshrimp: '#e36a8a',
+  firefish: '#ee6a00',
+  catodon: '#b088f9',
   cherrypick: '#ff6b9d',
   mastodon: '#6364ff',
+  hollo: '#3ec9b0',
+  akkoma: '#f0a030',
+  pleroma: '#f56040',
+  gotosocial: '#ff763b',
+  hometown: '#8b6bff',
+  glitchcafe: '#e04db9',
 };
 
 // Mastodon의 theme-color 메타태그는 배경색(#181820/#ffffff)을 반환하므로
@@ -608,16 +619,28 @@ export function renderNotification(notif) {
 }
 
 export function renderAccountCard(account, onRemove) {
+  const sw = account.software || account.platform;
   const card = document.createElement('div');
-  card.className = `account-card platform-${account.platform}`;
-  card.style.borderLeftColor = usableColor(account.themeColor, account.platform);
+  card.className = `account-card platform-${sw}`;
+  card.style.borderLeftColor = usableColor(account.themeColor, sw);
 
   const p = account.profile;
-  const platformLabels = {
+  const softwareLabels = {
     misskey: 'Misskey',
+    sharkey: 'Sharkey',
+    foundkey: 'FoundKey',
+    hajkey: 'Hajkey',
     iceshrimp: 'Iceshrimp',
+    firefish: 'Firefish',
+    catodon: 'Catodon',
     cherrypick: 'CherryPick',
     mastodon: 'Mastodon',
+    hollo: 'Hollo',
+    akkoma: 'Akkoma',
+    pleroma: 'Pleroma',
+    gotosocial: 'GoToSocial',
+    hometown: 'Hometown',
+    glitchcafe: 'Glitch',
   };
 
   const postLabel = account.platform === 'mastodon' ? '게시물' : '노트';
@@ -631,7 +654,7 @@ export function renderAccountCard(account, onRemove) {
         <div class="account-card-name">${escapeHtml(p.displayName)}</div>
         <div class="account-card-handle">@${escapeHtml(p.acct)} · ${new URL(account.instanceUrl).hostname}</div>
       </div>
-      <span class="account-card-platform platform-badge ${account.platform}">${platformLabels[account.platform]}</span>
+      <span class="account-card-platform platform-badge ${sw}">${softwareLabels[sw] || sw}</span>
     </div>
     <div class="account-card-stats">
       <div class="account-stat">

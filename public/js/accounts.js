@@ -62,7 +62,7 @@ export class AccountStore {
     return this.clients.get(accountId);
   }
 
-  async addAccount(platform, instanceUrl, accessToken, label = '') {
+  async addAccount(platform, instanceUrl, accessToken, label = '', software = '') {
     const client = platform === 'mastodon'
       ? new MastodonClient(instanceUrl, accessToken)
       : new MisskeyClient(instanceUrl, accessToken, platform);
@@ -87,6 +87,7 @@ export class AccountStore {
       account = {
         id: `mastodon_${profile.id}_${Date.now()}`,
         platform,
+        software: software || platform,
         instanceUrl: instanceUrl.replace(/\/+$/, ''),
         accessToken,
         themeColor,
@@ -106,6 +107,7 @@ export class AccountStore {
       account = {
         id: `${platform}_${profile.id}_${Date.now()}`,
         platform,
+        software: software || platform,
         instanceUrl: instanceUrl.replace(/\/+$/, ''),
         accessToken,
         themeColor,

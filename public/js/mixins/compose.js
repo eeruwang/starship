@@ -25,7 +25,7 @@ export const ComposeMixin = {
       btn.innerHTML = `
         <img class="compose-account-avatar" src="${p.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
         <span class="compose-account-name">${escapeHtml(p.displayName)}</span>
-        <span class="platform-dot ${account.platform}" ${dotStyle}></span>
+        <span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>
       `;
 
       // In restricted mode (multi-account column), no pre-selection unless explicitly preferred

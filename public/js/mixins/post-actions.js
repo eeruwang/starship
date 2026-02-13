@@ -941,7 +941,7 @@ export const PostActionsMixin = {
         <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}"${isPreferred && dotColor ? ` style="border-left-color:${dotColor}"` : ''}>
           <img src="${p.avatarUrl || ''}" alt="" onerror="this.style.display='none'">
           <span class="picker-name">${escapeHtml(p.displayName)}</span>
-          <span class="platform-dot ${account.platform}" ${dotStyle}></span>
+          <span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>
         </button>
       `;
     }
