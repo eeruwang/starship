@@ -776,5 +776,5 @@ function resolveReactionHtml(reaction, reactionEmojis, emojis, instanceUrl) {
   // Replace common unicode reactions with themed SVG icons
   const iconFn = REACTION_ICON_MAP[reaction];
   if (iconFn) return iconFn();
-  return reaction;
+  return `<span class="reaction-unicode">${reaction}</span>`;
 }
