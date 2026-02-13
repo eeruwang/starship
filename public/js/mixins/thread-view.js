@@ -145,7 +145,7 @@ export const ThreadViewMixin = {
     if (!localPostId) {
       if (!canonicalUri) return null;
       try {
-        const resolved = await client.resolveUrl(canonicalUri);
+        const resolved = await this._cachedResolveUrl(client, canonicalUri);
         if (!resolved) return null;
         localPostId = resolved.id;
       } catch { return null; }
@@ -286,24 +286,28 @@ export const ThreadViewMixin = {
       return;
     }
 
+    const fragment = document.createDocumentFragment();
+
     // Ancestors (linear chain)
     for (const post of ancestors) {
       const el = renderPost(post);
       el.classList.add('thread-post', 'thread-ancestor');
-      content.appendChild(el);
+      fragment.appendChild(el);
     }
 
     // Target post (highlighted)
     if (targetPost) {
       const el = renderPost(targetPost);
       el.classList.add('thread-post', 'thread-target');
-      content.appendChild(el);
+      fragment.appendChild(el);
     }
 
     // Descendants: build a reply tree and render with indentation
     if (descendants.length > 0) {
-      this._renderDescendantTree(content, descendants, targetPost?.id);
+      this._renderDescendantTree(fragment, descendants, targetPost?.id);
     }
+
+    content.appendChild(fragment);
 
     // Enrich link cards with OG data
     this.enrichLinkCards(content);
