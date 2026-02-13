@@ -694,6 +694,11 @@ export const DataLoadingMixin = {
           dstDisplay._misskeyNoteId = dstDisplay._misskeyNoteId || srcDisplay.id;
           dstDisplay._misskeyAccountId = dstDisplay._misskeyAccountId || post.accountId;
           if (srcDisplay.instanceUrl) dstDisplay._reactionInstanceUrl = dstDisplay._reactionInstanceUrl || srcDisplay.instanceUrl;
+          // Per-instance cache: supports multiple Misskey-type accounts on different instances
+          if (srcDisplay.instanceUrl) {
+            if (!dstDisplay._noteIdsByInstance) dstDisplay._noteIdsByInstance = {};
+            dstDisplay._noteIdsByInstance[srcDisplay.instanceUrl] = srcDisplay.id;
+          }
         }
         // Merge Misskey reaction data into the primary post
         if (srcDisplay.reactions && Object.keys(srcDisplay.reactions).length > 0 &&
@@ -762,6 +767,9 @@ export const DataLoadingMixin = {
         if (cached._misskeyNoteId) dp._misskeyNoteId = cached._misskeyNoteId;
         if (cached._misskeyAccountId) dp._misskeyAccountId = cached._misskeyAccountId;
         if (cached._reactionInstanceUrl) dp._reactionInstanceUrl = cached._reactionInstanceUrl;
+        if (cached._noteIdsByInstance) {
+          dp._noteIdsByInstance = { ...(dp._noteIdsByInstance || {}), ...cached._noteIdsByInstance };
+        }
         if (cached.id && cached.platform && cached.platform !== 'mastodon') {
           dp._misskeyNoteId = dp._misskeyNoteId || cached.id;
         }
@@ -798,17 +806,26 @@ export const DataLoadingMixin = {
         toFetch.push({ item, post, dp });
       }
 
-      // Sequential processing to avoid Misskey rate limits (was: all 10 concurrent)
+      // Sequential processing to avoid Misskey rate limits
+      // Prioritize posts with cached note IDs (notes/show has high rate limit)
+      // Limit ap/show calls (strict rate limit) to avoid blocking user-initiated actions
       (async () => {
+        let apShowCount = 0;
+        const AP_SHOW_LIMIT = 3;
         for (const { item, post, dp } of toFetch.slice(0, 10)) {
           try {
             // Use notes/show (high rate limit) when note ID is cached, fallback to ap/show
             let resolved;
-            if (dp._misskeyNoteId) {
-              const rawNote = await client.getNote(dp._misskeyNoteId);
+            const cachedNoteId = dp._misskeyNoteId
+              || (dp._noteIdsByInstance && dp._noteIdsByInstance[misskeyAccount.instanceUrl]);
+            if (cachedNoteId) {
+              const rawNote = await client.getNote(cachedNoteId);
               if (rawNote) resolved = client.normalizePost(rawNote);
-            } else {
+            } else if (apShowCount < AP_SHOW_LIMIT) {
               resolved = await this._cachedResolveUrl(client, dp.canonicalUri);
+              apShowCount++;
+            } else {
+              continue; // Skip to preserve rate limit for user actions
             }
             if (!resolved) continue;
             const rdp = resolved.reblog || resolved;
@@ -823,6 +840,10 @@ export const DataLoadingMixin = {
             if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
             dp._misskeyNoteId = rdp.id;
             dp._misskeyAccountId = misskeyAccount.id;
+            if (misskeyAccount.instanceUrl) {
+              if (!dp._noteIdsByInstance) dp._noteIdsByInstance = {};
+              dp._noteIdsByInstance[misskeyAccount.instanceUrl] = rdp.id;
+            }
             this._adjustFavouritesForReactions(dp);
             this.postCache.set(`${post.platform}:${post.id}`, post);
 

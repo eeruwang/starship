@@ -203,10 +203,17 @@ export const ThreadViewMixin = {
       tDp._misskeyAccountId = tDp._misskeyAccountId || sDp._misskeyAccountId;
     }
     if (sDp._reactionInstanceUrl) tDp._reactionInstanceUrl = tDp._reactionInstanceUrl || sDp._reactionInstanceUrl;
+    if (sDp._noteIdsByInstance) {
+      tDp._noteIdsByInstance = { ...(tDp._noteIdsByInstance || {}), ...sDp._noteIdsByInstance };
+    }
     if (sDp.id && source.platform !== 'mastodon' && !tDp._misskeyNoteId) {
       tDp._misskeyNoteId = sDp.id;
       tDp._misskeyAccountId = source.accountId;
       if (sDp.instanceUrl) tDp._reactionInstanceUrl = tDp._reactionInstanceUrl || sDp.instanceUrl;
+    }
+    if (sDp.id && source.platform !== 'mastodon' && sDp.instanceUrl) {
+      if (!tDp._noteIdsByInstance) tDp._noteIdsByInstance = {};
+      tDp._noteIdsByInstance[sDp.instanceUrl] = sDp.id;
     }
     // Merge reactions (Misskey reactions into Mastodon post)
     if (sDp.reactions && Object.keys(sDp.reactions).length > 0) {

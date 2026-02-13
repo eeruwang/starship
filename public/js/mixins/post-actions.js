@@ -98,15 +98,23 @@ export const PostActionsMixin = {
       const originalCached = this.postCache.get(`${platform}:${actionPostId}`) || cachedPost;
       const displayPost = originalCached?.reblog || originalCached;
 
-      // Try cached Misskey note ID first (avoids ap/show API call, prevents 429)
+      // Try cached note ID first (avoids ap/show API call, prevents 429)
       let resolved = false;
-      const cachedNoteId = displayPost?._misskeyNoteId;
-      const cachedAccountId = displayPost?._misskeyAccountId;
-      if (cachedNoteId && cachedAccountId) {
-        const cachedAccount = this.store.getById(cachedAccountId);
-        if (cachedAccount && cachedAccount.instanceUrl === account.instanceUrl) {
-          actionPostId = cachedNoteId;
-          resolved = true;
+      // Multi-instance lookup: check per-instance map first (handles multiple Misskey-type accounts)
+      if (displayPost?._noteIdsByInstance && displayPost._noteIdsByInstance[account.instanceUrl]) {
+        actionPostId = displayPost._noteIdsByInstance[account.instanceUrl];
+        resolved = true;
+      }
+      // Fallback: legacy single-account cache
+      if (!resolved) {
+        const cachedNoteId = displayPost?._misskeyNoteId;
+        const cachedAccountId = displayPost?._misskeyAccountId;
+        if (cachedNoteId && cachedAccountId) {
+          const cachedAccount = this.store.getById(cachedAccountId);
+          if (cachedAccount && cachedAccount.instanceUrl === account.instanceUrl) {
+            actionPostId = cachedNoteId;
+            resolved = true;
+          }
         }
       }
 
@@ -129,6 +137,8 @@ export const PostActionsMixin = {
           if (displayPost) {
             displayPost._misskeyNoteId = resolvedPost.id;
             displayPost._misskeyAccountId = accountId;
+            if (!displayPost._noteIdsByInstance) displayPost._noteIdsByInstance = {};
+            displayPost._noteIdsByInstance[account.instanceUrl] = resolvedPost.id;
           }
         } catch (err) {
           this.showToast('게시물 조회 실패: ' + err.message);
@@ -451,6 +461,8 @@ export const PostActionsMixin = {
       if (adp.instanceUrl) {
         dp.instanceUrl = dp.instanceUrl || adp.instanceUrl;
         dp._reactionInstanceUrl = adp.instanceUrl;
+        if (!dp._noteIdsByInstance) dp._noteIdsByInstance = {};
+        dp._noteIdsByInstance[adp.instanceUrl] = adp.id;
       }
 
       // Adjust favourites: Mastodon counts custom reactions as favourites
@@ -485,6 +497,9 @@ export const PostActionsMixin = {
       if (bdp._misskeyNoteId) cdp._misskeyNoteId = bdp._misskeyNoteId;
       if (bdp._misskeyAccountId) cdp._misskeyAccountId = bdp._misskeyAccountId;
       if (bdp._reactionInstanceUrl) cdp._reactionInstanceUrl = bdp._reactionInstanceUrl;
+      if (bdp._noteIdsByInstance) {
+        cdp._noteIdsByInstance = { ...(cdp._noteIdsByInstance || {}), ...bdp._noteIdsByInstance };
+      }
       if (bdp.instanceUrl) cdp.instanceUrl = cdp.instanceUrl || bdp.instanceUrl;
       cachedPost.favourited = basePost.favourited;
       cachedPost.reblogged = basePost.reblogged;
