@@ -463,7 +463,6 @@ function corsHeaders() {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };
 }
@@ -524,6 +523,7 @@ async function handleInstanceTheme(url) {
 
   try {
     const res = await fetch(targetUrl, {
+      signal: AbortSignal.timeout(5000),
       headers: {
         'User-Agent': 'StarShip/1.0',
         'Accept': 'text/html,application/xhtml+xml',
@@ -576,7 +576,7 @@ async function fetchYoutubeOg(url) {
   try {
     const res = await fetch(
       `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
     );
     if (res.ok) {
       const data = await res.json();
@@ -600,7 +600,7 @@ async function fetchTwitterOg(url) {
     try {
       const oRes = await fetch(
         `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-        { headers: { 'User-Agent': 'Mozilla/5.0' } }
+        { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
       );
       if (oRes.ok) {
         const data = await oRes.json();
@@ -623,6 +623,7 @@ async function fetchTwitterOg(url) {
           'Accept': 'text/html',
         },
         redirect: 'follow',
+        signal: AbortSignal.timeout(5000),
       });
       if (htmlRes.ok) {
         const html = await readPartial(htmlRes, 65536);
@@ -645,6 +646,7 @@ async function fetchAndParseOg(targetUrl) {
       'Accept': 'text/html,application/xhtml+xml',
     },
     redirect: 'follow',
+    signal: AbortSignal.timeout(5000),
   });
 
   if (!res.ok) {

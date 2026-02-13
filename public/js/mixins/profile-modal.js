@@ -87,7 +87,7 @@ export const ProfileModalMixin = {
         stickyHeader.classList.remove('visible');
       }
     };
-    scrollEl.addEventListener('scroll', onScroll);
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
     this._profileStickyScrollHandler = onScroll;
 
     // Reset scroll position
@@ -236,7 +236,7 @@ export const ProfileModalMixin = {
       fieldsEl.innerHTML = fields.map(f => `
         <div class="profile-field">
           <span class="profile-field-name">${resolveFieldEmojis(escapeHtml(f.name))}</span>
-          <span class="profile-field-value">${resolveFieldEmojis(f.value || escapeHtml(f.value))}</span>
+          <span class="profile-field-value">${isMisskey ? resolveFieldEmojis(escapeHtml(f.value || '')) : resolveFieldEmojis(f.value || '')}</span>
         </div>
       `).join('');
     }
@@ -295,9 +295,12 @@ export const ProfileModalMixin = {
       editBannerBtn.style.display = 'none';
       editAvatarBtn.style.display = 'none';
       if (this._profileEditAvatarFile) {
+        if (avatar.src.startsWith('blob:')) URL.revokeObjectURL(avatar.src);
         avatar.src = this._profileOriginalAvatar || '';
       }
       if (this._profileEditBannerFile) {
+        const bgUrl = banner.style.backgroundImage.match(/url\(([^)]+)\)/)?.[1];
+        if (bgUrl && bgUrl.startsWith('blob:')) URL.revokeObjectURL(bgUrl);
         banner.style.cssText = this._profileOriginalBannerStyle || '';
       }
       let html = `<a class="btn btn-secondary btn-small" href="${instanceUrl}/@${user.username}" target="_blank" rel="noopener">인스턴스에서 보기</a>`;
@@ -449,7 +452,7 @@ export const ProfileModalMixin = {
           this._loadMoreProfileNotes();
         }
       };
-      scrollEl.addEventListener('scroll', this._profileScrollHandler);
+      scrollEl.addEventListener('scroll', this._profileScrollHandler, { passive: true });
     } catch (err) {
       console.error('Failed to load profile notes:', err);
       postsEl.innerHTML = '<div class="profile-posts-empty">노트를 불러올 수 없습니다</div>';

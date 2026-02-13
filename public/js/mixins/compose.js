@@ -149,7 +149,7 @@ export const ComposeMixin = {
         const ov = document.getElementById('compose-text-overlay');
         if (ov) ov.scrollTop = this.composeText.scrollTop;
       };
-      this.composeText.addEventListener('scroll', this._composeScrollSyncHandler);
+      this.composeText.addEventListener('scroll', this._composeScrollSyncHandler, { passive: true });
     }
 
     this.openModal(this.modalCompose);
@@ -319,20 +319,23 @@ export const ComposeMixin = {
     }
 
     if (needsFetch) {
+      const fetchPromises = [];
       for (const id of this.composeSelectedAccounts) {
         if (this._composeEmojiMapAccountIds.has(id)) continue;
         this._composeEmojiMapAccountIds.add(id);
         const client = this.store.getClient(id);
         if (!client?.getInstanceEmojis) continue;
-        try {
-          const emojis = await client.getInstanceEmojis();
-          for (const e of emojis) {
-            if (e.name && e.url) {
-              this._composeEmojiMap[e.name] = e.url;
+        fetchPromises.push(
+          client.getInstanceEmojis().then(emojis => {
+            for (const e of emojis) {
+              if (e.name && e.url) {
+                this._composeEmojiMap[e.name] = e.url;
+              }
             }
-          }
-        } catch (err) { console.warn('Instance emoji fetch failed:', err); }
+          }).catch(err => console.warn('Instance emoji fetch failed:', err))
+        );
       }
+      if (fetchPromises.length > 0) await Promise.all(fetchPromises);
     }
 
     return this._composeEmojiMap;
@@ -440,6 +443,10 @@ export const ComposeMixin = {
   },
 
   renderComposeImagePreview() {
+    // Revoke old ObjectURLs before clearing
+    this.composeImagePreview.querySelectorAll('img').forEach(img => {
+      if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+    });
     this.composeImagePreview.innerHTML = '';
     this.composeFiles.forEach((file, idx) => {
       const item = document.createElement('div');

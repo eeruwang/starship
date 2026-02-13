@@ -27,6 +27,7 @@ class StarShipApp {
     this.postCache = new Map(); // key: `${platform}:${id}`, value: post
     this.POST_CACHE_MAX = 500;
     this._ogCache = new Map(); // URL → { title, description, image, siteName }
+    this._OG_CACHE_MAX = 200;
     this._columnPagination = new WeakMap();
     this.composeFiles = [];
     this.composeSelectedAccounts = new Set();

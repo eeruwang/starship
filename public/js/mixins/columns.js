@@ -437,6 +437,8 @@ export const ColumnsMixin = {
     setTimeout(() => {
       toast.classList.remove('visible');
       toast.addEventListener('transitionend', () => toast.remove());
+      // Fallback: remove after 1s even if transitionend doesn't fire
+      setTimeout(() => { if (toast.parentNode) toast.remove(); }, 1000);
     }, 3500);
   },
 };

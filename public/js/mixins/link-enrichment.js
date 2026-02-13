@@ -134,6 +134,14 @@ export const LinkEnrichmentMixin = {
         og = await res.json();
         if (og.error) return;
         this._ogCache.set(url, og);
+        // Evict oldest entries if over limit
+        if (this._ogCache.size > (this._OG_CACHE_MAX || 200)) {
+          const toDelete = this._ogCache.size - (this._OG_CACHE_MAX || 200);
+          const keys = this._ogCache.keys();
+          for (let i = 0; i < toDelete; i++) {
+            this._ogCache.delete(keys.next().value);
+          }
+        }
       } catch { return; }
     }
 

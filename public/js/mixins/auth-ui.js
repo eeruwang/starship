@@ -353,6 +353,13 @@ export const AuthUIMixin = {
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
     } catch {}
     this._currentUser = null;
+    // Stop background timers
+    this.stopAutoRefresh();
+    clearTimeout(this._syncDebounce);
+    this._syncDebounce = null;
+    // Clear caches
+    this.postCache.clear();
+    this._ogCache.clear();
     // Clear local data
     this.store.replaceAll([]);
     this.columnState = { all: true, notifications: true, accounts: {}, columnOrder: [] };
