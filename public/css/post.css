@@ -839,9 +839,41 @@ h4.mfm-heading { font-size: 1em; }
 .post-reactions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   margin-top: 0.5rem;
   padding-top: 0.4rem;
+  align-items: flex-start;
+}
+
+/* Engagement group containers */
+.engagement-likes,
+.engagement-reactions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.engagement-likes {
+  padding-right: 8px;
+  border-right: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  margin-right: 2px;
+}
+
+/* Only show separator when reactions follow */
+.engagement-likes:last-child {
+  padding-right: 0;
+  border-right: none;
+  margin-right: 0;
+}
+
+.engagement-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, rgba(255,255,255,0.4));
+  margin-right: 2px;
 }
 
 .reaction-badge {
@@ -855,6 +887,21 @@ h4.mfm-heading { font-size: 1em; }
   gap: 5px;
   line-height: 1;
   transition: all 0.2s;
+}
+
+/* Like badge distinct warm color */
+.reaction-badge.like-badge {
+  background: rgba(229, 115, 115, 0.1);
+  border-color: rgba(229, 115, 115, 0.25);
+}
+
+.reaction-badge.like-badge.reacted {
+  background: rgba(229, 115, 115, 0.2);
+  border-color: rgba(229, 115, 115, 0.45);
+}
+
+.reaction-badge.like-badge .reaction-count {
+  color: #e57373;
 }
 
 .reaction-badge .custom-emoji {

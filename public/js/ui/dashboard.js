@@ -693,13 +693,15 @@ export function buildReactionsHtml(displayPost, wrapperPost) {
   if (hasFavs) {
     const isFaved = wrapperPost.favourited || displayPost.favourited
       || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
-    html += `<span class="reaction-badge${isFaved ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span>`;
+    html += `<span class="engagement-likes"><span class="engagement-label">좋아요</span><span class="reaction-badge like-badge${isFaved ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${displayPost.stats.favourites}</span></span></span>`;
   }
   if (hasReactions) {
+    html += `<span class="engagement-reactions"><span class="engagement-label">리액션</span>`;
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
       const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
       html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
     }
+    html += `</span>`;
   }
   return html;
 }
