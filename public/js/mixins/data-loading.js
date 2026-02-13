@@ -716,59 +716,60 @@ export const DataLoadingMixin = {
   // Fire-and-forget: cards are re-rendered in-place as results arrive.
   _fetchMissingReactions(items, container, { isNotification = false } = {}) {
     const misskeyAccount = this.store.getAll().find(a => a.platform !== 'mastodon');
-    if (!misskeyAccount) return;
-    const client = this.store.getClient(misskeyAccount.id);
-    if (!client) return;
+    const client = misskeyAccount ? this.store.getClient(misskeyAccount.id) : null;
 
     const misskeyHost = (() => {
+      if (!misskeyAccount) return '';
       try { return new URL(misskeyAccount.instanceUrl).hostname; } catch { return ''; }
     })();
 
-    // --- Phase 1: Patch post-level reaction data (timeline & notification posts) ---
-    const seenUris = new Set();
-    const toFetch = [];
-    for (const item of items) {
-      const post = isNotification ? item.post : item;
-      if (!post) continue;
-      const dp = post.reblog || post;
-      if (dp.reactions && Object.keys(dp.reactions).length > 0) continue;
-      if (!dp.stats?.favourites || dp.stats.favourites <= 0) continue;
-      if (!dp.canonicalUri) continue;
-      if (seenUris.has(dp.canonicalUri)) continue;
-      seenUris.add(dp.canonicalUri);
-      toFetch.push({ item, post, dp });
-    }
+    // --- Phase 1: Patch post-level reaction data (requires authenticated Misskey client) ---
+    if (client) {
+      const seenUris = new Set();
+      const toFetch = [];
+      for (const item of items) {
+        const post = isNotification ? item.post : item;
+        if (!post) continue;
+        const dp = post.reblog || post;
+        if (dp.reactions && Object.keys(dp.reactions).length > 0) continue;
+        if (!dp.stats?.favourites || dp.stats.favourites <= 0) continue;
+        if (!dp.canonicalUri) continue;
+        if (seenUris.has(dp.canonicalUri)) continue;
+        seenUris.add(dp.canonicalUri);
+        toFetch.push({ item, post, dp });
+      }
 
-    for (const { item, post, dp } of toFetch.slice(0, 5)) {
-      client.resolveUrl(dp.canonicalUri).then(resolved => {
-        if (!resolved) return;
-        const rdp = resolved.reblog || resolved;
-        if (!rdp.reactions || Object.keys(rdp.reactions).length === 0) return;
-        dp.reactions = rdp.reactions;
-        dp.reactionEmojis = rdp.reactionEmojis || dp.reactionEmojis;
-        dp.emojis = rdp.emojis || dp.emojis;
-        if (rdp.instanceUrl) dp.instanceUrl = dp.instanceUrl || rdp.instanceUrl;
-        if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
-        dp._misskeyNoteId = rdp.id;
-        dp._misskeyAccountId = misskeyAccount.id;
-        this._adjustFavouritesForReactions(dp);
-        this.postCache.set(`${post.platform}:${post.id}`, post);
+      for (const { item, post, dp } of toFetch.slice(0, 5)) {
+        client.resolveUrl(dp.canonicalUri).then(resolved => {
+          if (!resolved) return;
+          const rdp = resolved.reblog || resolved;
+          if (!rdp.reactions || Object.keys(rdp.reactions).length === 0) return;
+          dp.reactions = rdp.reactions;
+          dp.reactionEmojis = rdp.reactionEmojis || dp.reactionEmojis;
+          dp.emojis = rdp.emojis || dp.emojis;
+          if (rdp.instanceUrl) dp.instanceUrl = dp.instanceUrl || rdp.instanceUrl;
+          if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
+          dp._misskeyNoteId = rdp.id;
+          dp._misskeyAccountId = misskeyAccount.id;
+          this._adjustFavouritesForReactions(dp);
+          this.postCache.set(`${post.platform}:${post.id}`, post);
 
-        if (isNotification) {
-          for (const notif of items) {
-            if (!notif.post || (notif.post.reblog || notif.post).canonicalUri !== dp.canonicalUri) continue;
-            const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
+          if (isNotification) {
+            for (const notif of items) {
+              if (!notif.post || (notif.post.reblog || notif.post).canonicalUri !== dp.canonicalUri) continue;
+              const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
+              for (const card of cards) {
+                card.replaceWith(renderNotification(notif));
+              }
+            }
+          } else {
+            const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
             for (const card of cards) {
-              card.replaceWith(renderNotification(notif));
+              card.replaceWith(renderPost(item));
             }
           }
-        } else {
-          const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
-          for (const card of cards) {
-            card.replaceWith(renderPost(item));
-          }
-        }
-      }).catch(() => {});
+        }).catch(() => {});
+      }
     }
 
     // --- Phase 2: Convert Mastodon favourite notifications to reactions ---
@@ -789,114 +790,214 @@ export const DataLoadingMixin = {
       favByUri.get(uri).push(notif);
     }
 
-    for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 5)) {
-      (async () => {
-        try {
-          // Step 1: Resolve the Mastodon post URI on the Misskey instance
-          let resolved;
-          try {
-            resolved = await client.resolveUrl(uri);
-          } catch (e) {
-            console.warn('[StarShip] fav→reaction: resolveUrl failed for', uri, e.message || e);
-            return;
+    // Shared helper: apply resolved reaction data to notification group
+    const applyReactions = (groupNotifs, reactionByUser, reactionEmojis, aggregateTypes, emojiBaseUrl) => {
+      let changed = false;
+      for (const notif of groupNotifs) {
+        const actorAcct = notif.actor?.acct
+          ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl).toLowerCase()
+          : null;
+        if (!actorAcct) continue;
+
+        // Try exact match from notes/reactions
+        let emoji = reactionByUser.get(actorAcct);
+
+        // Fallback: infer from aggregate reactions
+        if (!emoji && aggregateTypes.length > 0) {
+          if (aggregateTypes.length === 1) {
+            emoji = aggregateTypes[0][0];
+          } else {
+            const nonHeart = aggregateTypes.filter(([k]) => k !== '❤' && k !== '❤️');
+            emoji = nonHeart.length > 0
+              ? nonHeart.sort((a, b) => b[1] - a[1])[0][0]
+              : aggregateTypes[0][0];
           }
-          if (!resolved) {
-            console.warn('[StarShip] fav→reaction: resolveUrl returned null for', uri);
-            return;
-          }
-          const rdp = resolved.reblog || resolved;
-          if (!rdp.id) return;
-
-          // Step 2: Get per-user reactions via notes/reactions API (primary data source)
-          // This is more reliable than rdp.reactions which may be empty from ap/show
-          const reactionByUser = new Map();
-          try {
-            const userReactions = await client.getReactions(rdp.id) || [];
-            for (const r of userReactions) {
-              if (!r.user) continue;
-              const host = r.user.host || misskeyHost;
-              const acct = `${r.user.username}@${host}`.toLowerCase();
-              reactionByUser.set(acct, r.type);
-            }
-          } catch (e) {
-            console.warn('[StarShip] fav→reaction: getReactions failed for note', rdp.id, e.message || e);
-          }
-
-          // Step 3: Build aggregate fallback from resolved note's reaction data
-          const reactionEmojis = rdp.reactionEmojis || rdp.emojis || {};
-          const aggregateTypes = Object.entries(rdp.reactions || {}).filter(([, c]) => c > 0);
-
-          // If neither per-user nor aggregate data available, skip
-          if (reactionByUser.size === 0 && aggregateTypes.length === 0) {
-            console.warn('[StarShip] fav→reaction: no reaction data found for', uri);
-            return;
-          }
-
-          let changed = false;
-
-          for (const notif of groupNotifs) {
-            const actorAcct = notif.actor?.acct
-              ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl).toLowerCase()
-              : null;
-            if (!actorAcct) continue;
-
-            // Try exact match from notes/reactions
-            let emoji = reactionByUser.get(actorAcct);
-
-            // Fallback: infer from aggregate reactions
-            if (!emoji && aggregateTypes.length > 0) {
-              if (aggregateTypes.length === 1) {
-                emoji = aggregateTypes[0][0];
-              } else {
-                // Pick most common non-heart reaction
-                const nonHeart = aggregateTypes.filter(([k]) => k !== '❤' && k !== '❤️');
-                emoji = nonHeart.length > 0
-                  ? nonHeart.sort((a, b) => b[1] - a[1])[0][0]
-                  : aggregateTypes[0][0];
-              }
-            }
-            if (!emoji) continue;
-
-            // Convert favourite → reaction
-            notif.type = 'reaction';
-            notif.label = '리액션';
-            notif.reactionEmoji = emoji;
-            notif.icon = emoji;
-
-            // Resolve custom emoji URL (:name: format)
-            const customMatch = emoji.match(/^:(.+):$/);
-            if (customMatch) {
-              const name = customMatch[1];
-              const url = reactionEmojis[name] || reactionEmojis[name + '@.'] || null;
-              if (url) {
-                notif.reactionEmojiUrl = url;
-              } else {
-                const baseName = name.replace(/@\.$/, '');
-                notif.reactionEmojiUrl = `${misskeyAccount.instanceUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
-              }
-            }
-
-            // Update dedup key
-            const actorKey = notif.actor?.acct || notif.actor?.id || '';
-            const postKey = notif.post?.canonicalUri || notif.post?.id || '';
-            notif._dedupKey = `reaction:${actorKey}:${postKey}:${emoji}`;
-            changed = true;
-          }
-
-          if (changed) {
-            for (const notif of groupNotifs) {
-              if (notif.type !== 'reaction') continue;
-              const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
-              for (const card of cards) {
-                card.replaceWith(renderNotification(notif));
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('[StarShip] fav→reaction error:', e);
         }
-      })();
+        if (!emoji) continue;
+
+        notif.type = 'reaction';
+        notif.label = '리액션';
+        notif.reactionEmoji = emoji;
+        notif.icon = emoji;
+
+        const customMatch = emoji.match(/^:(.+):$/);
+        if (customMatch) {
+          const name = customMatch[1];
+          const url = reactionEmojis[name] || reactionEmojis[name + '@.'] || null;
+          if (url) {
+            notif.reactionEmojiUrl = url;
+          } else {
+            const baseName = name.replace(/@\.$/, '');
+            notif.reactionEmojiUrl = `${emojiBaseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+          }
+        }
+
+        const actorKey = notif.actor?.acct || notif.actor?.id || '';
+        const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+        notif._dedupKey = `reaction:${actorKey}:${postKey}:${emoji}`;
+        changed = true;
+      }
+      return changed;
+    };
+
+    const rerenderGroup = (groupNotifs) => {
+      for (const notif of groupNotifs) {
+        if (notif.type !== 'reaction') continue;
+        const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
+        for (const card of cards) {
+          card.replaceWith(renderNotification(notif));
+        }
+      }
+    };
+
+    if (client) {
+      // --- Authenticated approach using Misskey account ---
+      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 5)) {
+        (async () => {
+          try {
+            let resolved;
+            try {
+              resolved = await client.resolveUrl(uri);
+            } catch (e) {
+              console.warn('[StarShip] fav→reaction: resolveUrl failed for', uri, e.message || e);
+              return;
+            }
+            if (!resolved) return;
+            const rdp = resolved.reblog || resolved;
+            if (!rdp.id) return;
+
+            const reactionByUser = new Map();
+            try {
+              const userReactions = await client.getReactions(rdp.id) || [];
+              for (const r of userReactions) {
+                if (!r.user) continue;
+                const host = r.user.host || misskeyHost;
+                const acct = `${r.user.username}@${host}`.toLowerCase();
+                reactionByUser.set(acct, r.type);
+              }
+            } catch (e) {
+              console.warn('[StarShip] fav→reaction: getReactions failed for note', rdp.id, e.message || e);
+            }
+
+            const reactionEmojis = rdp.reactionEmojis || rdp.emojis || {};
+            const aggregateTypes = Object.entries(rdp.reactions || {}).filter(([, c]) => c > 0);
+            if (reactionByUser.size === 0 && aggregateTypes.length === 0) return;
+
+            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, aggregateTypes, misskeyAccount.instanceUrl);
+            if (changed) rerenderGroup(groupNotifs);
+          } catch (e) {
+            console.warn('[StarShip] fav→reaction error:', e);
+          }
+        })();
+      }
+    } else {
+      // --- Unauthenticated approach via actor's Misskey instance ---
+      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 5)) {
+        (async () => {
+          try {
+            // Find an actor whose instance is Misskey-compatible
+            let actorInstanceUrl = null;
+            for (const notif of groupNotifs) {
+              const acct = notif.actor?.acct;
+              if (!acct || !acct.includes('@')) continue;
+              const host = acct.split('@').pop();
+              const instanceUrl = `https://${host}`;
+              const isMisskey = await this._detectMisskeyInstance(instanceUrl);
+              if (isMisskey) {
+                actorInstanceUrl = instanceUrl;
+                break;
+              }
+            }
+            if (!actorInstanceUrl) return;
+
+            // Step 1: Resolve the post URI via unauthenticated ap/show
+            let noteId;
+            try {
+              const resolved = await this._unauthMisskeyRequest(actorInstanceUrl, 'ap/show', { uri });
+              if (!resolved || resolved.type !== 'Note' || !resolved.object) return;
+              noteId = resolved.object.id;
+            } catch (e) {
+              console.warn('[StarShip] unauth fav→reaction: ap/show failed for', uri, e.message || e);
+              return;
+            }
+
+            // Step 2: Get per-user reactions (unauthenticated)
+            const reactionByUser = new Map();
+            let reactionEmojis = {};
+            let aggregateTypes = [];
+            try {
+              const reactions = await this._unauthMisskeyRequest(actorInstanceUrl, 'notes/reactions', { noteId, limit: 20 });
+              if (!Array.isArray(reactions) || reactions.length === 0) return;
+              const actorHost = new URL(actorInstanceUrl).hostname;
+              for (const r of reactions) {
+                if (!r.user) continue;
+                const host = r.user.host || actorHost;
+                const acct = `${r.user.username}@${host}`.toLowerCase();
+                reactionByUser.set(acct, r.type);
+              }
+            } catch (e) {
+              console.warn('[StarShip] unauth fav→reaction: notes/reactions failed for', noteId, e.message || e);
+              return;
+            }
+
+            // Step 3: Get note details for emoji URLs and aggregate reaction counts
+            try {
+              const note = await this._unauthMisskeyRequest(actorInstanceUrl, 'notes/show', { noteId });
+              if (note) {
+                reactionEmojis = note.reactionEmojis || {};
+                aggregateTypes = Object.entries(note.reactions || {}).filter(([, c]) => c > 0);
+              }
+            } catch { /* proceed with per-user data only */ }
+
+            if (reactionByUser.size === 0 && aggregateTypes.length === 0) return;
+
+            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, aggregateTypes, actorInstanceUrl);
+            if (changed) rerenderGroup(groupNotifs);
+          } catch (e) {
+            console.warn('[StarShip] unauth fav→reaction error:', e);
+          }
+        })();
+      }
     }
+  },
+
+  // Detect whether a remote instance is Misskey-compatible (cached, unauthenticated)
+  async _detectMisskeyInstance(instanceUrl) {
+    if (!this._misskeyInstanceCache) this._misskeyInstanceCache = new Map();
+    if (this._misskeyInstanceCache.has(instanceUrl)) return this._misskeyInstanceCache.get(instanceUrl);
+
+    try {
+      const result = await this._unauthMisskeyRequest(instanceUrl, 'meta', {});
+      const isMisskey = !!(result && (result.version || result.softwareName));
+      this._misskeyInstanceCache.set(instanceUrl, isMisskey);
+      return isMisskey;
+    } catch {
+      this._misskeyInstanceCache.set(instanceUrl, false);
+      return false;
+    }
+  },
+
+  // Make an unauthenticated POST request to a Misskey instance API (via proxy)
+  async _unauthMisskeyRequest(instanceUrl, endpoint, body) {
+    const targetUrl = `${instanceUrl}/api/${endpoint}`;
+    const useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    const fetchUrl = useProxy
+      ? `/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl;
+
+    const res = await fetch(fetchUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Misskey unauthenticated API error ${res.status}`);
+    }
+    if (res.status === 204) return null;
+    const text = await res.text();
+    if (!text) return null;
+    return JSON.parse(text);
   },
 
   _deduplicateNotifications(notifs) {
