@@ -278,8 +278,10 @@ export const DataLoadingMixin = {
         })
       );
 
+      let rawApiCount = 0;
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value) {
+          rawApiCount += result.value.length;
           allPosts.push(...result.value);
         }
       }
@@ -319,9 +321,10 @@ export const DataLoadingMixin = {
       this.cachePosts(newPosts);
       await this.fetchMissingReplyParents(newPosts, accounts);
 
-      if (newPosts.length === 0) {
+      if (rawApiCount === 0) {
         pagination.hasMore = false;
-      } else {
+      }
+      if (newPosts.length > 0) {
         for (const post of newPosts) {
           container.appendChild(renderPost(post));
         }
@@ -397,11 +400,11 @@ export const DataLoadingMixin = {
           // Find max ID from response (don't assume first element is newest)
           let maxId = notifs[0].id;
           for (let i = 1; i < notifs.length; i++) {
-            if (notifs[i].id > maxId) maxId = notifs[i].id;
+            if (this._compareIds(notifs[i].id, maxId) > 0) maxId = notifs[i].id;
           }
           // Only advance sinceId forward, never backward
           const prev = newestIds.get(accountId);
-          if (!prev || maxId > prev) {
+          if (!prev || this._compareIds(maxId, prev) > 0) {
             newestIds.set(accountId, maxId);
           }
         }
@@ -488,7 +491,7 @@ export const DataLoadingMixin = {
           const accountId = notifs[0].accountId;
           let minId = notifs[0].id;
           for (let i = 1; i < notifs.length; i++) {
-            if (notifs[i].id < minId) minId = notifs[i].id;
+            if (this._compareIds(notifs[i].id, minId) < 0) minId = notifs[i].id;
           }
           // Only go backward on first load (don't override with newer oldest when polling)
           if (isFirstLoad || !oldestIds.has(accountId)) {
@@ -1023,6 +1026,14 @@ export const DataLoadingMixin = {
     return JSON.parse(text);
   },
 
+  // Compare two ID strings numerically-safe: length-first, then lexicographic.
+  // Works for Mastodon (numeric strings of varying length) and Misskey (fixed-length aidx).
+  // Returns negative if a < b, positive if a > b, 0 if equal.
+  _compareIds(a, b) {
+    if (a.length !== b.length) return a.length - b.length;
+    return a < b ? -1 : a > b ? 1 : 0;
+  },
+
   _deduplicateNotifications(notifs) {
     const seen = new Map();
     const deduped = [];
@@ -1093,8 +1104,10 @@ export const DataLoadingMixin = {
         })
       );
 
+      let rawApiCount = 0;
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value) {
+          rawApiCount += result.value.length;
           allNotifs.push(...result.value);
         }
       }
@@ -1149,7 +1162,7 @@ export const DataLoadingMixin = {
           const accountId = notifs[0].accountId;
           let minId = notifs[0].id;
           for (let i = 1; i < notifs.length; i++) {
-            if (notifs[i].id < minId) minId = notifs[i].id;
+            if (this._compareIds(notifs[i].id, minId) < 0) minId = notifs[i].id;
           }
           oldestIds.set(accountId, minId);
         }
@@ -1167,12 +1180,39 @@ export const DataLoadingMixin = {
         });
       if (notifPosts.length > 0) {
         this.cachePosts(notifPosts);
+
+        // Merge cached reaction data into older notification posts
+        this._mergeReactionsFromCache(notifPosts);
+        for (const n of newNotifs) {
+          if (n.type !== 'favourite' || !n.post) continue;
+          const dp = n.post.reblog || n.post;
+          if (!dp.reactions) continue;
+          const entries = Object.entries(dp.reactions);
+          const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
+          if (nonHeart.length === 0) continue;
+          const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
+          n.type = 'reaction';
+          n.label = '리액션';
+          n.reactionEmoji = emoji;
+          n.icon = emoji;
+          const match = emoji.match(/^:(.+):$/);
+          if (match) {
+            const name = match[1];
+            n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
+                              || dp.emojis?.[name] || dp.emojis?.[name + '@.'] || null;
+          }
+        }
+
         await this.fetchMissingReplyParents(notifPosts, accounts);
       }
 
-      if (newNotifs.length === 0) {
+      // Only stop pagination when the API itself returned nothing.
+      // If API returned results but they were all dedup'd away, the cursor
+      // has still advanced and the next page may have unique items.
+      if (rawApiCount === 0) {
         pagination.hasMore = false;
-      } else {
+      }
+      if (newNotifs.length > 0) {
         for (const notif of newNotifs) {
           container.appendChild(renderNotification(notif));
         }
