@@ -430,6 +430,8 @@ export class MastodonClient {
           author: this.normalizeUser(nqs.account),
           media: (nqs.media_attachments || []).map(m => ({
             type: m.type, url: m.url, previewUrl: m.preview_url, description: m.description,
+            width: m.meta?.original?.width || m.meta?.small?.width || 0,
+            height: m.meta?.original?.height || m.meta?.small?.height || 0,
           })),
           url: nqs.url,
           quotePost: null,
@@ -446,6 +448,8 @@ export class MastodonClient {
           url: m.url,
           previewUrl: m.preview_url,
           description: m.description,
+          width: m.meta?.original?.width || m.meta?.small?.width || 0,
+          height: m.meta?.original?.height || m.meta?.small?.height || 0,
         })),
         url: quoteSource.url,
         quotePost: nestedQuote,
@@ -525,6 +529,8 @@ export class MastodonClient {
         url: m.url,
         previewUrl: m.preview_url,
         description: m.description,
+        width: m.meta?.original?.width || m.meta?.small?.width || 0,
+        height: m.meta?.original?.height || m.meta?.small?.height || 0,
       })),
       stats: {
         replies: status.replies_count || 0,

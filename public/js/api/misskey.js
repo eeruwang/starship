@@ -336,6 +336,8 @@ export class MisskeyClient {
             url: f.url,
             previewUrl: f.thumbnailUrl || f.url,
             description: f.comment || f.name,
+            width: f.properties?.width || 0,
+            height: f.properties?.height || 0,
           })),
           url: nqn.uri || `${this.instanceUrl}/notes/${nqn.id}`,
           quotePost: null, // cap at 2 levels
@@ -352,6 +354,8 @@ export class MisskeyClient {
           url: f.url,
           previewUrl: f.thumbnailUrl || f.url,
           description: f.comment || f.name,
+          width: f.properties?.width || 0,
+          height: f.properties?.height || 0,
         })),
         url: qn.uri || `${this.instanceUrl}/notes/${qn.id}`,
         quotePost: nestedQuote,
@@ -397,6 +401,8 @@ export class MisskeyClient {
         previewUrl: f.thumbnailUrl || f.url,
         description: f.comment || f.name,
         sensitive: !!f.isSensitive,
+        width: f.properties?.width || 0,
+        height: f.properties?.height || 0,
       })),
       stats: {
         replies: actualNote.repliesCount || 0,

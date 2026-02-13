@@ -110,7 +110,8 @@ function renderReplyMedia(media) {
   if (!media || media.length === 0) return '';
   const items = media.filter(m => m.type !== 'audio').slice(0, 4);
   if (items.length === 0) return '';
-  let html = `<div class="reply-context-media post-media media-${items.length}">`;
+  const layoutClass = getMediaLayoutClass(items);
+  let html = `<div class="reply-context-media post-media media-${items.length}${layoutClass}">`;
   for (const m of items) {
     if (m.type === 'video') {
       html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
@@ -150,18 +151,44 @@ function renderLinkCardHtml(lc, extraClass = '') {
 const SENSITIVE_REVEAL_BTN = `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
 const SENSITIVE_HIDE_BTN = `<button class="sensitive-hide" title="민감한 미디어 숨기기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>숨기기</span></button>`;
 
+function getMediaLayoutClass(mediaItems) {
+  const count = Math.min(mediaItems.length, 4);
+  if (count <= 1) return '';
+  const ratios = mediaItems.slice(0, count).map(m => {
+    if (m.width && m.height) return m.width / m.height;
+    return 1; // default to square if unknown
+  });
+  // portrait < 0.8, landscape > 1.2, square in between
+  const orientations = ratios.map(r => r < 0.8 ? 'p' : r > 1.2 ? 'l' : 's');
+  if (count === 2) {
+    const allPortrait = orientations.every(o => o === 'p');
+    const allLandscape = orientations.every(o => o === 'l' || o === 's');
+    if (allPortrait) return ' layout-2p';
+    if (allLandscape) return ' layout-2l';
+    return ' layout-2m'; // mixed
+  }
+  if (count === 3) {
+    // If first image is portrait, use left-big layout; if landscape, use top-big layout
+    if (orientations[0] === 'p') return ' layout-3pl';
+    return ' layout-3lt';
+  }
+  // count === 4: always 2x2
+  return '';
+}
+
 function renderMediaGridHtml(mediaItems, isSensitive, extraClass = '') {
   if (!mediaItems || mediaItems.length === 0) return '';
   const count = Math.min(mediaItems.length, 4);
   const sensitiveClass = isSensitive ? ' media-sensitive' : '';
+  const layoutClass = getMediaLayoutClass(mediaItems);
   const cls = extraClass
-    ? `${extraClass} post-media media-${count}${sensitiveClass}`
-    : `post-media media-${count}${sensitiveClass}`;
+    ? `${extraClass} post-media media-${count}${layoutClass}${sensitiveClass}`
+    : `post-media media-${count}${layoutClass}${sensitiveClass}`;
   let html = `<div class="${cls}">`;
   if (isSensitive) {
     html += SENSITIVE_REVEAL_BTN + SENSITIVE_HIDE_BTN;
   }
-  for (const m of mediaItems) {
+  for (const m of mediaItems.slice(0, count)) {
     if (m.type === 'video') {
       html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
     } else {

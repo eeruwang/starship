@@ -333,28 +333,74 @@ h4.mfm-heading { font-size: 1em; }
   border-radius: var(--radius);
   overflow: hidden;
   display: grid;
-  gap: 4px;
-}
-
-.post-media.media-1 {
-  grid-template-columns: 1fr;
-}
-.post-media.media-2 {
-  grid-template-columns: 1fr 1fr;
-}
-.post-media.media-3,
-.post-media.media-4 {
-  grid-template-columns: 1fr 1fr;
+  gap: 2px;
 }
 
 .post-media img,
 .post-media video {
   width: 100%;
-  max-height: 300px;
+  height: 100%;
   object-fit: cover;
-  border-radius: var(--radius);
   cursor: pointer;
   transition: opacity 0.2s;
+}
+
+/* === 1 image === */
+.post-media.media-1 {
+  grid-template-columns: 1fr;
+  max-height: 400px;
+}
+.post-media.media-1 img,
+.post-media.media-1 video {
+  max-height: 400px;
+}
+
+/* === 2 images: landscape/square - side by side, moderate height === */
+.post-media.media-2 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 200px;
+}
+/* 2 images: both portrait - side by side, taller */
+.post-media.media-2.layout-2p {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 320px;
+}
+/* 2 images: all landscape */
+.post-media.media-2.layout-2l {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 200px;
+}
+/* 2 images: mixed aspect ratios */
+.post-media.media-2.layout-2m {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 260px;
+}
+
+/* === 3 images: first is portrait → left-big layout === */
+.post-media.media-3 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 160px 160px;
+}
+.post-media.media-3.layout-3pl {
+  grid-template-columns: 3fr 2fr;
+  grid-template-rows: 160px 160px;
+}
+.post-media.media-3.layout-3pl > :first-child {
+  grid-row: 1 / 3;
+}
+/* 3 images: first is landscape → top-big layout */
+.post-media.media-3.layout-3lt {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 200px 140px;
+}
+.post-media.media-3.layout-3lt > :first-child {
+  grid-column: 1 / 3;
+}
+
+/* === 4 images: 2x2 grid === */
+.post-media.media-4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 160px 160px;
 }
 
 /* ===== Link Card ===== */
@@ -990,6 +1036,9 @@ h4.mfm-heading { font-size: 1em; }
   max-height: 120px;
   border-radius: 6px;
   overflow: hidden;
+}
+.reply-context-media.post-media {
+  grid-template-rows: 120px !important;
 }
 .notif-parent-content .reply-context-media {
   max-height: 100px;
