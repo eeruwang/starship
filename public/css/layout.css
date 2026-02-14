@@ -83,6 +83,16 @@
   display: none;
 }
 
+.col-toggle.thread-toggle {
+  background: linear-gradient(135deg, #3a5a4a, #4a6a5a);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.col-toggle.thread-toggle:hover {
+  background: linear-gradient(135deg, #4a6a5a, #5a7a6a);
+}
+
 .col-toggle-separator {
   width: 1px;
   height: 20px;

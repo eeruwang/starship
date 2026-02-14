@@ -277,7 +277,10 @@
     <div class="modal modal-thread">
       <div class="thread-header">
         <h2>대화 스레드</h2>
-        <button class="btn btn-icon" data-close-modal="modal-thread"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <div class="thread-header-actions">
+          <button class="btn btn-icon" id="btn-pin-thread" title="컬럼으로 추가"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="17.5" y1="14" x2="17.5" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg></button>
+          <button class="btn btn-icon" data-close-modal="modal-thread"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
       </div>
       <div class="thread-content" id="thread-content"></div>
     </div>

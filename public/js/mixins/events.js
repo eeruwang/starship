@@ -344,7 +344,8 @@ export const EventsMixin = {
       if (e.target.closest('.post-action, .reaction-badge, a, button, [data-lightbox], .expand-toggle, .cw-toggle, .post-media, img')) return;
       const card = e.target.closest('.post-card');
       if (!card) return;
-      if (card.closest('.thread-content')) return;
+      // Ignore clicks inside the thread modal (but allow clicks in thread columns)
+      if (card.closest('.modal .thread-content')) return;
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;
@@ -524,12 +525,26 @@ export const EventsMixin = {
       this.openProfileModal(author, platform, accountId);
     });
 
+    // Pin thread as column button
+    document.getElementById('btn-pin-thread').addEventListener('click', () => {
+      this.pinThreadAsColumn();
+    });
+
     // Column close/refresh buttons
     this.columnsContainer.addEventListener('click', (e) => {
       const closeBtn = e.target.closest('[data-action="close-column"]');
       if (closeBtn) {
         const colType = closeBtn.dataset.columnType;
         const accountId = closeBtn.dataset.accountId;
+
+        // Thread columns use unpinThreadColumn
+        if (colType === 'thread') {
+          const col = closeBtn.closest('.column');
+          const threadKey = col?.dataset.threadKey;
+          if (threadKey) this.unpinThreadColumn(threadKey);
+          return;
+        }
+
         const orderKey = colType === 'account' ? `account:${accountId}` : colType;
         if (colType === 'all') {
           this.columnState.all = false;

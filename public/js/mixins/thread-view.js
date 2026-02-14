@@ -32,6 +32,9 @@ export const ThreadViewMixin = {
     content.innerHTML = '<div class="thread-loading"><div class="spinner"></div></div>';
     this.openModal(modal);
 
+    // Store current thread info so the pin button can use it
+    this._currentThread = { postId, platform, accountId };
+
     try {
       const cachedPost = this.postCache.get(`${platform}:${postId}`);
       const canonicalUri = cachedPost ? (cachedPost.reblog || cachedPost).canonicalUri : null;
@@ -144,6 +147,132 @@ export const ThreadViewMixin = {
         el.style.removeProperty('--merged-gradient');
         if (solidColor) el.style.borderLeftColor = solidColor;
       }
+    }
+  },
+
+  /**
+   * Pin the current thread as a column.
+   * Called from the pin button in the thread modal header.
+   */
+  pinThreadAsColumn() {
+    const info = this._currentThread;
+    if (!info) return;
+
+    const threadKey = `thread:${info.platform}:${info.postId}`;
+
+    // Already pinned?
+    if (this.columnState.threads?.[threadKey]) {
+      this.showToast('이미 컬럼으로 추가된 스레드입니다', 'info');
+      return;
+    }
+
+    // Save thread info to columnState
+    if (!this.columnState.threads) this.columnState.threads = {};
+    this.columnState.threads[threadKey] = {
+      postId: info.postId,
+      platform: info.platform,
+      accountId: info.accountId,
+    };
+    this.updateColumnOrder(threadKey, true);
+    this.saveColumnState();
+
+    // Build column and insert
+    const col = this.buildSingleColumn('thread', null, threadKey);
+    if (col) {
+      const refNode = this.getColumnInsertionPoint('thread', null, threadKey);
+      this.columnsContainer.insertBefore(col, refNode);
+
+      col.style.opacity = '0';
+      col.style.transform = 'scale(0.95)';
+      col.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      requestAnimationFrame(() => {
+        col.style.opacity = '1';
+        col.style.transform = 'scale(1)';
+        setTimeout(() => { col.style.transition = ''; col.style.transform = ''; }, 350);
+      });
+
+      this.loadThreadForColumn(col);
+    }
+
+    // Update toggle bar and close the modal
+    this.renderToggleBar();
+    this.closeModal(document.getElementById('modal-thread'));
+  },
+
+  /**
+   * Remove a pinned thread column.
+   */
+  unpinThreadColumn(threadKey) {
+    if (this.columnState.threads) {
+      delete this.columnState.threads[threadKey];
+      // Clean up empty threads object
+      if (Object.keys(this.columnState.threads).length === 0) {
+        delete this.columnState.threads;
+      }
+    }
+    this.updateColumnOrder(threadKey, false);
+    this.saveColumnState();
+    this.renderToggleBar();
+    this.toggleColumnSmooth('thread', false, null, threadKey);
+  },
+
+  /**
+   * Load thread data into a thread column.
+   */
+  async loadThreadForColumn(col) {
+    const postId = col.dataset.threadPostId;
+    const platform = col.dataset.threadPlatform;
+    const accountId = col.dataset.threadAccountId;
+    const content = col.querySelector('.column-content');
+    if (!content) return;
+
+    content.classList.add('thread-content');
+    content.innerHTML = '<div class="thread-loading"><div class="spinner"></div></div>';
+
+    try {
+      // Fetch from the primary account
+      const primaryResult = await this._fetchThreadForAccount(postId, platform, accountId, null);
+
+      let ancestors = primaryResult?.ancestors || [];
+      let targetPost = primaryResult?.target || null;
+      let descendants = primaryResult?.descendants || [];
+
+      // Update column title with author info
+      const h2 = col.querySelector('.column-header h2');
+      if (h2 && targetPost) {
+        const author = targetPost.author;
+        const name = escapeHtml(author.displayName || author.username);
+        const avatarHtml = author.avatarUrl
+          ? `<img class="column-header-avatar" src="${escapeHtml(author.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+          : '';
+        h2.innerHTML = `${avatarHtml}${name}의 스레드`;
+      }
+
+      let allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
+      this.cachePosts(allPosts);
+      this._mergeReactionsFromCache(allPosts);
+      this._renderThread(content, ancestors, targetPost, descendants);
+      this._fetchMissingReactions(allPosts, content);
+
+      // Phase 2: merge other accounts
+      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      const canonicalUri = cachedPost ? (cachedPost.reblog || cachedPost).canonicalUri : null;
+      const visibleAccounts = this.store.getVisible();
+      const otherAccounts = visibleAccounts
+        .filter(a => a.id !== accountId)
+        .map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) }));
+
+      if (otherAccounts.length > 0 && canonicalUri) {
+        await this._mergeOtherAccountThreads(
+          content, otherAccounts, canonicalUri, platform,
+          ancestors, targetPost, descendants, cachedPost,
+          true, visibleAccounts.map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) })),
+          accountId
+        );
+      }
+    } catch (err) {
+      console.error('Thread column load failed:', err);
+      content.innerHTML = `<div class="thread-loading">스레드를 불러올 수 없습니다.</div>`;
     }
   },
 
@@ -333,13 +462,15 @@ export const ThreadViewMixin = {
     // Enrich link cards with OG data
     this.enrichLinkCards(content);
 
-    // Scroll to the target post
-    requestAnimationFrame(() => {
-      const target = content.querySelector('.thread-target');
-      if (target) {
-        target.scrollIntoView({ block: 'center' });
-      }
-    });
+    // Scroll to the target post (only in modal, not in pinned columns)
+    if (content.closest('.modal')) {
+      requestAnimationFrame(() => {
+        const target = content.querySelector('.thread-target');
+        if (target) {
+          target.scrollIntoView({ block: 'center' });
+        }
+      });
+    }
   },
 
   /**

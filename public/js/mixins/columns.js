@@ -82,6 +82,26 @@ export const ColumnsMixin = {
       }
     }
 
+    // Thread column toggles
+    const threads = this.columnState.threads;
+    if (threads && Object.keys(threads).length > 0) {
+      const sep2 = document.createElement('div');
+      sep2.className = 'col-toggle-separator';
+      this.toggleBar.appendChild(sep2);
+
+      for (const [threadKey, info] of Object.entries(threads)) {
+        const toggle = document.createElement('button');
+        toggle.className = 'col-toggle active thread-toggle';
+        toggle.dataset.toggleType = 'thread';
+        toggle.dataset.threadKey = threadKey;
+        // Show a short label from cached post
+        const cached = this.postCache.get(`${info.platform}:${info.postId}`);
+        const label = cached?.author?.displayName || '스레드';
+        toggle.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6;margin-right:4px"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>${escapeHtml(label)}`;
+        this.toggleBar.appendChild(toggle);
+      }
+    }
+
   },
 
   handleToggleClick(toggle) {
@@ -106,6 +126,9 @@ export const ColumnsMixin = {
       this.saveColumnState();
       this.renderToggleBar();
       this.toggleColumnSmooth('account', this.columnState.accounts[accountId], accountId);
+    } else if (type === 'thread') {
+      const threadKey = toggle.dataset.threadKey;
+      this.unpinThreadColumn(threadKey);
     }
   },
 
@@ -121,10 +144,10 @@ export const ColumnsMixin = {
     }
   },
 
-  toggleColumnSmooth(type, visible, accountId = null) {
+  toggleColumnSmooth(type, visible, accountId = null, threadKey = null) {
     if (visible) {
       // Build and insert column at the correct position
-      const col = this.buildSingleColumn(type, accountId);
+      const col = this.buildSingleColumn(type, accountId, threadKey);
       if (!col) return;
 
       const refNode = this.getColumnInsertionPoint(type, accountId);
@@ -144,7 +167,7 @@ export const ColumnsMixin = {
       this.loadColumnData(col, type, accountId);
     } else {
       // Find and animate out
-      const col = this.findColumnElement(type, accountId);
+      const col = this.findColumnElement(type, accountId, threadKey);
       if (!col) return;
 
       col.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
@@ -154,7 +177,7 @@ export const ColumnsMixin = {
     }
   },
 
-  buildSingleColumn(type, accountId) {
+  buildSingleColumn(type, accountId, threadKey) {
     if (type === 'all') {
       return this.createColumn('전체', 'all', null);
     } else if (type === 'notifications') {
@@ -164,6 +187,15 @@ export const ColumnsMixin = {
       if (!account) return null;
       const name = escapeHtml(account.label || account.profile.displayName);
       return this.createColumn(name, 'account', account.id);
+    } else if (type === 'thread' && threadKey) {
+      const info = this.columnState.threads?.[threadKey];
+      if (!info) return null;
+      const col = this.createColumn('스레드', 'thread', null);
+      col.dataset.threadKey = threadKey;
+      col.dataset.threadPostId = info.postId;
+      col.dataset.threadPlatform = info.platform;
+      col.dataset.threadAccountId = info.accountId;
+      return col;
     }
     return null;
   },
@@ -180,15 +212,19 @@ export const ColumnsMixin = {
       if (account) {
         this.loadTimelineForColumn(content, [account]);
       }
+    } else if (type === 'thread') {
+      this.loadThreadForColumn(col);
     }
   },
 
-  findColumnElement(type, accountId) {
+  findColumnElement(type, accountId, threadKey) {
     const columns = this.columnsContainer.querySelectorAll('.column');
     for (const col of columns) {
       if (col.dataset.columnType === type) {
         if (type === 'account') {
           if (col.dataset.accountId === accountId) return col;
+        } else if (type === 'thread') {
+          if (col.dataset.threadKey === threadKey) return col;
         } else {
           return col;
         }
@@ -198,21 +234,25 @@ export const ColumnsMixin = {
   },
 
   // Determine correct insertion position using the saved toggle order
-  getColumnInsertionPoint(type, accountId) {
+  getColumnInsertionPoint(type, accountId, threadKey) {
     const existing = [...this.columnsContainer.querySelectorAll('.column')];
     const order = this.columnState.order || [];
 
-    const myKey = type === 'account' ? `account:${accountId}` : type;
+    const myKey = type === 'account' ? `account:${accountId}`
+      : type === 'thread' ? (threadKey || type) : type;
     const myIndex = order.indexOf(myKey);
+
+    const _colKey = (col) => {
+      if (col.dataset.columnType === 'account') return `account:${col.dataset.accountId}`;
+      if (col.dataset.columnType === 'thread') return col.dataset.threadKey;
+      return col.dataset.columnType;
+    };
 
     // Find the first existing column that should come AFTER this one in the order
     for (let i = myIndex + 1; i < order.length; i++) {
       const key = order[i];
       for (const col of existing) {
-        const colKey = col.dataset.columnType === 'account'
-          ? `account:${col.dataset.accountId}`
-          : col.dataset.columnType;
-        if (colKey === key) return col;
+        if (_colKey(col) === key) return col;
       }
     }
     return null; // append to end
@@ -245,6 +285,16 @@ export const ColumnsMixin = {
             const col = this.createColumn(name, 'account', account.id);
             this.columnsContainer.appendChild(col);
             this.loadTimelineForColumn(col.querySelector('.column-content'), [account]);
+          }
+        }
+      } else if (key.startsWith('thread:')) {
+        const threadKey = key;
+        const info = this.columnState.threads?.[threadKey];
+        if (info) {
+          const col = this.buildSingleColumn('thread', null, threadKey);
+          if (col) {
+            this.columnsContainer.appendChild(col);
+            this.loadThreadForColumn(col);
           }
         }
       }
@@ -355,6 +405,8 @@ export const ColumnsMixin = {
             if (account) {
               await this.loadTimelineForColumn(content, [account]);
             }
+          } else if (colType === 'thread') {
+            await this.loadThreadForColumn(col);
           }
         } finally {
           // End refresh animation with a brief flash

@@ -145,6 +145,12 @@
   margin: 0;
 }
 
+.thread-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .thread-content {
   overflow-y: auto;
   padding: 0.5rem;
