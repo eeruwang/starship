@@ -21,7 +21,7 @@ function buildFetchUrl(targetUrl) {
 
 const MASTODON_SCOPES = 'read write follow push';
 
-export async function startMastodonOAuth(instanceUrl) {
+export async function startMastodonOAuth(instanceUrl, popup) {
   instanceUrl = instanceUrl.replace(/\/+$/, '');
 
   // 1. 앱 등록
@@ -50,7 +50,7 @@ export async function startMastodonOAuth(instanceUrl) {
     clientSecret: app.client_secret,
   });
 
-  // 3. 인증 페이지로 리다이렉트 (팝업)
+  // 3. 인증 페이지로 이동
   const authUrl = `${instanceUrl}/oauth/authorize?` + new URLSearchParams({
     client_id: app.client_id,
     redirect_uri: CALLBACK_URL,
@@ -58,7 +58,12 @@ export async function startMastodonOAuth(instanceUrl) {
     scope: MASTODON_SCOPES,
   }).toString();
 
-  return openAuthPopup(authUrl);
+  if (popup) {
+    popup.location.href = authUrl;
+  } else {
+    window.location.href = authUrl;
+  }
+  return popup;
 }
 
 export async function completeMastodonOAuth(code, pending) {
@@ -107,7 +112,7 @@ const MISSKEY_PERMISSIONS = [
   'write:votes',
 ].join(',');
 
-export async function startMiAuth(instanceUrl, platform) {
+export async function startMiAuth(instanceUrl, platform, popup) {
   instanceUrl = instanceUrl.replace(/\/+$/, '');
 
   const sessionId = crypto.randomUUID();
@@ -124,7 +129,12 @@ export async function startMiAuth(instanceUrl, platform) {
     permission: MISSKEY_PERMISSIONS,
   }).toString();
 
-  return openAuthPopup(authUrl);
+  if (popup) {
+    popup.location.href = authUrl;
+  } else {
+    window.location.href = authUrl;
+  }
+  return popup;
 }
 
 export async function completeMiAuth(sessionId, pending) {
@@ -153,7 +163,7 @@ export async function completeMiAuth(sessionId, pending) {
 
 // ===== 공통 유틸 =====
 
-function openAuthPopup(url) {
+export function openAuthPopup(url) {
   const width = 600;
   const height = 700;
   const left = window.screenX + (window.outerWidth - width) / 2;

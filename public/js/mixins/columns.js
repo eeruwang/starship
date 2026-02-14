@@ -75,7 +75,7 @@ export const ColumnsMixin = {
         toggle.className = `col-toggle ${isActive ? 'active' : ''}${isHidden ? ' account-hidden' : ''}`;
         toggle.dataset.toggleType = 'account';
         toggle.dataset.accountId = account.id;
-        const dotColor = account.themeColor || this._instanceColor(account.instanceUrl);
+        const dotColor = this._accountColor(account);
         const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
         toggle.innerHTML = `<span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>${escapeHtml(account.label || account.profile.displayName)}`;
         this.toggleBar.appendChild(toggle);
@@ -261,7 +261,7 @@ export const ColumnsMixin = {
     if (type === 'account' && accountId) {
       const account = this.store.getById(accountId);
       if (account?.profile?.avatarUrl) {
-        const acColor = account.themeColor || this._instanceColor(account.instanceUrl);
+        const acColor = this._accountColor(account);
         const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
         avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
       }
@@ -271,7 +271,7 @@ export const ColumnsMixin = {
       if (accounts.length > 0) {
         const avatars = accounts.map(a => {
           if (!a.profile?.avatarUrl) return '';
-          const acColor = a.themeColor || this._instanceColor(a.instanceUrl);
+          const acColor = this._accountColor(a);
           const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
           return `<img class="column-header-avatar stacked" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
         }).filter(Boolean).join('');
@@ -310,7 +310,7 @@ export const ColumnsMixin = {
           const name = escapeHtml(account.label || account.profile.displayName);
           let avatarHtml = '';
           if (account.profile?.avatarUrl) {
-            const acColor = account.themeColor || this._instanceColor(account.instanceUrl);
+            const acColor = this._accountColor(account);
             const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
             avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
           }
@@ -323,7 +323,7 @@ export const ColumnsMixin = {
         if (accounts.length > 0) {
           const avatars = accounts.map(a => {
             if (!a.profile?.avatarUrl) return '';
-            const acColor = a.themeColor || this._instanceColor(a.instanceUrl);
+            const acColor = this._accountColor(a);
             const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
             return `<img class="column-header-avatar stacked" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
           }).filter(Boolean).join('');

@@ -50,7 +50,7 @@ class StarShipApp {
     this._turnstileWidgetId = null;
     this._turnstileToken = null;
     this.fetchSiteInfo();
-    this.checkAuth();
+    // checkAuth() is called in DOMContentLoaded after pending OAuth results are processed
   }
 
   loadSettings() {
@@ -200,15 +200,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const app = new StarShipApp();
   window.app = app;
 
-  // Redirect OAuth callback
+  // 1. Check auth and load cloud data first (establishes _currentUser)
+  await app.checkAuth();
+
+  // 2. Process any pending OAuth callback result (adds on top of cloud data)
   const authResult = localStorage.getItem('starship_auth_result');
   if (authResult) {
     localStorage.removeItem('starship_auth_result');
     try {
       const result = JSON.parse(authResult);
       await app.store.addAccount(result.platform, result.instanceUrl, result.accessToken);
-      app.debouncedSaveToCloud();
       app.render();
+      await app.saveToCloud();
     } catch (err) {
       console.error('OAuth 콜백 처리 실패:', err);
     }

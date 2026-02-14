@@ -111,7 +111,8 @@ export const AuthUIMixin = {
       case 'export-data': {
         const data = {
           accounts: this.store.getAll().map(a => ({
-            id: a.id, platform: a.platform, instanceUrl: a.instanceUrl,
+            id: a.id, platform: a.platform, software: a.software || a.platform,
+            instanceUrl: a.instanceUrl,
             accessToken: a.accessToken, themeColor: a.themeColor,
             label: a.label, profile: a.profile, hidden: a.hidden || false,
           })),
@@ -387,7 +388,8 @@ export const AuthUIMixin = {
         credentials: 'same-origin',
         body: JSON.stringify({
           accounts: this.store.getAll().map(a => ({
-            id: a.id, platform: a.platform, instanceUrl: a.instanceUrl,
+            id: a.id, platform: a.platform, software: a.software || a.platform,
+            instanceUrl: a.instanceUrl,
             accessToken: a.accessToken, themeColor: a.themeColor,
             label: a.label, profile: a.profile, hidden: a.hidden || false,
           })),

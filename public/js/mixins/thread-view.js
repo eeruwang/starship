@@ -41,7 +41,7 @@ export const ThreadViewMixin = {
       const accounts = visibleAccounts.map(a => ({
         id: a.id,
         platform: a.platform,
-        themeColor: a.themeColor || this._instanceColor(a.instanceUrl),
+        themeColor: this._accountColor(a),
       }));
 
       // Fetch thread data from all accounts in parallel
@@ -173,7 +173,7 @@ export const ThreadViewMixin = {
     }
 
     // Add account metadata to all posts
-    const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
+    const effectiveColor = this._accountColor(account);
     const addMeta = (post) => {
       post.accountId = accountId;
       post.accountPlatform = account.platform;

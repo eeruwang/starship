@@ -2,7 +2,7 @@
  * Account Setup Mixin
  * Handles add account modal, platform detection, OAuth login, manual token, and settings
  */
-import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from '../auth.js';
+import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth, openAuthPopup } from '../auth.js';
 
 export const AccountSetupMixin = {
 
@@ -225,6 +225,9 @@ export const AccountSetupMixin = {
       return;
     }
 
+    // Open popup SYNCHRONOUSLY before any async work (iOS blocks window.open after await)
+    const popup = openAuthPopup('about:blank');
+
     this.btnOAuthLogin.disabled = true;
     this.btnOAuthLogin.textContent = '플랫폼 감지 중...';
     this.addAccountError.style.display = 'none';
@@ -237,6 +240,7 @@ export const AccountSetupMixin = {
     }
 
     if (!platform) {
+      if (popup) popup.close();
       this.showAddError('플랫폼을 감지할 수 없습니다. 인스턴스 주소를 확인하세요.');
       this.btnOAuthLogin.disabled = false;
       this.btnOAuthLogin.textContent = '로그인으로 연결';
@@ -246,16 +250,16 @@ export const AccountSetupMixin = {
     this.btnOAuthLogin.textContent = '인증 페이지 여는 중...';
 
     try {
-      let popup;
       if (platform === 'mastodon') {
-        popup = await startMastodonOAuth(instanceUrl);
+        await startMastodonOAuth(instanceUrl, popup);
       } else {
-        popup = await startMiAuth(instanceUrl, platform);
+        await startMiAuth(instanceUrl, platform, popup);
       }
 
       if (popup) {
         this.btnOAuthLogin.textContent = '인증 대기 중... (팝업에서 로그인하세요)';
       } else {
+        // Popup was blocked → redirect flow (handled by main.js on next page load)
         return;
       }
 
@@ -263,9 +267,10 @@ export const AccountSetupMixin = {
 
       await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken, '', this._detectedSoftware);
       this.closeModal(this.modalAddAccount);
-      this.debouncedSaveToCloud();
       this.render();
+      await this.saveToCloud();
     } catch (err) {
+      if (popup) popup.close();
       clearPendingAuth();
       this.showAddError(`인증 실패: ${err.message}`);
     } finally {
@@ -320,8 +325,8 @@ export const AccountSetupMixin = {
     try {
       await this.store.addAccount(platform, instanceUrl, accessToken, label, this._detectedSoftware);
       this.closeModal(this.modalAddAccount);
-      this.debouncedSaveToCloud();
       this.render();
+      await this.saveToCloud();
     } catch (err) {
       this.showAddError(`연결 실패: ${err.message}`);
     } finally {

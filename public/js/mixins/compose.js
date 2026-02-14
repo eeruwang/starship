@@ -20,7 +20,7 @@ export const ComposeMixin = {
       const btn = document.createElement('button');
       btn.className = 'compose-account-toggle';
       btn.dataset.accountId = account.id;
-      const dotColor = account.themeColor || this._instanceColor(account.instanceUrl);
+      const dotColor = this._accountColor(account);
       const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       btn.innerHTML = `
         <img class="compose-account-avatar" src="${p.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">

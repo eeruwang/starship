@@ -315,7 +315,7 @@ export const PostActionsMixin = {
         // No cache — store normalized post directly
         updatedPost.accountId = accountId;
         updatedPost.accountPlatform = account.platform;
-        updatedPost.themeColor = account.themeColor || this._instanceColor(account.instanceUrl);
+        updatedPost.themeColor = this._accountColor(account);
         this.postCache.set(cacheKey, updatedPost);
       }
 
@@ -935,7 +935,7 @@ export const PostActionsMixin = {
     for (const account of sortedAccounts) {
       const p = account.profile;
       const isPreferred = account.id === preferredAccountId;
-      const dotColor = account.themeColor || this._instanceColor(account.instanceUrl) || '';
+      const dotColor = this._accountColor(account) || '';
       const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       html += `
         <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}"${isPreferred && dotColor ? ` style="border-left-color:${dotColor}"` : ''}>

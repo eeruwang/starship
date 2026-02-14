@@ -3,6 +3,7 @@
  * Handles timeline loading, notifications, pagination, and caching
  */
 import { escapeHtml } from '../ui/utils.js';
+import { usableColor } from '../ui/dashboard.js';
 import { renderPost, renderNotification, renderLoading, renderLoadingText } from '../ui/dashboard.js';
 
 export const DataLoadingMixin = {
@@ -369,7 +370,7 @@ export const DataLoadingMixin = {
           try {
             const sinceId = !isFirstLoad ? prevNewestIds?.get(account.id) || null : null;
             const notifs = await client.getNotifications(this.settings.postsCount, null, sinceId);
-            const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
+            const effectiveColor = this._accountColor(account);
             return notifs.map(n => {
               const notif = client.normalizeNotification(n);
               notif.themeColor = effectiveColor;
@@ -596,7 +597,7 @@ export const DataLoadingMixin = {
   _addPostMeta(post, account) {
     post.accountId = account.id;
     post.accountPlatform = account.platform;
-    post.themeColor = account.themeColor || this._instanceColor(account.instanceUrl);
+    post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile.id);
     return post;
@@ -634,6 +635,11 @@ export const DataLoadingMixin = {
   _normalizeAcct(acct, instanceUrl) {
     if (!acct || acct.includes('@')) return acct || '';
     try { return `${acct}@${new URL(instanceUrl).hostname}`; } catch { return acct; }
+  },
+
+  // Get the effective accent color for an account (themeColor → platform default)
+  _accountColor(account) {
+    return usableColor(account.themeColor, account.software || account.platform);
   },
 
   // Generate a deterministic color from instance hostname when themeColor is unavailable
@@ -1155,7 +1161,7 @@ export const DataLoadingMixin = {
 
           try {
             const notifs = await client.getNotifications(this.settings.postsCount, maxId, null);
-            const effectiveColor = account.themeColor || this._instanceColor(account.instanceUrl);
+            const effectiveColor = this._accountColor(account);
             return notifs.map(n => {
               const notif = client.normalizeNotification(n);
               notif.themeColor = effectiveColor;
