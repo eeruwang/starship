@@ -85,6 +85,7 @@ export class StreamManager {
 
       ws.onmessage = (event) => {
         state.lastActivity = Date.now();
+        state.awaitingPong = false;
         try {
           const msg = JSON.parse(event.data);
           // Misskey pong — just an activity signal, no further handling
@@ -246,22 +247,51 @@ export class StreamManager {
         continue;
       }
 
-      // Send Misskey application-level ping
-      if (state.account.platform !== 'mastodon') {
-        try { ws.send('{"type":"ping"}'); } catch { /* closing */ }
+      // Misskey: if we sent a ping last tick and got no pong, treat as stale
+      if (state.account.platform !== 'mastodon' && state.awaitingPong) {
+        console.warn(`[Stream] No pong from: ${state.account.label}, reconnecting`);
+        this._forceReconnect(state);
+        continue;
       }
 
-      // Force reconnect if no activity for too long
+      // Send application-level ping per platform
+      if (state.account.platform !== 'mastodon') {
+        // Misskey/Iceshrimp/CherryPick: JSON ping, expect pong next tick
+        try {
+          ws.send('{"type":"ping"}');
+          state.awaitingPong = true;
+        } catch { /* closing */ }
+      } else {
+        // Mastodon: no app-level ping protocol, but we can probe the
+        // transport. If bufferedAmount keeps growing the socket is dead.
+        if (state._lastBuffered != null && ws.bufferedAmount >= state._lastBuffered && state._lastBuffered > 0) {
+          console.warn(`[Stream] Socket stuck: ${state.account.label}, reconnecting`);
+          this._forceReconnect(state);
+          continue;
+        }
+        state._lastBuffered = ws.bufferedAmount;
+      }
+
+      // Force reconnect if no activity for too long (covers both platforms)
       if (state.lastActivity && now - state.lastActivity > staleThreshold) {
         console.warn(`[Stream] Stale connection: ${state.account.label}, reconnecting`);
-        ws.onclose = null;
-        ws.close();
-        state.ws = null;
-        this._emit('disconnected', { accountId: state.account.id });
-        state.reconnectDelay = 2000;
-        this._scheduleReconnect(state);
+        this._forceReconnect(state);
       }
     }
+  }
+
+  /** Close and immediately schedule reconnect for a connection */
+  _forceReconnect(state) {
+    const ws = state.ws;
+    if (ws) {
+      ws.onclose = null;
+      ws.close();
+    }
+    state.ws = null;
+    state.awaitingPong = false;
+    this._emit('disconnected', { accountId: state.account.id });
+    state.reconnectDelay = 2000;
+    this._scheduleReconnect(state);
   }
 
   isConnected(accountId) {

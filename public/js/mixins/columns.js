@@ -375,12 +375,36 @@ export const ColumnsMixin = {
         this.refreshAll();
       }
     }, this.AUTO_REFRESH_INTERVAL);
+
+    // Refresh immediately when the tab becomes visible again, so posts
+    // missed during background throttling appear without waiting for the
+    // next polling interval.
+    if (!this._visibilityRefreshHandler) {
+      this._lastHiddenAt = null;
+      this._visibilityRefreshHandler = () => {
+        if (document.visibilityState === 'hidden') {
+          this._lastHiddenAt = Date.now();
+        } else if (document.visibilityState === 'visible' && this._lastHiddenAt) {
+          const away = Date.now() - this._lastHiddenAt;
+          this._lastHiddenAt = null;
+          // Only refresh if tab was hidden for more than 30 seconds
+          if (away > 30_000 && !this.store.isEmpty()) {
+            this.refreshAll();
+          }
+        }
+      };
+      document.addEventListener('visibilitychange', this._visibilityRefreshHandler);
+    }
   },
 
   stopAutoRefresh() {
     if (this.autoRefreshTimer) {
       clearInterval(this.autoRefreshTimer);
       this.autoRefreshTimer = null;
+    }
+    if (this._visibilityRefreshHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityRefreshHandler);
+      this._visibilityRefreshHandler = null;
     }
   },
 
