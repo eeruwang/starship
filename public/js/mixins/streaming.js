@@ -60,42 +60,122 @@ export const StreamingMixin = {
       const content = col.querySelector('.column-content');
       if (!content) continue;
 
-      let shouldAdd = false;
-      if (type === 'all' && !account.hidden) {
-        shouldAdd = true;
-      } else if (type === 'account' && col.dataset.accountId === account.id) {
-        shouldAdd = true;
+      // --- Timeline columns (all / account) ---
+      if (type === 'all' || type === 'account') {
+        let shouldAdd = false;
+        if (type === 'all' && !account.hidden) {
+          shouldAdd = true;
+        } else if (type === 'account' && col.dataset.accountId === account.id) {
+          shouldAdd = true;
+        }
+        if (!shouldAdd) continue;
+
+        // Duplicate check by platform:id
+        if (content.querySelector(`.post-card[data-platform="${post.platform}"][data-post-id="${post.id}"]`)) continue;
+
+        // Duplicate check by canonicalUri (same post from another account)
+        const displayPost = post.reblog || post;
+        if (displayPost.canonicalUri) {
+          const existing = content.querySelector(`.post-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`);
+          if (existing) continue;
+        }
+
+        // Remove "empty" placeholder if present
+        const placeholder = content.querySelector('.loading-text');
+        if (placeholder) placeholder.remove();
+
+        const el = renderPost(post);
+        el.classList.add('new-post');
+
+        const scrollTop = content.scrollTop;
+        content.insertBefore(el, content.firstChild);
+
+        // Keep scroll position stable if user has scrolled down
+        if (scrollTop > 0) {
+          content.scrollTop = scrollTop + el.offsetHeight + 8;
+        }
+
+        setTimeout(() => el.classList.remove('new-post'), 400);
+        this.enrichLinkCards(content);
+        continue;
       }
-      if (!shouldAdd) continue;
 
-      // Duplicate check by platform:id
-      if (content.querySelector(`.post-card[data-platform="${post.platform}"][data-post-id="${post.id}"]`)) continue;
-
-      // Duplicate check by canonicalUri (same post from another account)
-      const displayPost = post.reblog || post;
-      if (displayPost.canonicalUri) {
-        const existing = content.querySelector(`.post-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`);
-        if (existing) continue;
+      // --- Thread columns: append replies in real-time ---
+      if (type === 'thread') {
+        this._addStreamPostToThread(col, content, post);
       }
-
-      // Remove "empty" placeholder if present
-      const placeholder = content.querySelector('.loading-text');
-      if (placeholder) placeholder.remove();
-
-      const el = renderPost(post);
-      el.classList.add('new-post');
-
-      const scrollTop = content.scrollTop;
-      content.insertBefore(el, content.firstChild);
-
-      // Keep scroll position stable if user has scrolled down
-      if (scrollTop > 0) {
-        content.scrollTop = scrollTop + el.offsetHeight + 8;
-      }
-
-      setTimeout(() => el.classList.remove('new-post'), 400);
-      this.enrichLinkCards(content);
     }
+  },
+
+  /**
+   * Try to append a streaming post as a new reply in a thread column.
+   * Only adds the post if its replyToId matches a post already in the thread.
+   */
+  _addStreamPostToThread(col, content, post) {
+    const replyToId = post.replyToId;
+    if (!replyToId) return;
+
+    // Duplicate check
+    if (content.querySelector(`.post-card[data-platform="${post.platform}"][data-post-id="${post.id}"]`)) return;
+    const displayPost = post.reblog || post;
+    if (displayPost.canonicalUri) {
+      if (content.querySelector(`.post-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`)) return;
+    }
+
+    // Find the parent card in the thread column
+    let parentCard = content.querySelector(
+      `.post-card[data-platform="${post.platform}"][data-post-id="${CSS.escape(replyToId)}"]`
+    );
+
+    // Cross-account: try canonicalUri lookup if direct ID didn't match
+    if (!parentCard) {
+      const cachedParent = this.postCache.get(`${post.platform}:${replyToId}`);
+      if (cachedParent) {
+        const parentUri = (cachedParent.reblog || cachedParent).canonicalUri;
+        if (parentUri) {
+          parentCard = content.querySelector(`.post-card[data-canonical-uri="${CSS.escape(parentUri)}"]`);
+        }
+      }
+    }
+
+    if (!parentCard) return;
+
+    // Determine parent's depth from its CSS class
+    const getCardDepth = (card) => {
+      if (card.classList.contains('thread-target') || card.classList.contains('thread-ancestor')) return 0;
+      for (let i = 4; i >= 1; i--) {
+        if (card.classList.contains(`thread-depth-${i}`)) return i;
+      }
+      return 0;
+    };
+
+    const parentDepth = getCardDepth(parentCard);
+    const newDepth = Math.min(parentDepth + 1, 4);
+
+    // Find insertion point: after parent and all its deeper descendants
+    let insertAfter = parentCard;
+    let sibling = parentCard.nextElementSibling;
+    while (sibling && sibling.classList.contains('post-card')) {
+      if (!sibling.classList.contains('thread-descendant')) break;
+      const sibDepth = getCardDepth(sibling);
+      if (sibDepth <= parentDepth) break; // Left the parent's subtree
+      insertAfter = sibling;
+      sibling = sibling.nextElementSibling;
+    }
+
+    const el = renderPost(post);
+    el.classList.add('thread-post', 'thread-descendant', `thread-depth-${newDepth}`, 'new-post');
+
+    const scrollTop = content.scrollTop;
+    insertAfter.insertAdjacentElement('afterend', el);
+
+    // Keep scroll stable if user has scrolled up from the bottom
+    if (scrollTop > 0) {
+      content.scrollTop = scrollTop + el.offsetHeight + 8;
+    }
+
+    setTimeout(() => el.classList.remove('new-post'), 400);
+    this.enrichLinkCards(content);
   },
 
   _onStreamNotification({ account, notif }) {
@@ -182,10 +262,9 @@ export const StreamingMixin = {
 
     if (!updated) return;
 
-    // Re-render matching cards in timeline columns (not notifications or thread columns —
-    // thread columns manage their own rendering via loadThreadForColumn)
+    // Re-render matching cards in timeline and thread columns (not notifications)
     for (const col of this.columnsContainer.querySelectorAll('.column')) {
-      if (col.dataset.columnType === 'notifications' || col.dataset.columnType === 'thread') continue;
+      if (col.dataset.columnType === 'notifications') continue;
       const content = col.querySelector('.column-content');
       if (!content) continue;
 
@@ -194,7 +273,14 @@ export const StreamingMixin = {
         if (!card.isConnected) continue;
         const cardPost = this.postCache.get(`${card.dataset.platform}:${card.dataset.postId}`);
         if (cardPost) {
-          card.replaceWith(renderPost(cardPost));
+          const newEl = renderPost(cardPost);
+          // Preserve thread styling classes for thread columns
+          if (col.dataset.columnType === 'thread') {
+            for (const cls of card.classList) {
+              if (cls.startsWith('thread-')) newEl.classList.add(cls);
+            }
+          }
+          card.replaceWith(newEl);
         }
       }
     }
@@ -217,10 +303,19 @@ export const StreamingMixin = {
       const content = col.querySelector('.column-content');
       if (!content) continue;
 
+      const isThread = col.dataset.columnType === 'thread';
+
       // Match by platform:id
       const cards = content.querySelectorAll(`.post-card[data-platform="${post.platform}"][data-post-id="${post.id}"]`);
       for (const card of cards) {
-        if (card.isConnected) card.replaceWith(renderPost(post));
+        if (!card.isConnected) continue;
+        const newEl = renderPost(post);
+        if (isThread) {
+          for (const cls of card.classList) {
+            if (cls.startsWith('thread-')) newEl.classList.add(cls);
+          }
+        }
+        card.replaceWith(newEl);
       }
 
       // Also match by canonicalUri (cross-account)
@@ -234,7 +329,13 @@ export const StreamingMixin = {
             cdp.content = dp.content;
             cdp.contentWarning = dp.contentWarning;
             cdp.media = dp.media;
-            card.replaceWith(renderPost(cardPost));
+            const newEl = renderPost(cardPost);
+            if (isThread) {
+              for (const cls of card.classList) {
+                if (cls.startsWith('thread-')) newEl.classList.add(cls);
+              }
+            }
+            card.replaceWith(newEl);
           }
         }
       }
