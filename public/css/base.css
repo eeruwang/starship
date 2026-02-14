@@ -84,6 +84,42 @@
   background: rgba(100, 100, 180, 0.4);
 }
 
+/* Light theme: column toggle bar buttons */
+[data-theme="light"] .col-toggle {
+  background: #edeef3;
+  color: #5a5a78;
+}
+[data-theme="light"] .col-toggle:hover {
+  background: #dfe0ea;
+  color: #3a3a58;
+}
+[data-theme="light"] .col-toggle.active {
+  background: var(--accent-primary);
+  color: white;
+  box-shadow: 0 2px 8px rgba(99, 100, 255, 0.25);
+}
+[data-theme="light"] .col-toggle.fixed {
+  background: linear-gradient(135deg, #e0e1f5, #d5d6ee);
+  color: #4a4a78;
+}
+[data-theme="light"] .col-toggle.fixed:hover {
+  background: linear-gradient(135deg, #d5d6ee, #c8c9e5);
+  color: #3a3a68;
+}
+[data-theme="light"] .col-toggle.fixed.active {
+  background: linear-gradient(135deg, #6364ff, #7e7fff);
+  color: white;
+  box-shadow: 0 2px 8px rgba(99, 100, 255, 0.3);
+}
+[data-theme="light"] .col-toggle.thread-toggle {
+  background: linear-gradient(135deg, #daf0e3, #c8e8d5);
+  color: #3a6a4a;
+}
+[data-theme="light"] .col-toggle.thread-toggle:hover {
+  background: linear-gradient(135deg, #c8e8d5, #b5dfc5);
+  color: #2a5a3a;
+}
+
 /* Platform accent colors — shared across post/notif/account cards */
 .platform-misskey { border-left-color: var(--accent-misskey); }
 .platform-sharkey { border-left-color: var(--accent-sharkey); }
