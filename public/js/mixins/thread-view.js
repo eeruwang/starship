@@ -21,8 +21,8 @@ export const ThreadViewMixin = {
 
   /**
    * Entry point for all thread views.
-   * Always fetches from all visible accounts for complete data.
-   * Merged-account borders are shown only in 'all' / 'notifications' columns.
+   * Two-phase loading: renders from the clicked account immediately,
+   * then merges data from other accounts in the background.
    */
   async openThreadView(postId, platform, accountId, { columnType } = {}) {
     const showMergedUI = !columnType || columnType === 'all' || columnType === 'notifications';
@@ -44,85 +44,106 @@ export const ThreadViewMixin = {
         themeColor: this._accountColor(a),
       }));
 
-      // Fetch thread data from all accounts in parallel
-      let ancestors = [];
-      let targetPost = null;
-      let descendants = [];
+      // Phase 1: Fetch from clicked account (no URL resolution needed — fastest)
+      const primaryResult = await this._fetchThreadForAccount(
+        postId, platform, accountId, null
+      );
 
-      if (accounts.length <= 1) {
-        // Single account: straightforward fetch
-        const result = await this._fetchThreadForAccount(
-          postId, platform, accountId, null
-        );
-        if (result) {
-          ancestors = result.ancestors;
-          targetPost = result.target;
-          descendants = result.descendants;
-        }
-      } else {
-        // Multi-account: fetch from all, merge and deduplicate
-        const results = await Promise.allSettled(
-          accounts.map(async (ma) => {
-            // Only the clicked account can use the original postId directly;
-            // other accounts (even same platform) may be on different instances
-            const localPostId = (ma.id === accountId) ? postId : null;
-            return this._fetchThreadForAccount(
-              localPostId, platform, ma.id, canonicalUri
-            );
-          })
-        );
+      let ancestors = primaryResult?.ancestors || [];
+      let targetPost = primaryResult?.target || null;
+      let descendants = primaryResult?.descendants || [];
 
-        for (const result of results) {
-          if (result.status !== 'fulfilled' || !result.value) continue;
-          const r = result.value;
-          ancestors.push(...r.ancestors);
-          if (r.target) {
-            if (!targetPost) {
-              targetPost = r.target;
-            } else {
-              this._mergePostData(targetPost, r.target);
-            }
-          }
-          descendants.push(...r.descendants);
-        }
-
-        ancestors = this._deduplicateThreadPosts(ancestors);
-        descendants = this._deduplicateThreadPosts(descendants);
-
-        // Preserve mergedAccounts from cache on target
-        if (targetPost && cachedPost?.mergedAccounts) {
-          targetPost.mergedAccounts = cachedPost.mergedAccounts;
-        }
-      }
-
-      // Cache all posts (always with mergedAccounts intact for cache consistency)
-      const allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
+      // Render immediately with primary account data
+      let allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
       this.cachePosts(allPosts);
-
-      // Merge cached reaction data (e.g. from timeline Misskey lookups) into thread posts
       this._mergeReactionsFromCache(allPosts);
-
-      // Render
       this._renderThread(content, ancestors, targetPost, descendants);
-
-      // Control merged-account border via DOM, not data mutation
-      // This keeps the post cache clean and consistent across views
-      if (!showMergedUI) {
-        // Use the clicked account's color as solid border for merged posts
-        const clickedAcct = accounts.find(a => a.id === accountId);
-        const solidColor = clickedAcct?.themeColor || null;
-        for (const el of content.querySelectorAll('.merged-border')) {
-          el.classList.remove('merged-border');
-          el.style.removeProperty('--merged-gradient');
-          if (solidColor) el.style.borderLeftColor = solidColor;
-        }
-      }
-
-      // Enrich posts with reaction data from Misskey (fire-and-forget)
+      this._applyMergedBorderUI(content, showMergedUI, accounts, accountId);
       this._fetchMissingReactions(allPosts, content);
+
+      // Phase 2: Fetch from other accounts in background and merge
+      const otherAccounts = accounts.filter(a => a.id !== accountId);
+      if (otherAccounts.length > 0 && canonicalUri) {
+        this._mergeOtherAccountThreads(
+          content, otherAccounts, canonicalUri, platform,
+          ancestors, targetPost, descendants, cachedPost,
+          showMergedUI, accounts, accountId
+        );
+      }
     } catch (err) {
       console.error('Thread load failed:', err);
       content.innerHTML = `<div class="thread-loading">스레드를 불러오는 중 오류가 발생했습니다: ${escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  /**
+   * Background merge: fetch thread from other accounts and re-render with merged data.
+   */
+  async _mergeOtherAccountThreads(
+    content, otherAccounts, canonicalUri, platform,
+    ancestors, targetPost, descendants, cachedPost,
+    showMergedUI, allAccounts, clickedAccountId
+  ) {
+    try {
+      const results = await Promise.allSettled(
+        otherAccounts.map(ma =>
+          this._fetchThreadForAccount(null, platform, ma.id, canonicalUri)
+        )
+      );
+
+      let hasNewData = false;
+      for (const result of results) {
+        if (result.status !== 'fulfilled' || !result.value) continue;
+        const r = result.value;
+        hasNewData = true;
+        ancestors.push(...r.ancestors);
+        if (r.target) {
+          if (!targetPost) {
+            targetPost = r.target;
+          } else {
+            this._mergePostData(targetPost, r.target);
+          }
+        }
+        descendants.push(...r.descendants);
+      }
+
+      if (!hasNewData) return;
+
+      ancestors = this._deduplicateThreadPosts(ancestors);
+      descendants = this._deduplicateThreadPosts(descendants);
+
+      if (targetPost && cachedPost?.mergedAccounts) {
+        targetPost.mergedAccounts = cachedPost.mergedAccounts;
+      }
+
+      const allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
+      this.cachePosts(allPosts);
+      this._mergeReactionsFromCache(allPosts);
+
+      // Re-render with merged data (preserve scroll position)
+      const scrollTop = content.scrollTop;
+      this._renderThread(content, ancestors, targetPost, descendants);
+      this._applyMergedBorderUI(content, showMergedUI, allAccounts, clickedAccountId);
+      content.scrollTop = scrollTop;
+
+      this._fetchMissingReactions(allPosts, content);
+    } catch (err) {
+      console.error('Background thread merge failed:', err);
+    }
+  },
+
+  /**
+   * Apply or remove merged-account border UI based on column context.
+   */
+  _applyMergedBorderUI(content, showMergedUI, accounts, clickedAccountId) {
+    if (!showMergedUI) {
+      const clickedAcct = accounts.find(a => a.id === clickedAccountId);
+      const solidColor = clickedAcct?.themeColor || null;
+      for (const el of content.querySelectorAll('.merged-border')) {
+        el.classList.remove('merged-border');
+        el.style.removeProperty('--merged-gradient');
+        if (solidColor) el.style.borderLeftColor = solidColor;
+      }
     }
   },
 
