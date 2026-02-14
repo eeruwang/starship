@@ -218,13 +218,18 @@ export const ThreadViewMixin = {
 
   /**
    * Load thread data into a thread column.
+   * Guarded against concurrent calls for the same column.
    */
   async loadThreadForColumn(col) {
+    // Prevent overlapping loads for the same column
+    if (col._threadLoading) return;
+    col._threadLoading = true;
+
     const postId = col.dataset.threadPostId;
     const platform = col.dataset.threadPlatform;
     const accountId = col.dataset.threadAccountId;
     const content = col.querySelector('.column-content');
-    if (!content) return;
+    if (!content) { col._threadLoading = false; return; }
 
     content.classList.add('thread-content');
     content.innerHTML = '<div class="thread-loading"><div class="spinner"></div></div>';
@@ -273,6 +278,8 @@ export const ThreadViewMixin = {
     } catch (err) {
       console.error('Thread column load failed:', err);
       content.innerHTML = `<div class="thread-loading">스레드를 불러올 수 없습니다.</div>`;
+    } finally {
+      col._threadLoading = false;
     }
   },
 

@@ -47,6 +47,8 @@ export const DataLoadingMixin = {
           if (account) {
             loadPromise = this.loadTimelineForColumn(content, [account]);
           }
+        } else if (type === 'thread') {
+          loadPromise = this.loadThreadForColumn(col);
         }
 
         if (loadPromise) {

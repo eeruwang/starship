@@ -182,9 +182,10 @@ export const StreamingMixin = {
 
     if (!updated) return;
 
-    // Re-render matching cards in all timeline columns
+    // Re-render matching cards in timeline columns (not notifications or thread columns —
+    // thread columns manage their own rendering via loadThreadForColumn)
     for (const col of this.columnsContainer.querySelectorAll('.column')) {
-      if (col.dataset.columnType === 'notifications') continue;
+      if (col.dataset.columnType === 'notifications' || col.dataset.columnType === 'thread') continue;
       const content = col.querySelector('.column-content');
       if (!content) continue;
 
