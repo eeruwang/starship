@@ -269,7 +269,7 @@ export class MastodonClient {
     return this.request('POST', '/api/v1/statuses', body);
   }
 
-  async uploadMedia(file) {
+  async uploadMedia(file, { onProgress } = {}) {
     const formData = new FormData();
     formData.append('file', file);
 
@@ -277,6 +277,13 @@ export class MastodonClient {
     const fetchUrl = this.useProxy
       ? `/proxy?url=${encodeURIComponent(targetUrl)}`
       : targetUrl;
+
+    if (onProgress) {
+      return this._xhrUpload(fetchUrl, formData, {
+        headers: { 'Authorization': `Bearer ${this.accessToken}` },
+        onProgress,
+      });
+    }
 
     const res = await fetch(fetchUrl, {
       method: 'POST',
@@ -289,6 +296,27 @@ export class MastodonClient {
       throw new Error(`Media upload error ${res.status}: ${errText}`);
     }
     return res.json();
+  }
+
+  _xhrUpload(url, formData, { headers = {}, onProgress }) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { reject(new Error('Invalid JSON response')); }
+        } else {
+          reject(new Error(`Media upload error ${xhr.status}: ${xhr.responseText}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Upload network error'));
+      xhr.send(formData);
+    });
   }
 
   normalizeUser(acct) {

@@ -481,6 +481,29 @@ export const ComposeMixin = {
     });
   },
 
+  _showUploadProgress() {
+    const items = this.composeImagePreview.querySelectorAll('.preview-item');
+    items.forEach((item) => {
+      if (item.querySelector('.upload-progress')) return;
+      const overlay = document.createElement('div');
+      overlay.className = 'upload-progress';
+      overlay.innerHTML = '<div class="upload-progress-bar"></div>';
+      item.appendChild(overlay);
+    });
+  },
+
+  _updateUploadProgress(fileIndex, ratio) {
+    const items = this.composeImagePreview.querySelectorAll('.preview-item');
+    const item = items[fileIndex];
+    if (!item) return;
+    const bar = item.querySelector('.upload-progress-bar');
+    if (bar) bar.style.width = `${Math.round(ratio * 100)}%`;
+    if (ratio >= 1) {
+      const overlay = item.querySelector('.upload-progress');
+      if (overlay) overlay.classList.add('done');
+    }
+  },
+
   async handleComposeSubmit() {
     // Edit mode
     if (this.composeText.dataset.editPostId) {
@@ -514,6 +537,12 @@ export const ComposeMixin = {
     this.btnComposeSubmit.textContent = '게시 중...';
     this.composeError.style.display = 'none';
 
+    // Show upload progress overlays on preview images
+    const totalFiles = this.composeFiles.length;
+    if (totalFiles > 0) {
+      this._showUploadProgress();
+    }
+
     const errors = [];
 
     for (const accountId of selectedIds) {
@@ -522,18 +551,23 @@ export const ComposeMixin = {
       if (!account || !client) continue;
 
       try {
-        // Upload files per account
+        // Upload files per account with progress
         let fileIds = [];
-        if (this.composeFiles.length > 0) {
-          for (const file of this.composeFiles) {
+        if (totalFiles > 0) {
+          for (let i = 0; i < this.composeFiles.length; i++) {
+            const file = this.composeFiles[i];
+            this.btnComposeSubmit.textContent = `업로드 ${i + 1}/${totalFiles}`;
+            const onProgress = (ratio) => this._updateUploadProgress(i, ratio);
             if (account.platform === 'mastodon') {
-              const result = await client.uploadMedia(file);
+              const result = await client.uploadMedia(file, { onProgress });
               fileIds.push(result.id);
             } else {
-              const result = await client.uploadFile(file);
+              const result = await client.uploadFile(file, { onProgress });
               fileIds.push(result.id);
             }
+            this._updateUploadProgress(i, 1);
           }
+          this.btnComposeSubmit.textContent = '게시 중...';
         }
 
         // Cross-instance reply resolution: resolve the post on this account's instance

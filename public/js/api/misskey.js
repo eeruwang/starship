@@ -240,7 +240,7 @@ export class MisskeyClient {
     } catch { return null; }
   }
 
-  async uploadFile(file) {
+  async uploadFile(file, { onProgress } = {}) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('i', this.accessToken);
@@ -249,6 +249,10 @@ export class MisskeyClient {
     const fetchUrl = this.useProxy
       ? `/proxy?url=${encodeURIComponent(targetUrl)}`
       : targetUrl;
+
+    if (onProgress) {
+      return this._xhrUpload(fetchUrl, formData, { onProgress });
+    }
 
     const res = await fetch(fetchUrl, {
       method: 'POST',
@@ -260,6 +264,26 @@ export class MisskeyClient {
       throw new Error(`File upload error ${res.status}: ${errText}`);
     }
     return res.json();
+  }
+
+  _xhrUpload(url, formData, { onProgress }) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { reject(new Error('Invalid JSON response')); }
+        } else {
+          reject(new Error(`File upload error ${xhr.status}: ${xhr.responseText}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Upload network error'));
+      xhr.send(formData);
+    });
   }
 
   normalizeUser(user) {

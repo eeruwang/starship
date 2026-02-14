@@ -516,6 +516,26 @@
   justify-content: center;
 }
 
+/* ===== Upload Progress ===== */
+.upload-progress {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  transition: opacity 0.3s;
+}
+.upload-progress.done {
+  opacity: 0;
+}
+.upload-progress-bar {
+  width: 0;
+  height: 4px;
+  background: var(--accent-color, #6364ff);
+  border-radius: 2px;
+  transition: width 0.15s ease;
+}
+
 /* ===== Account Picker Popup ===== */
 .account-picker {
   position: fixed;
