@@ -388,8 +388,14 @@ export const EventsMixin = {
       if (!img) return;
       e.preventDefault();
       e.stopPropagation();
-      const fullUrl = img.dataset.fullUrl || img.src;
-      this.openLightbox(fullUrl, img);
+      // Collect all lightbox images in the same media container
+      const mediaContainer = img.closest('.post-media, .reply-context-media');
+      const allImages = mediaContainer
+        ? [...mediaContainer.querySelectorAll('img[data-lightbox="true"]')]
+        : [img];
+      const mediaList = allImages.map(i => ({ url: i.dataset.fullUrl || i.src, thumb: i }));
+      const index = allImages.indexOf(img);
+      this.openLightbox(mediaList, Math.max(index, 0));
     });
 
     // Lightbox close
@@ -399,6 +405,13 @@ export const EventsMixin = {
         this.closeLightbox();
       }
     });
+
+    // Lightbox nav buttons
+    this.lightboxPrev.addEventListener('click', (e) => { e.stopPropagation(); this.navigateLightbox(-1); });
+    this.lightboxNext.addEventListener('click', (e) => { e.stopPropagation(); this.navigateLightbox(1); });
+
+    // Lightbox swipe
+    this._bindLightboxSwipe();
   },
 
   _bindComposeEvents() {
@@ -683,6 +696,12 @@ export const EventsMixin = {
         return;
       }
 
+      // Arrow keys: navigate lightbox images when open
+      if (this._lightboxMedia && this._lightboxMedia.length > 1 && this.lightbox.style.display !== 'none') {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); this.navigateLightbox(-1); return; }
+        if (e.key === 'ArrowRight') { e.preventDefault(); this.navigateLightbox(1); return; }
+      }
+
       if (e.target.matches('input, textarea, select')) return;
 
       if (e.key === 'ArrowLeft') {
@@ -728,26 +747,106 @@ export const EventsMixin = {
 
   // ===== Lightbox =====
 
-  openLightbox(url, sourceImg) {
-    this._lightboxSourceImg = sourceImg || null;
-    this.lightboxImg.src = url;
+  openLightbox(mediaList, index) {
+    // mediaList: [{ url, thumb }, ...]  index: which to show first
+    this._lightboxMedia = mediaList;
+    this._lightboxIndex = index || 0;
+    const item = mediaList[this._lightboxIndex];
+    this._lightboxSourceImg = item.thumb || null;
+
+    this.lightboxImg.src = item.url;
     this.lightbox.style.display = 'flex';
+
     // Animate from source thumbnail position
-    if (sourceImg) {
-      const rect = sourceImg.getBoundingClientRect();
+    if (item.thumb) {
+      const rect = item.thumb.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
       this.lightboxImg.style.transformOrigin = `${cx}px ${cy}px`;
-      this.lightboxImg.classList.remove('lb-enter', 'lb-exit');
+      this.lightboxImg.classList.remove('lb-enter', 'lb-exit', 'lb-slide-left', 'lb-slide-right');
       void this.lightboxImg.offsetWidth;
       this.lightboxImg.classList.add('lb-enter');
     }
+
+    this._updateLightboxNav();
     requestAnimationFrame(() => this.lightbox.classList.add('visible'));
+  },
+
+  navigateLightbox(direction) {
+    if (!this._lightboxMedia || this._lightboxMedia.length <= 1) return;
+    const newIndex = this._lightboxIndex + direction;
+    if (newIndex < 0 || newIndex >= this._lightboxMedia.length) return;
+
+    this._lightboxIndex = newIndex;
+    const item = this._lightboxMedia[newIndex];
+    this._lightboxSourceImg = item.thumb || null;
+
+    // Slide animation
+    this.lightboxImg.classList.remove('lb-enter', 'lb-exit', 'lb-slide-left', 'lb-slide-right');
+    void this.lightboxImg.offsetWidth;
+    this.lightboxImg.src = item.url;
+    this.lightboxImg.classList.add(direction > 0 ? 'lb-slide-left' : 'lb-slide-right');
+
+    this._updateLightboxNav();
+  },
+
+  _updateLightboxNav() {
+    const count = this._lightboxMedia ? this._lightboxMedia.length : 0;
+    const hasMultiple = count > 1;
+
+    this.lightboxPrev.classList.toggle('visible', hasMultiple && this._lightboxIndex > 0);
+    this.lightboxNext.classList.toggle('visible', hasMultiple && this._lightboxIndex < count - 1);
+
+    if (hasMultiple) {
+      this.lightboxCounter.textContent = `${this._lightboxIndex + 1} / ${count}`;
+      this.lightboxCounter.classList.add('visible');
+    } else {
+      this.lightboxCounter.classList.remove('visible');
+    }
+  },
+
+  _bindLightboxSwipe() {
+    let startX = 0, startY = 0, tracking = false;
+
+    this.lightbox.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    }, { passive: true });
+
+    this.lightbox.addEventListener('touchmove', (e) => {
+      if (!tracking) return;
+      // Allow vertical scroll but prevent horizontal page scroll during swipe
+      const dx = Math.abs(e.touches[0].clientX - startX);
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (dx > dy && dx > 10) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    this.lightbox.addEventListener('touchend', (e) => {
+      if (!tracking) return;
+      tracking = false;
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const dx = endX - startX;
+      const dy = Math.abs(endY - startY);
+
+      // Only treat as swipe if horizontal distance > 50px and more horizontal than vertical
+      if (Math.abs(dx) > 50 && Math.abs(dx) > dy) {
+        if (dx < 0) {
+          this.navigateLightbox(1); // swipe left → next
+        } else {
+          this.navigateLightbox(-1); // swipe right → prev
+        }
+      }
+    }, { passive: true });
   },
 
   closeLightbox() {
     this.lightbox.classList.remove('visible');
-    this.lightboxImg.classList.remove('lb-enter');
+    this.lightboxImg.classList.remove('lb-enter', 'lb-slide-left', 'lb-slide-right');
     this.lightboxImg.classList.add('lb-exit');
     const onDone = () => {
       this.lightboxImg.removeEventListener('animationend', onDone);
@@ -756,6 +855,11 @@ export const EventsMixin = {
       this.lightboxImg.classList.remove('lb-exit');
       this.lightboxImg.style.transformOrigin = '';
       this._lightboxSourceImg = null;
+      this._lightboxMedia = null;
+      this._lightboxIndex = 0;
+      this.lightboxPrev.classList.remove('visible');
+      this.lightboxNext.classList.remove('visible');
+      this.lightboxCounter.classList.remove('visible');
     };
     this.lightboxImg.addEventListener('animationend', onDone);
     // Fallback if animation doesn't fire

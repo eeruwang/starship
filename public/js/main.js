@@ -169,6 +169,9 @@ class StarShipApp {
     this.lightbox = document.getElementById('lightbox');
     this.lightboxImg = document.getElementById('lightbox-img');
     this.lightboxClose = document.getElementById('lightbox-close');
+    this.lightboxPrev = document.getElementById('lightbox-prev');
+    this.lightboxNext = document.getElementById('lightbox-next');
+    this.lightboxCounter = document.getElementById('lightbox-counter');
   }
 
   // All other methods are provided by mixins:
