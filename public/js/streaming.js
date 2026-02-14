@@ -172,6 +172,8 @@ export class StreamManager {
         this._emit('postUpdate', { account, post });
       } else if (msg.event === 'delete') {
         this._emit('postDelete', { account, postId: msg.payload });
+      } else {
+        console.debug(`[Stream] ${account.label} unhandled event: ${msg.event}`);
       }
     } catch (e) {
       console.error(`[Stream] Mastodon parse error (${msg.event}):`, e);
@@ -188,9 +190,22 @@ export class StreamManager {
       if (channelId === 'ht' && eventType === 'note') {
         const post = client.normalizePost(body);
         this._emit('post', { account, post });
-      } else if (channelId === 'mn' && eventType === 'notification') {
-        const notif = client.normalizeNotification(body);
-        this._emit('notification', { account, notif });
+      } else if (channelId === 'mn') {
+        if (eventType === 'notification') {
+          const notif = client.normalizeNotification(body);
+          this._emit('notification', { account, notif });
+        } else if (eventType === 'mention' || eventType === 'reply') {
+          // Misskey main channel sends mention/reply as raw notes in addition to
+          // notification events. Emit as posts so they appear in timelines even if
+          // the notification event is missing or delayed.
+          const post = client.normalizePost(body);
+          this._emit('post', { account, post });
+        } else {
+          // Log unhandled main-channel events for debugging
+          console.debug(`[Stream] ${account.label} main:${eventType}`, body.type || body.id || '');
+        }
+      } else {
+        console.debug(`[Stream] ${account.label} unhandled: ch=${channelId} ev=${eventType}`);
       }
     } catch (e) {
       console.error(`[Stream] Misskey parse error (${eventType}):`, e);
