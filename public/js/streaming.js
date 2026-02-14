@@ -9,6 +9,8 @@ export class StreamManager {
   constructor() {
     this.connections = new Map(); // accountId → ConnectionState
     this.listeners = new Map();   // event → Set<callback>
+    this._heartbeatInterval = null;
+    this._visibilityHandler = null;
   }
 
   on(event, callback) {
@@ -41,6 +43,7 @@ export class StreamManager {
     };
     this.connections.set(account.id, state);
     this._open(state);
+    this._ensureHeartbeat();
   }
 
   _open(state) {
@@ -63,6 +66,7 @@ export class StreamManager {
       ws.onopen = () => {
         console.log(`[Stream] Connected: ${account.label}`);
         state.reconnectDelay = 2000;
+        state.lastActivity = Date.now();
 
         if (account.platform !== 'mastodon') {
           // Misskey: subscribe to homeTimeline + main (notifications)
@@ -80,8 +84,11 @@ export class StreamManager {
       };
 
       ws.onmessage = (event) => {
+        state.lastActivity = Date.now();
         try {
           const msg = JSON.parse(event.data);
+          // Misskey pong — just an activity signal, no further handling
+          if (msg.type === 'pong') return;
           this._handleMessage(state, msg);
         } catch {
           // ignore non-JSON (ping frames, etc.)
@@ -96,8 +103,9 @@ export class StreamManager {
         }
       };
 
-      ws.onerror = () => {
-        // onclose fires after onerror
+      ws.onerror = (e) => {
+        console.warn(`[Stream] Error: ${account.label}`, e);
+        // onclose fires after onerror — reconnection handled there
       };
     } catch (e) {
       console.error(`[Stream] Connection failed: ${account.label}`, e);
@@ -191,6 +199,68 @@ export class StreamManager {
   disconnectAll() {
     for (const id of [...this.connections.keys()]) {
       this.disconnect(id);
+    }
+    this._stopHeartbeat();
+  }
+
+  /**
+   * Start heartbeat interval if not already running.
+   * Every 30s: sends Misskey ping and checks all connections for staleness.
+   */
+  _ensureHeartbeat() {
+    if (this._heartbeatInterval) return;
+
+    this._heartbeatInterval = setInterval(() => this._heartbeatTick(), 30_000);
+
+    // Reconnect stale connections when tab becomes visible again
+    if (!this._visibilityHandler) {
+      this._visibilityHandler = () => {
+        if (document.visibilityState === 'visible') this._heartbeatTick();
+      };
+      document.addEventListener('visibilitychange', this._visibilityHandler);
+    }
+  }
+
+  _stopHeartbeat() {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+      this._heartbeatInterval = null;
+    }
+    if (this._visibilityHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
+  }
+
+  _heartbeatTick() {
+    const now = Date.now();
+    const staleThreshold = 90_000; // 90 seconds without activity
+
+    for (const state of this.connections.values()) {
+      if (state.intentionalClose) continue;
+
+      const ws = state.ws;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        // Not connected — schedule reconnect if not already pending
+        if (!state.reconnectTimer) this._scheduleReconnect(state);
+        continue;
+      }
+
+      // Send Misskey application-level ping
+      if (state.account.platform !== 'mastodon') {
+        try { ws.send('{"type":"ping"}'); } catch { /* closing */ }
+      }
+
+      // Force reconnect if no activity for too long
+      if (state.lastActivity && now - state.lastActivity > staleThreshold) {
+        console.warn(`[Stream] Stale connection: ${state.account.label}, reconnecting`);
+        ws.onclose = null;
+        ws.close();
+        state.ws = null;
+        this._emit('disconnected', { accountId: state.account.id });
+        state.reconnectDelay = 2000;
+        this._scheduleReconnect(state);
+      }
     }
   }
 
