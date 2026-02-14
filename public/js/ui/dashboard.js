@@ -25,7 +25,7 @@ export const PLATFORM_COLORS = {
   sharkey: '#3ea8ff',
   foundkey: '#71a6d2',
   hajkey: '#6bb87a',
-  iceshrimp: '#e36a8a',
+  iceshrimp: '#8c7af5',
   firefish: '#ee6a00',
   catodon: '#b088f9',
   cherrypick: '#ff6b9d',
