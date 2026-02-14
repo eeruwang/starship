@@ -756,28 +756,43 @@ export const PostActionsMixin = {
     if (isMisskeyType) setupPickerSearch(picker, 'reaction');
 
     // Position near button: prefer above, fall back to below if not enough space
+    // Clamp to viewport to prevent clipping
     const positionReactionPicker = (r) => {
       const pickerHeight = picker.offsetHeight || 420;
       const spaceAbove = r.top;
       const spaceBelow = window.innerHeight - r.bottom;
       if (spaceAbove >= pickerHeight + 4 || spaceAbove >= spaceBelow) {
-        // Place above
-        picker.style.bottom = `${window.innerHeight - r.top + 4}px`;
-        picker.style.top = '';
+        // Place above, clamp so top doesn't go off-screen
+        const bottom = window.innerHeight - r.top + 4;
+        const top = window.innerHeight - bottom - pickerHeight;
+        if (top < 4) {
+          picker.style.top = '4px';
+          picker.style.bottom = '';
+        } else {
+          picker.style.bottom = `${bottom}px`;
+          picker.style.top = '';
+        }
       } else {
-        // Place below
-        picker.style.top = `${r.bottom + 4}px`;
+        // Place below, clamp so bottom doesn't go off-screen
+        const top = r.bottom + 4;
+        if (top + pickerHeight > window.innerHeight - 4) {
+          picker.style.top = `${Math.max(4, window.innerHeight - pickerHeight - 4)}px`;
+        } else {
+          picker.style.top = `${top}px`;
+        }
         picker.style.bottom = '';
       }
       picker.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 330))}px`;
     };
-    const rect = anchorElement.getBoundingClientRect();
-    picker.style.position = 'fixed';
-    positionReactionPicker(rect);
 
+    // Start hidden to avoid position jump, then fade in after final position
+    picker.style.position = 'fixed';
+    picker.style.opacity = '0';
     document.body.appendChild(picker);
-    // Re-position after DOM insert so offsetHeight is accurate
     positionReactionPicker(anchorElement.getBoundingClientRect());
+    // Force layout, then fade in
+    picker.offsetHeight; // eslint-disable-line no-unused-expressions
+    picker.style.opacity = '';
     this._trackPopupScroll('reactionPicker', picker, anchorElement, positionReactionPicker);
 
     // Handle emoji click (delegated, works for dynamically added instance emojis too)
@@ -957,12 +972,12 @@ export const PostActionsMixin = {
         picker.style.left = `${window.innerWidth - pw - 8}px`;
       }
     };
-    const rect = anchorElement.getBoundingClientRect();
-    positionAccountPicker(rect);
-
+    // Start hidden to avoid position jump, then fade in after final position
+    picker.style.opacity = '0';
     document.body.appendChild(picker);
-    // Re-adjust after DOM append (now offsetWidth is real)
     positionAccountPicker(anchorElement.getBoundingClientRect());
+    picker.offsetHeight; // eslint-disable-line no-unused-expressions
+    picker.style.opacity = '';
     this._trackPopupScroll('accountPicker', picker, anchorElement, positionAccountPicker);
     this._activePickerAnchor = anchorElement;
 
