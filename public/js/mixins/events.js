@@ -69,7 +69,7 @@ export const EventsMixin = {
       btn.addEventListener('click', () => {
         const modalId = btn.dataset.closeModal;
         this.closeModal(document.getElementById(modalId));
-        if (modalId === 'modal-compose') { this.closeComposeEmojiPicker(); this.closeComposeVisibilityPicker(); }
+        if (modalId === 'modal-compose') { this.closeComposeEmojiPicker(); this.closeComposeVisibilityPicker(); this._closeEmojiAutocomplete(); }
       });
     });
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
@@ -78,6 +78,7 @@ export const EventsMixin = {
           this.closeModal(overlay);
           this.closeComposeEmojiPicker();
           this.closeComposeVisibilityPicker();
+          this._closeEmojiAutocomplete();
         }
       });
     });
@@ -426,6 +427,9 @@ export const EventsMixin = {
     this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());
     this.composeText.addEventListener('input', () => this._updateComposeWordCount());
 
+    // Inline emoji autocomplete on ':' trigger
+    this.composeText.addEventListener('input', () => this._handleEmojiAutocomplete());
+
     // Drag-and-drop image upload
     this.composeEditor.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -452,8 +456,33 @@ export const EventsMixin = {
       if (files.length > 0) this.renderComposeImagePreview();
     });
 
-    // Cmd/Ctrl+Enter to submit
+    // Cmd/Ctrl+Enter to submit + emoji autocomplete keyboard navigation
     this.composeText.addEventListener('keydown', (e) => {
+      // Emoji autocomplete keyboard navigation
+      if (this._isEmojiAutocompleteOpen()) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          this._navigateEmojiAutocomplete(1);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this._navigateEmojiAutocomplete(-1);
+          return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          const idx = this._emojiAutocompleteIndex ?? 0;
+          this._selectEmojiAutocomplete(idx);
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          this._closeEmojiAutocomplete();
+          return;
+        }
+      }
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
         this.handleComposeSubmit();

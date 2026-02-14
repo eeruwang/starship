@@ -10,6 +10,51 @@ export const COMMON_EMOJIS = [
 ];
 
 /**
+ * Unicode emoji name map for inline autocomplete.
+ * Maps shortcode names to unicode characters.
+ */
+export const UNICODE_EMOJI_MAP = {
+  thumbsup: '👍', thumbsdown: '👎', heart: '❤️', laughing: '😆', tada: '🎉',
+  open_mouth: '😮', thinking: '🤔', cry: '😢', eyes: '👀', fire: '🔥',
+  star: '⭐', '100': '💯', sparkles: '✨', joy: '😂', pray: '🙏',
+  two_hearts: '💕', blush: '😊', smile: '😄', grin: '😁', wink: '😉',
+  kissing_heart: '😘', heart_eyes: '😍', sweat_smile: '😅', rofl: '🤣',
+  relaxed: '☺️', yum: '😋', sunglasses: '😎', sob: '😭', angry: '😠',
+  rage: '🤬', skull: '💀', clap: '👏', wave: '👋', ok_hand: '👌',
+  v: '✌️', muscle: '💪', raised_hands: '🙌', point_up: '☝️',
+  point_down: '👇', point_left: '👈', point_right: '👉',
+  rocket: '🚀', rainbow: '🌈', sun: '☀️', moon: '🌙', cloud: '☁️',
+  umbrella: '☂️', snowflake: '❄️', cherry_blossom: '🌸', rose: '🌹',
+  tulip: '🌷', sunflower: '🌻', fallen_leaf: '🍂',
+  apple: '🍎', pizza: '🍕', cake: '🎂', coffee: '☕', beer: '🍺',
+  wine_glass: '🍷', icecream: '🍦',
+  dog: '🐶', cat: '🐱', rabbit: '🐰', bear: '🐻', penguin: '🐧',
+  chicken: '🐔', fish: '🐟', butterfly: '🦋',
+  check: '✅', x: '❌', warning: '⚠️', question: '❓', exclamation: '❗',
+  bulb: '💡', bell: '🔔', pin: '📌', memo: '📝', book: '📖',
+  gift: '🎁', trophy: '🏆', medal: '🏅', crown: '👑', gem: '💎',
+  money: '💰', bomb: '💣', hammer: '🔨', wrench: '🔧', gear: '⚙️',
+  lock: '🔒', key: '🔑', link: '🔗', mag: '🔍',
+  music: '🎵', art: '🎨', movie: '🎬', camera: '📷', phone: '📱',
+  computer: '💻', earth: '🌍', flag: '🏁', clock: '🕐',
+  zzz: '💤', poop: '💩', ghost: '👻', alien: '👽', robot: '🤖',
+  smiley: '😃', stuck_out_tongue: '😛', worried: '😟', confused: '😕',
+  hushed: '😯', astonished: '😲', flushed: '😳', dizzy_face: '😵',
+  mask: '😷', sleeping: '😴', pensive: '😔', disappointed: '😞',
+  cold_sweat: '😰', scream: '😱', tired_face: '😫', nerd: '🤓',
+  smirk: '😏', unamused: '😒', rolling_eyes: '🙄', grimacing: '😬',
+  innocent: '😇', devil: '😈', clown: '🤡', cowboy: '🤠',
+  party: '🥳', pleading: '🥺', shush: '🤫', monocle: '🧐',
+  hot: '🥵', cold: '🥶', vomit: '🤮', sneezing: '🤧',
+  handshake: '🤝', writing_hand: '✍️', nail_polish: '💅',
+  red_heart: '❤️', orange_heart: '🧡', yellow_heart: '💛',
+  green_heart: '💚', blue_heart: '💙', purple_heart: '💜',
+  broken_heart: '💔', sparkling_heart: '💖', heartbeat: '💓',
+  plus: '➕', minus: '➖', arrow_up: '⬆️', arrow_down: '⬇️',
+  arrow_left: '⬅️', arrow_right: '➡️',
+};
+
+/**
  * Build the instance custom emoji section (categories, no search — search is at picker level).
  * @param {Array} emojis - Array of { name, url, category? }
  * @param {string} itemClass - CSS class(es) for emoji buttons

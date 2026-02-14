@@ -3,7 +3,7 @@
  * Handles the compose modal: opening, emoji picker, file attachments, and submission
  */
 import { escapeHtml, compressImage } from '../ui/utils.js';
-import { COMMON_EMOJIS, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
+import { COMMON_EMOJIS, UNICODE_EMOJI_MAP, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
 
 export const ComposeMixin = {
 
@@ -502,6 +502,188 @@ export const ComposeMixin = {
       const overlay = item.querySelector('.upload-progress');
       if (overlay) overlay.classList.add('done');
     }
+  },
+
+  // ===== Inline Emoji Autocomplete =====
+
+  /**
+   * Extract the emoji autocomplete query from the textarea at cursor position.
+   * Returns { query, colonPos, endPos } or null if no autocomplete context.
+   */
+  _getEmojiAutocompleteQuery() {
+    const ta = this.composeText;
+    const text = ta.value;
+    const pos = ta.selectionStart;
+
+    // Search backwards from cursor for ':'
+    let colonPos = -1;
+    for (let i = pos - 1; i >= 0; i--) {
+      const ch = text[i];
+      if (ch === ':') {
+        colonPos = i;
+        break;
+      }
+      // Stop at whitespace or newline (except when part of the query)
+      if (/\s/.test(ch)) break;
+    }
+
+    if (colonPos === -1) return null;
+
+    // Colon must be at start of text or after whitespace
+    if (colonPos > 0 && !/\s/.test(text[colonPos - 1])) return null;
+
+    const query = text.substring(colonPos + 1, pos);
+
+    // Don't trigger if query contains whitespace or another colon (already closed)
+    if (/[\s:]/.test(query)) return null;
+
+    // Require at least 1 character after colon for filtering
+    if (query.length < 1) return null;
+
+    return { query, colonPos, endPos: pos };
+  },
+
+  /**
+   * Handle emoji autocomplete on each input event.
+   */
+  async _handleEmojiAutocomplete() {
+    const result = this._getEmojiAutocompleteQuery();
+    if (!result) {
+      this._closeEmojiAutocomplete();
+      return;
+    }
+
+    const { query } = result;
+    const lowerQuery = query.toLowerCase();
+
+    // Gather matches from both unicode and custom emojis
+    const matches = [];
+
+    // Search unicode emojis by name
+    for (const [name, char] of Object.entries(UNICODE_EMOJI_MAP)) {
+      if (name.includes(lowerQuery)) {
+        matches.push({ name, display: char, text: char, isCustom: false });
+      }
+      if (matches.length >= 30) break;
+    }
+
+    // Search custom instance emojis
+    const emojiMap = await this._getComposeEmojiMap();
+    for (const [name, url] of Object.entries(emojiMap)) {
+      if (name.toLowerCase().includes(lowerQuery)) {
+        matches.push({ name, url, text: `:${name}:`, isCustom: true });
+      }
+      if (matches.length >= 30) break;
+    }
+
+    if (matches.length === 0) {
+      this._closeEmojiAutocomplete();
+      return;
+    }
+
+    this._renderEmojiAutocomplete(matches);
+  },
+
+  /**
+   * Render the autocomplete dropdown with matched emojis.
+   */
+  _renderEmojiAutocomplete(matches) {
+    let dropdown = document.getElementById('emoji-autocomplete-dropdown');
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = 'emoji-autocomplete-dropdown';
+      dropdown.className = 'emoji-autocomplete-dropdown';
+      const textWrap = document.querySelector('.compose-text-wrap');
+      textWrap.style.position = 'relative';
+      textWrap.appendChild(dropdown);
+
+      dropdown.addEventListener('mousedown', (e) => {
+        // Prevent blur on textarea when clicking dropdown items
+        e.preventDefault();
+      });
+      dropdown.addEventListener('click', (e) => {
+        const item = e.target.closest('.emoji-ac-item');
+        if (!item) return;
+        const idx = parseInt(item.dataset.index);
+        this._selectEmojiAutocomplete(idx);
+      });
+    }
+
+    this._emojiAutocompleteIndex = 0;
+    this._emojiAutocompleteItems = matches;
+
+    dropdown.innerHTML = matches.map((m, i) => `
+      <button class="emoji-ac-item${i === 0 ? ' active' : ''}" data-index="${i}">
+        ${m.isCustom
+          ? `<img src="${escapeHtml(m.url)}" alt=":${escapeHtml(m.name)}:" class="emoji-ac-img" referrerpolicy="no-referrer">`
+          : `<span class="emoji-ac-unicode">${m.display}</span>`
+        }
+        <span class="emoji-ac-name">:${escapeHtml(m.name)}:</span>
+      </button>
+    `).join('');
+  },
+
+  /**
+   * Select an emoji from the autocomplete dropdown by index.
+   */
+  _selectEmojiAutocomplete(index) {
+    const items = this._emojiAutocompleteItems;
+    if (!items || index < 0 || index >= items.length) return;
+
+    const selected = items[index];
+    const result = this._getEmojiAutocompleteQuery();
+    if (!result) return;
+
+    const ta = this.composeText;
+    const before = ta.value.substring(0, result.colonPos);
+    const after = ta.value.substring(result.endPos);
+    ta.value = before + selected.text + ' ' + after;
+    const newPos = result.colonPos + selected.text.length + 1;
+    ta.selectionStart = ta.selectionEnd = newPos;
+    ta.focus();
+
+    this._closeEmojiAutocomplete();
+    this._updateComposeEmojiPreview();
+    this._updateComposeWordCount();
+  },
+
+  /**
+   * Close the emoji autocomplete dropdown.
+   */
+  _closeEmojiAutocomplete() {
+    const dropdown = document.getElementById('emoji-autocomplete-dropdown');
+    if (dropdown) dropdown.remove();
+    this._emojiAutocompleteItems = null;
+    this._emojiAutocompleteIndex = -1;
+  },
+
+  /**
+   * Navigate the autocomplete dropdown with arrow keys.
+   * Returns true if navigation was handled (autocomplete is open).
+   */
+  _navigateEmojiAutocomplete(direction) {
+    const dropdown = document.getElementById('emoji-autocomplete-dropdown');
+    if (!dropdown || !this._emojiAutocompleteItems) return false;
+
+    const items = this._emojiAutocompleteItems;
+    let newIndex = (this._emojiAutocompleteIndex || 0) + direction;
+    if (newIndex < 0) newIndex = items.length - 1;
+    if (newIndex >= items.length) newIndex = 0;
+
+    this._emojiAutocompleteIndex = newIndex;
+
+    const buttons = dropdown.querySelectorAll('.emoji-ac-item');
+    buttons.forEach((btn, i) => btn.classList.toggle('active', i === newIndex));
+    buttons[newIndex]?.scrollIntoView({ block: 'nearest' });
+
+    return true;
+  },
+
+  /**
+   * Check if the emoji autocomplete dropdown is currently open.
+   */
+  _isEmojiAutocompleteOpen() {
+    return !!document.getElementById('emoji-autocomplete-dropdown');
   },
 
   async handleComposeSubmit() {

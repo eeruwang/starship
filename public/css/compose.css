@@ -732,6 +732,67 @@
   overflow: hidden;
 }
 
+/* ===== Inline Emoji Autocomplete ===== */
+.emoji-autocomplete-dropdown {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  border-radius: 0 0 var(--radius) var(--radius);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  animation: picker-in 0.12s ease-out;
+  scrollbar-width: thin;
+}
+
+.emoji-ac-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.emoji-ac-item:hover,
+.emoji-ac-item.active {
+  background: rgba(124, 125, 255, 0.15);
+}
+
+.emoji-ac-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.emoji-ac-unicode {
+  font-size: 1.2rem;
+  line-height: 1;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.emoji-ac-name {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Quote action */
 .post-action[data-action="quote"]:hover {
   color: #9b59b6;
