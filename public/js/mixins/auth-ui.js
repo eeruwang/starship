@@ -505,10 +505,10 @@ export const AuthUIMixin = {
       <div class="reauth-picker-modal">
         <div class="reauth-picker-header">
           <h3>계정 관리</h3>
-          <p class="reauth-picker-desc">${accounts.length > 0 ? '계정을 클릭하면 재인증합니다. 👁 전체/알림 표시 토글, ✕ 삭제' : '연결된 계정이 없습니다. 아래에서 추가하세요.'}</p>
+          <p class="reauth-picker-desc">${accounts.length > 0 ? '드래그하여 순서 변경. 클릭하면 재인증. 👁 표시 토글, ✕ 삭제' : '연결된 계정이 없습니다. 아래에서 추가하세요.'}</p>
         </div>
         <div class="reauth-picker-list">
-          ${accounts.map(a => {
+          ${accounts.map((a, i) => {
             const isHidden = !!a.hidden;
             const sw = a.software || a.platform;
             const borderColor = usableColor(a.themeColor, sw);
@@ -516,12 +516,16 @@ export const AuthUIMixin = {
             const eyeSvg = isHidden
               ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
               : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+            const orderLabel = i === 0 ? ' <span class="reauth-default-badge">기본</span>' : '';
             return `
-            <div class="reauth-picker-row${isHidden ? ' account-hidden' : ''}" data-account-id="${a.id}" style="border-left: 3px solid ${borderColor}; border-radius: var(--radius);">
+            <div class="reauth-picker-row${isHidden ? ' account-hidden' : ''}" data-account-id="${a.id}" data-index="${i}" draggable="true" style="border-left: 3px solid ${borderColor}; border-radius: var(--radius);">
+              <span class="reauth-drag-handle" title="드래그하여 순서 변경">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
+              </span>
               <button class="reauth-picker-item" data-account-id="${a.id}">
                 <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
                 <div class="reauth-picker-info">
-                  <span class="reauth-picker-name">${escapeHtml(a.profile?.displayName || a.label || '')}</span>
+                  <span class="reauth-picker-name">${escapeHtml(a.profile?.displayName || a.label || '')}${orderLabel}</span>
                   <span class="reauth-picker-instance">${escapeHtml(a.instanceUrl.replace('https://', ''))}</span>
                 </div>
                 <span class="platform-badge ${sw}" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 8px; white-space: nowrap;">${escapeHtml(swLabel)}</span>
@@ -622,6 +626,47 @@ export const AuthUIMixin = {
         }
         this.render();
       });
+    });
+
+    // Drag-and-drop reordering
+    const list = picker.querySelector('.reauth-picker-list');
+    let dragRow = null;
+    list.addEventListener('dragstart', (e) => {
+      dragRow = e.target.closest('.reauth-picker-row');
+      if (!dragRow) return;
+      dragRow.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', '');
+    });
+    list.addEventListener('dragend', () => {
+      if (dragRow) dragRow.classList.remove('dragging');
+      list.querySelectorAll('.reauth-picker-row').forEach(r => r.classList.remove('drag-over'));
+      dragRow = null;
+    });
+    list.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const target = e.target.closest('.reauth-picker-row');
+      if (!target || target === dragRow) return;
+      list.querySelectorAll('.reauth-picker-row').forEach(r => r.classList.remove('drag-over'));
+      target.classList.add('drag-over');
+    });
+    list.addEventListener('dragleave', (e) => {
+      const target = e.target.closest('.reauth-picker-row');
+      if (target) target.classList.remove('drag-over');
+    });
+    list.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const target = e.target.closest('.reauth-picker-row');
+      if (!target || !dragRow || target === dragRow) return;
+      const fromIndex = parseInt(dragRow.dataset.index);
+      const toIndex = parseInt(target.dataset.index);
+      this.store.reorder(fromIndex, toIndex);
+      this.debouncedSaveToCloud();
+      this.render();
+      // Re-open picker with updated order
+      close();
+      setTimeout(() => this.openReauthAccountPicker(), 220);
     });
   },
 

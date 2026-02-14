@@ -855,6 +855,43 @@ textarea.input {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+}
+.reauth-picker-row.dragging {
+  opacity: 0.4;
+  transform: scale(0.97);
+}
+.reauth-picker-row.drag-over {
+  background: rgba(124, 125, 255, 0.1);
+  box-shadow: 0 -2px 0 0 var(--accent-primary) inset;
+}
+.reauth-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-muted);
+  padding: 0.3rem;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s;
+}
+.reauth-drag-handle:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+.reauth-drag-handle:active {
+  cursor: grabbing;
+}
+.reauth-default-badge {
+  font-size: 0.6rem;
+  background: var(--accent-primary);
+  color: #fff;
+  padding: 0.05rem 0.35rem;
+  border-radius: 6px;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+  font-weight: 600;
 }
 .reauth-picker-row .reauth-picker-item {
   flex: 1;

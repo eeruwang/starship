@@ -202,6 +202,15 @@ export class AccountStore {
     return this.accounts.filter(a => !a.hidden);
   }
 
+  reorder(fromIndex, toIndex) {
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= this.accounts.length || toIndex >= this.accounts.length) return;
+    const [moved] = this.accounts.splice(fromIndex, 1);
+    this.accounts.splice(toIndex, 0, moved);
+    this.save();
+  },
+
   toggleHidden(accountId) {
     const account = this.accounts.find(a => a.id === accountId);
     if (account) {
