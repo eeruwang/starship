@@ -25,3 +25,8 @@ database_id = "01f5e825-6777-4b3e-8716-2c02fe91555a"
 # TURNSTILE_SECRET은 wrangler secret으로 설정: wrangler secret put TURNSTILE_SECRET
 [vars]
 TURNSTILE_SITE_KEY = "0x4AAAAAACZUfwlrZqv0UjBX"
+
+# R2 이미지 캐시 (아바타, 미디어, 이모지)
+[[r2_buckets]]
+binding = "STARSHIP_CACHE"
+bucket_name = "starship-cache"
