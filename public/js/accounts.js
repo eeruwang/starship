@@ -209,7 +209,7 @@ export class AccountStore {
     const [moved] = this.accounts.splice(fromIndex, 1);
     this.accounts.splice(toIndex, 0, moved);
     this.save();
-  },
+  }
 
   toggleHidden(accountId) {
     const account = this.accounts.find(a => a.id === accountId);
