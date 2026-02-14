@@ -4,7 +4,7 @@
  */
 import { escapeHtml } from '../ui/utils.js';
 import { usableColor } from '../ui/dashboard.js';
-import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from '../auth.js';
+import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth, openAuthPopup } from '../auth.js';
 
 const SOFTWARE_LABELS = {
   misskey: 'Misskey', sharkey: 'Sharkey', foundkey: 'FoundKey', hajkey: 'Hajkey',
@@ -626,51 +626,82 @@ export const AuthUIMixin = {
   },
 
   async reauthAccount(account) {
+    // Open popup SYNCHRONOUSLY (iOS blocks window.open after await)
+    const popup = openAuthPopup('about:blank');
+
     try {
-      let popup;
       if (account.platform === 'mastodon') {
-        popup = await startMastodonOAuth(account.instanceUrl);
+        await startMastodonOAuth(account.instanceUrl, popup);
       } else {
-        popup = await startMiAuth(account.instanceUrl, account.platform);
+        await startMiAuth(account.instanceUrl, account.platform, popup);
       }
 
       if (!popup) return;
 
       const result = await waitForAuthCallback();
 
-      // Update the existing account's token instead of adding new
+      // Update the existing account's token
       account.accessToken = result.accessToken;
-      this.store.save();
       // Recreate the client with new token
       const newClient = this.store.createClient(account);
       this.store.clients.set(account.id, newClient);
-      this.debouncedSaveToCloud();
 
-      // Re-verify credentials to update profile
+      // Re-verify credentials, fetch theme color, and detect software
       const client = this.store.getClient(account.id);
       if (client) {
         try {
+          const [profile, themeColor] = await Promise.all([
+            client.verifyCredentials(),
+            client.fetchThemeColor().catch(() => null),
+          ]);
+
+          if (themeColor) account.themeColor = themeColor;
+
+          // Re-detect software via NodeInfo if not already set
+          if (!account.software || account.software === account.platform) {
+            const sw = await this._fetchNodeInfo(
+              (url) => (window.location.hostname !== 'localhost' ? `/proxy?url=${encodeURIComponent(url)}` : url),
+              account.instanceUrl
+            );
+            if (sw) {
+              const classified = this._classifyPlatform(sw, null);
+              if (classified) account.software = classified.software;
+            }
+          }
+
           if (account.platform === 'mastodon') {
-            const profile = await client.verifyCredentials();
-            account.profile = client.normalizeUser(profile);
+            account.profile = {
+              id: profile.id,
+              username: profile.username,
+              displayName: profile.display_name || profile.username,
+              acct: profile.acct,
+              avatarUrl: profile.avatar,
+              followersCount: profile.followers_count,
+              followingCount: profile.following_count,
+              statusesCount: profile.statuses_count,
+            };
           } else {
-            const me = await client.request('i');
+            const me = profile;
             account.profile = {
               id: me.id,
-              displayName: me.name || me.username,
               username: me.username,
+              displayName: me.name || me.username,
               acct: me.host ? `${me.username}@${me.host}` : me.username,
               avatarUrl: me.avatarUrl,
+              followersCount: me.followersCount,
+              followingCount: me.followingCount,
+              notesCount: me.notesCount,
             };
           }
-          this.store.save();
-          this.debouncedSaveToCloud();
         } catch {}
       }
 
+      this.store.save();
       this.showToast(`${account.profile?.displayName || account.label} 계정이 재인증되었습니다.`, 'success');
       this.render();
+      await this.saveToCloud();
     } catch (err) {
+      if (popup) popup.close();
       clearPendingAuth();
       this.showToast(`재인증 실패: ${err.message}`);
     }
