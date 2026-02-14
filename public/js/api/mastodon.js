@@ -5,12 +5,20 @@
  */
 import { escapeHtml, cachedImageUrl } from '../ui/utils.js';
 
+// Mastodon-compatible software that supports emoji reactions
+const REACTION_SOFTWARE = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+
 export class MastodonClient {
-  constructor(instanceUrl, accessToken) {
+  constructor(instanceUrl, accessToken, software = 'mastodon') {
     this.instanceUrl = instanceUrl.replace(/\/+$/, '');
     this.accessToken = accessToken;
+    this.software = software;
     // localhost가 아니면 Worker 프록시 사용 (Cloudflare 배포 환경)
     this.useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+  }
+
+  get supportsReactions() {
+    return REACTION_SOFTWARE.has(this.software);
   }
 
   async request(method, path, body = null) {
@@ -140,6 +148,49 @@ export class MastodonClient {
 
   async unfavourite(id) {
     return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/unfavourite`);
+  }
+
+  /**
+   * Emoji reaction support for Mastodon-compatible forks.
+   * - Fedibird/glitch-soc/Hollo: /api/v1/statuses/:id/emoji_reactions/:emoji
+   * - Pleroma/Akkoma: /api/v1/pleroma/statuses/:id/reactions/:emoji
+   */
+  async createReaction(id, reaction = '❤') {
+    const emoji = encodeURIComponent(reaction.replace(/^:|:$/g, ''));
+    if (this.software === 'akkoma' || this.software === 'pleroma') {
+      return this.request('PUT', `/api/v1/pleroma/statuses/${encodeURIComponent(id)}/reactions/${emoji}`);
+    }
+    return this.request('PUT', `/api/v1/statuses/${encodeURIComponent(id)}/emoji_reactions/${emoji}`);
+  }
+
+  async deleteReaction(id, reaction) {
+    if (!reaction) return this.unfavourite(id);
+    const emoji = encodeURIComponent(reaction.replace(/^:|:$/g, ''));
+    if (this.software === 'akkoma' || this.software === 'pleroma') {
+      return this.request('DELETE', `/api/v1/pleroma/statuses/${encodeURIComponent(id)}/reactions/${emoji}`);
+    }
+    return this.request('DELETE', `/api/v1/statuses/${encodeURIComponent(id)}/emoji_reactions/${emoji}`);
+  }
+
+  async getReactions(id, type = null) {
+    try {
+      let reactions;
+      if (this.software === 'akkoma' || this.software === 'pleroma') {
+        reactions = await this.request('GET', `/api/v1/pleroma/statuses/${encodeURIComponent(id)}/reactions`);
+      } else {
+        reactions = await this.request('GET', `/api/v1/statuses/${encodeURIComponent(id)}/emoji_reactions`);
+      }
+      if (!Array.isArray(reactions)) return [];
+      // Normalize to flat user list like Misskey: [{ type, user }]
+      const result = [];
+      for (const r of reactions) {
+        if (type && r.name !== type && r.name !== type.replace(/^:|:$/g, '')) continue;
+        for (const u of (r.accounts || [])) {
+          result.push({ type: r.name, user: u });
+        }
+      }
+      return result;
+    } catch { return []; }
   }
 
   async reblog(id) {

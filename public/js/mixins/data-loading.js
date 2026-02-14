@@ -377,6 +377,7 @@ export const DataLoadingMixin = {
               const notif = client.normalizeNotification(n);
               notif.themeColor = effectiveColor;
               notif.accountId = account.id;
+              notif.accountSoftware = account.software || account.platform;
               notif.instanceUrl = account.instanceUrl;
               return notif;
             });
@@ -437,6 +438,7 @@ export const DataLoadingMixin = {
           .map(n => {
             n.post.accountId = n.accountId;
             n.post.accountPlatform = n.platform;
+            n.post.accountSoftware = n.accountSoftware || n.platform;
             return n.post;
           });
         if (preDedupPosts.length > 0) this._mergeReactionsFromCache(preDedupPosts);
@@ -491,6 +493,7 @@ export const DataLoadingMixin = {
         .map(n => {
           n.post.accountId = n.accountId;
           n.post.accountPlatform = n.platform;
+          n.post.accountSoftware = n.accountSoftware || n.platform;
           if (n.mergedAccounts) n.post.mergedAccounts = n.mergedAccounts;
           return n.post;
         });
@@ -599,6 +602,7 @@ export const DataLoadingMixin = {
   _addPostMeta(post, account) {
     post.accountId = account.id;
     post.accountPlatform = account.platform;
+    post.accountSoftware = account.software || account.platform;
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile.id);
@@ -1168,6 +1172,7 @@ export const DataLoadingMixin = {
               const notif = client.normalizeNotification(n);
               notif.themeColor = effectiveColor;
               notif.accountId = account.id;
+              notif.accountSoftware = account.software || account.platform;
               notif.instanceUrl = account.instanceUrl;
               return notif;
             });
@@ -1207,6 +1212,7 @@ export const DataLoadingMixin = {
           .map(n => {
             n.post.accountId = n.accountId;
             n.post.accountPlatform = n.platform;
+            n.post.accountSoftware = n.accountSoftware || n.platform;
             return n.post;
           });
         if (preDedupPosts.length > 0) this._mergeReactionsFromCache(preDedupPosts);
@@ -1283,6 +1289,7 @@ export const DataLoadingMixin = {
         .map(n => {
           n.post.accountId = n.accountId;
           n.post.accountPlatform = n.platform;
+          n.post.accountSoftware = n.accountSoftware || n.platform;
           if (n.mergedAccounts) n.post.mergedAccounts = n.mergedAccounts;
           return n.post;
         });

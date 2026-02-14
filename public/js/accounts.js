@@ -53,7 +53,7 @@ export class AccountStore {
 
   createClient(account) {
     if (account.platform === 'mastodon') {
-      return new MastodonClient(account.instanceUrl, account.accessToken);
+      return new MastodonClient(account.instanceUrl, account.accessToken, account.software || 'mastodon');
     }
     return new MisskeyClient(account.instanceUrl, account.accessToken, account.platform);
   }
@@ -64,7 +64,7 @@ export class AccountStore {
 
   async addAccount(platform, instanceUrl, accessToken, label = '', software = '') {
     const client = platform === 'mastodon'
-      ? new MastodonClient(instanceUrl, accessToken)
+      ? new MastodonClient(instanceUrl, accessToken, software || 'mastodon')
       : new MisskeyClient(instanceUrl, accessToken, platform);
 
     const [profile, themeColor] = await Promise.all([

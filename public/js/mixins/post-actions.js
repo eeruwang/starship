@@ -738,22 +738,24 @@ export const PostActionsMixin = {
     picker.className = 'reaction-picker';
     picker.id = 'reaction-picker-popup';
 
-    // Check if this is a Misskey-type account (needs instance emojis)
+    // Check if this account supports custom emoji reactions (Misskey forks + Mastodon forks with reaction support)
     const client = this.store.getClient(accountId);
     const account = this.store.getById(accountId);
-    const isMisskeyType = account && account.platform !== 'mastodon';
+    const hasCustomEmojis = account && (
+      account.platform !== 'mastodon' || client?.supportsReactions
+    );
 
     // Build initial HTML with search + unicode emojis + loading placeholder for instance emojis
     picker.innerHTML = `
-      ${isMisskeyType ? '<div class="reaction-picker-search"><input type="text" class="reaction-picker-search-input" placeholder="이모지 검색..." /></div>' : ''}
+      ${hasCustomEmojis ? '<div class="reaction-picker-search"><input type="text" class="reaction-picker-search-input" placeholder="이모지 검색..." /></div>' : ''}
       <div class="reaction-picker-section-label">이모지</div>
       <div class="reaction-picker-grid reaction-picker-unicode">
         ${COMMON_EMOJIS.map(r => `<button class="reaction-picker-item" data-reaction="${r}">${r}</button>`).join('')}
       </div>
-      ${isMisskeyType ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
+      ${hasCustomEmojis ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
     `;
 
-    if (isMisskeyType) setupPickerSearch(picker, 'reaction');
+    if (hasCustomEmojis) setupPickerSearch(picker, 'reaction');
 
     // Position near button: prefer above, fall back to below if not enough space
     // Clamp to viewport to prevent clipping
@@ -819,8 +821,8 @@ export const PostActionsMixin = {
       this._reactionPickerClose = handler;
     }, 0);
 
-    // Async: fetch and insert instance custom emojis for Misskey accounts
-    if (isMisskeyType && client?.getInstanceEmojis) {
+    // Async: fetch and insert instance custom emojis
+    if (hasCustomEmojis && client?.getInstanceEmojis) {
       loadInstanceEmojis({
         client,
         picker,
@@ -850,9 +852,10 @@ export const PostActionsMixin = {
     const isCrossInstance = originalPostId && originalPostId !== actionPostId;
     try {
       btnElement.classList.add('processing');
-      // If already reacted on Misskey, delete old reaction first
       const cachedPost = this.postCache.get(`${platform}:${refreshPostId}`);
-      if (cachedPost?.myReaction) {
+      // Misskey only allows one reaction — delete old before adding new
+      // Mastodon forks allow multiple reactions, so skip delete
+      if (cachedPost?.myReaction && platform !== 'mastodon') {
         await client.deleteReaction(actionPostId);
       }
       await client.createReaction(actionPostId, reaction);
@@ -1116,8 +1119,25 @@ export const PostActionsMixin = {
         } else {
           popup.innerHTML = this._renderReactionUsersHtml(users);
         }
+      } else if (platform === 'mastodon' && client.supportsReactions && !isFavourite) {
+        // Mastodon fork with reaction support (Hollo, Fedibird, Pleroma, Akkoma): use reaction API
+        const reactions = await client.getReactions(postId, reaction || undefined);
+        users = reactions.map(r => {
+          const normalized = r.user ? client.normalizeUser(r.user) : null;
+          return {
+            displayNameHtml: normalized?.displayNameHtml || escapeHtml(r.user?.display_name || r.user?.username || '?'),
+            username: normalized?.acct || normalized?.username || r.user?.username || '?',
+            avatarUrl: normalized?.avatarUrl || r.user?.avatar || '',
+            reaction: r.type || '',
+          };
+        });
+        if (users.length === 0) {
+          popup.innerHTML = '<div class="reaction-users-loading">리액션한 사용자가 없습니다.</div>';
+        } else {
+          popup.innerHTML = this._renderReactionUsersHtml(users);
+        }
       } else if (platform === 'mastodon') {
-        // Emoji reaction on pure Mastodon (no Misskey data): fallback to getFavouritedBy
+        // Standard Mastodon or favourite badge: use getFavouritedBy
         const favUsers = await client.getFavouritedBy(postId);
         if (!favUsers || favUsers.length === 0) {
           popup.innerHTML = '<div class="reaction-users-loading">좋아요한 사용자가 없습니다.</div>';

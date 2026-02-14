@@ -46,6 +46,7 @@ export const StreamingMixin = {
     // Add metadata (same as _addPostMeta in data-loading)
     post.accountId = account.id;
     post.accountPlatform = account.platform;
+    post.accountSoftware = account.software || account.platform;
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile.id);
@@ -180,6 +181,7 @@ export const StreamingMixin = {
 
   _onStreamNotification({ account, notif }) {
     notif.accountId = account.id;
+    notif.accountSoftware = account.software || account.platform;
     notif.instanceUrl = account.instanceUrl;
     notif.themeColor = this._accountColor(account);
 
@@ -187,6 +189,7 @@ export const StreamingMixin = {
     if (notif.post) {
       notif.post.accountId = account.id;
       notif.post.accountPlatform = account.platform;
+      notif.post.accountSoftware = account.software || account.platform;
       this.cachePosts([notif.post]);
     }
 
@@ -290,6 +293,7 @@ export const StreamingMixin = {
     // Post was edited — update cache and re-render in all columns
     post.accountId = account.id;
     post.accountPlatform = account.platform;
+    post.accountSoftware = account.software || account.platform;
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile.id);
