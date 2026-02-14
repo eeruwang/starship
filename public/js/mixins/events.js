@@ -57,6 +57,7 @@ export const EventsMixin = {
         if (data.settings) { this.settings = { ...this.settings, ...data.settings }; this.saveSettings(); this.applySettings(); }
         if (data.columnState) { this.columnState = data.columnState; this.saveColumnState(); }
         this.render();
+        this.restartStreaming();
         this.debouncedSaveToCloud();
       } catch (err) { console.error('Import failed:', err); this.showToast('파일을 읽을 수 없습니다.'); }
       e.target.value = '';

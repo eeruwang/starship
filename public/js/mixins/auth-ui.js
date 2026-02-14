@@ -372,6 +372,7 @@ export const AuthUIMixin = {
     this._ogCache.clear();
     // Clear local data
     this.store.replaceAll([]);
+    this.stopStreaming();
     this.columnState = { all: true, notifications: true, accounts: {}, columnOrder: [] };
     this.saveColumnState();
     this.columnsContainer.innerHTML = '';
@@ -617,6 +618,7 @@ export const AuthUIMixin = {
         const name = account.profile?.displayName || account.label || accountId;
         if (!confirm(`"${name}" 계정을 삭제하시겠습니까?\n이 계정의 연결이 해제됩니다.`)) return;
         this.store.removeAccount(accountId);
+        this.streamManager?.disconnect(accountId);
         this.debouncedSaveToCloud();
         // Remove the row from the picker
         const row = btn.closest('.reauth-picker-row');
@@ -775,6 +777,7 @@ export const AuthUIMixin = {
       }
       // Re-render with cloud data
       this.render();
+      this.restartStreaming();
     } catch (err) {
       console.error('Cloud load failed:', err);
     }

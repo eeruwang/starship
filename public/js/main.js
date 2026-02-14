@@ -3,6 +3,7 @@
  * Fediverse multi-account dashboard for Misskey, Iceshrimp, CherryPick, and Mastodon.
  */
 import { AccountStore } from './accounts.js';
+import { StreamManager } from './streaming.js';
 
 // Mixins
 import { PostActionsMixin } from './mixins/post-actions.js';
@@ -15,6 +16,7 @@ import { ProfileModalMixin } from './mixins/profile-modal.js';
 import { EventsMixin } from './mixins/events.js';
 import { ColumnsMixin } from './mixins/columns.js';
 import { LinkEnrichmentMixin } from './mixins/link-enrichment.js';
+import { StreamingMixin } from './mixins/streaming.js';
 
 const COLUMN_STATE_KEY = 'starship_column_state';
 const SETTINGS_KEY = 'starship_settings';
@@ -22,6 +24,7 @@ const SETTINGS_KEY = 'starship_settings';
 class StarShipApp {
   constructor() {
     this.store = new AccountStore();
+    this.streamManager = new StreamManager();
     this.autoRefreshTimer = null;
     this.focusedColumnIndex = 0;
     this.postCache = new Map(); // key: `${platform}:${id}`, value: post
@@ -179,6 +182,7 @@ class StarShipApp {
   // - AccountSetupMixin: account setup modal
   // - ThreadViewMixin: thread view
   // - ProfileModalMixin: profile modal
+  // - StreamingMixin: real-time WebSocket streaming
 }
 
 // Apply mixins
@@ -193,6 +197,7 @@ Object.assign(StarShipApp.prototype,
   EventsMixin,
   ColumnsMixin,
   LinkEnrichmentMixin,
+  StreamingMixin,
 );
 
 // Initialize
@@ -215,5 +220,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       console.error('OAuth 콜백 처리 실패:', err);
     }
+  }
+
+  // 3. Start real-time streaming for all connected accounts
+  if (!app.store.isEmpty()) {
+    app.startStreaming();
   }
 });

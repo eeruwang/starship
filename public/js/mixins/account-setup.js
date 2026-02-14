@@ -268,6 +268,7 @@ export const AccountSetupMixin = {
       await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken, '', this._detectedSoftware);
       this.closeModal(this.modalAddAccount);
       this.render();
+      this.restartStreaming();
       await this.saveToCloud();
     } catch (err) {
       if (popup) popup.close();
@@ -326,6 +327,7 @@ export const AccountSetupMixin = {
       await this.store.addAccount(platform, instanceUrl, accessToken, label, this._detectedSoftware);
       this.closeModal(this.modalAddAccount);
       this.render();
+      this.restartStreaming();
       await this.saveToCloud();
     } catch (err) {
       this.showAddError(`연결 실패: ${err.message}`);
