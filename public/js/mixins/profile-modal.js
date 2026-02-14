@@ -2,7 +2,7 @@
  * Profile Modal Mixin
  * Handles the profile modal: opening, profile editing, notes tabs, follow relations
  */
-import { escapeHtml } from '../ui/utils.js';
+import { escapeHtml, compressImage } from '../ui/utils.js';
 import { renderPost } from '../ui/dashboard.js';
 
 export const ProfileModalMixin = {
@@ -382,22 +382,22 @@ export const ProfileModalMixin = {
 
     // Image upload handlers
     editBannerBtn.onclick = () => editBannerInput.click();
-    editBannerInput.onchange = () => {
+    editBannerInput.onchange = async () => {
       const file = editBannerInput.files[0];
       if (!file) return;
-      this._profileEditBannerFile = file;
-      const url = URL.createObjectURL(file);
+      this._profileEditBannerFile = await compressImage(file);
+      const url = URL.createObjectURL(this._profileEditBannerFile);
       banner.style.background = 'none';
       banner.style.backgroundImage = `url(${url})`;
       banner.style.backgroundSize = 'cover';
       banner.style.backgroundPosition = 'center';
     };
     editAvatarBtn.onclick = () => editAvatarInput.click();
-    editAvatarInput.onchange = () => {
+    editAvatarInput.onchange = async () => {
       const file = editAvatarInput.files[0];
       if (!file) return;
-      this._profileEditAvatarFile = file;
-      avatar.src = URL.createObjectURL(file);
+      this._profileEditAvatarFile = await compressImage(file);
+      avatar.src = URL.createObjectURL(this._profileEditAvatarFile);
     };
 
     editBtn.addEventListener('click', enterEditMode);

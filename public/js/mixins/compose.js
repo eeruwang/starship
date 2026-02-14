@@ -2,7 +2,7 @@
  * Compose Mixin
  * Handles the compose modal: opening, emoji picker, file attachments, and submission
  */
-import { escapeHtml } from '../ui/utils.js';
+import { escapeHtml, compressImage } from '../ui/utils.js';
 import { COMMON_EMOJIS, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
 
 export const ComposeMixin = {
@@ -443,11 +443,12 @@ export const ComposeMixin = {
     }
   },
 
-  handleComposeFileSelect() {
+  async handleComposeFileSelect() {
     const files = Array.from(this.composeFilesInput.files);
     for (const file of files) {
       if (this.composeFiles.length >= 4) break;
-      this.composeFiles.push(file);
+      const compressed = await compressImage(file);
+      this.composeFiles.push(compressed);
     }
     this.composeFilesInput.value = '';
     this.renderComposeImagePreview();

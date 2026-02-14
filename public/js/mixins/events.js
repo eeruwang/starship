@@ -2,7 +2,7 @@
  * Events Mixin
  * All event binding, keyboard navigation, and lightbox.
  */
-import { escapeHtml } from '../ui/utils.js';
+import { escapeHtml, compressImage } from '../ui/utils.js';
 
 export const EventsMixin = {
 
@@ -425,14 +425,15 @@ export const EventsMixin = {
         this.composeEditor.classList.remove('drag-over');
       }
     });
-    this.composeEditor.addEventListener('drop', (e) => {
+    this.composeEditor.addEventListener('drop', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       this.composeEditor.classList.remove('drag-over');
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
       for (const file of files) {
         if (this.composeFiles.length >= 4) break;
-        this.composeFiles.push(file);
+        const compressed = await compressImage(file);
+        this.composeFiles.push(compressed);
       }
       if (files.length > 0) this.renderComposeImagePreview();
     });
@@ -446,7 +447,7 @@ export const EventsMixin = {
     });
 
     // Paste image from clipboard
-    this.composeText.addEventListener('paste', (e) => {
+    this.composeText.addEventListener('paste', async (e) => {
       const items = Array.from(e.clipboardData?.items || []);
       const imageFiles = items
         .filter(item => item.type.startsWith('image/'))
@@ -455,7 +456,8 @@ export const EventsMixin = {
       if (imageFiles.length > 0) {
         for (const file of imageFiles) {
           if (this.composeFiles.length >= 4) break;
-          this.composeFiles.push(file);
+          const compressed = await compressImage(file);
+          this.composeFiles.push(compressed);
         }
         this.renderComposeImagePreview();
       }
