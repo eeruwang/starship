@@ -337,7 +337,7 @@ export const ThreadViewMixin = {
       post.accountSoftware = account.software || account.platform;
       post.themeColor = effectiveColor;
       const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
-      post.isOwn = String(ownerId) === String(account.profile.id);
+      post.isOwn = String(ownerId) === String(account.profile?.id);
       return post;
     };
     ancestors.forEach(addMeta);

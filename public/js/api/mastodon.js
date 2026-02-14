@@ -190,7 +190,10 @@ export class MastodonClient {
         }
       }
       return result;
-    } catch { return []; }
+    } catch (err) {
+      console.debug('[StarShip] getReactions failed:', err.message || err);
+      return [];
+    }
   }
 
   async reblog(id) {

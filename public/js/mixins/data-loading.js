@@ -605,7 +605,7 @@ export const DataLoadingMixin = {
     post.accountSoftware = account.software || account.platform;
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
-    post.isOwn = String(ownerId) === String(account.profile.id);
+    post.isOwn = String(ownerId) === String(account.profile?.id);
     return post;
   },
 

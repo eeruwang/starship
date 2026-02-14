@@ -442,7 +442,7 @@ export const PostActionsMixin = {
       basePost.accountPlatform = origAccount.platform;
       basePost.themeColor = origAccount.themeColor || null;
       const ownerId = basePost.rebloggedBy ? basePost.rebloggedBy.id : basePost.author.id;
-      basePost.isOwn = String(ownerId) === String(origAccount.profile.id);
+      basePost.isOwn = String(ownerId) === String(origAccount.profile?.id);
     }
     if (!basePost) return;
 
@@ -653,7 +653,9 @@ export const PostActionsMixin = {
     const cached = this.postCache.get(`${platform}:${postId}`);
     if (!cached) return postId;
     let current = cached;
-    while (current.reblog) {
+    const seen = new Set([postId]);
+    while (current.reblog && !seen.has(current.reblog.id)) {
+      seen.add(current.reblog.id);
       current = current.reblog;
     }
     return current.id;

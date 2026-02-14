@@ -569,8 +569,9 @@ export class MisskeyClient {
     });
 
     // 3. MFM $[function.params content] (innermost first, repeat for nesting)
-    let prevHtml;
+    let prevHtml, mfmIter = 0;
     do {
+      if (++mfmIter > 10) break; // prevent infinite loop on deeply nested MFM
       prevHtml = html;
       html = html.replace(/\$\[(\w+)(?:\.([\w=,.\-]+))?\s+([^\[\]]*)\]/g, (match, func, paramStr, content) => {
         const params = {};
