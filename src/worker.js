@@ -10,6 +10,10 @@
 
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+const CACHE_TTL_IMAGE = 7 * 24 * 60 * 60; // 7 days
+const CACHE_TTL_OG = 24 * 60 * 60; // 24 hours
+const CACHE_TTL_THEME = 7 * 24 * 60 * 60; // 7 days
+const CACHE_MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 let _tablesInitialized = false;
 
 export default {
@@ -21,6 +25,11 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
+    // Image cache proxy
+    if (url.pathname === '/cache/image' && request.method === 'GET') {
+      return handleImageCache(url, env);
+    }
+
     // Proxy
     if (url.pathname === '/proxy') {
       return handleProxy(request, url);
@@ -28,12 +37,12 @@ export default {
 
     // OG metadata fetch (no DB needed)
     if (url.pathname === '/api/og' && request.method === 'GET') {
-      return handleOgFetch(url);
+      return handleOgFetch(url, env);
     }
 
     // Instance theme-color fetch (no DB needed)
     if (url.pathname === '/api/instance-theme' && request.method === 'GET') {
-      return handleInstanceTheme(url);
+      return handleInstanceTheme(url, env);
     }
 
     // Auth & sync API
@@ -510,9 +519,122 @@ function isPrivateHost(hostname) {
   return false;
 }
 
+// ===== R2 Cache Helpers =====
+
+async function cacheKey(prefix, url) {
+  const data = new TextEncoder().encode(url);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hex = Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join('');
+  return `${prefix}/${hex}`;
+}
+
+async function r2Get(bucket, key, ttlSeconds) {
+  if (!bucket) return null;
+  const obj = await bucket.get(key);
+  if (!obj) return null;
+  const cached = obj.customMetadata?.cachedAt;
+  if (cached && (Date.now() - parseInt(cached)) > ttlSeconds * 1000) {
+    // Expired — delete in background, return null
+    bucket.delete(key).catch(() => {});
+    return null;
+  }
+  return obj;
+}
+
+async function r2PutJson(bucket, key, data) {
+  if (!bucket) return;
+  await bucket.put(key, JSON.stringify(data), {
+    httpMetadata: { contentType: 'application/json' },
+    customMetadata: { cachedAt: String(Date.now()) },
+  });
+}
+
+// ===== Image Cache Proxy =====
+
+async function handleImageCache(url, env) {
+  const targetUrl = url.searchParams.get('url');
+  if (!targetUrl) {
+    return jsonResponse({ error: 'Missing "url" parameter' }, 400);
+  }
+
+  let parsed;
+  try { parsed = new URL(targetUrl); } catch {
+    return jsonResponse({ error: 'Invalid URL' }, 400);
+  }
+  if (parsed.protocol !== 'https:') {
+    return jsonResponse({ error: 'Only HTTPS URLs allowed' }, 400);
+  }
+  if (isPrivateHost(parsed.hostname)) {
+    return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
+  }
+
+  const bucket = env.STARSHIP_CACHE;
+  const key = await cacheKey('img', targetUrl);
+
+  // Check R2 cache
+  const cached = await r2Get(bucket, key, CACHE_TTL_IMAGE);
+  if (cached) {
+    const headers = {
+      'Content-Type': cached.httpMetadata?.contentType || 'image/png',
+      'Cache-Control': `public, max-age=${CACHE_TTL_IMAGE}`,
+      'X-Cache': 'HIT',
+      ...corsHeaders(),
+    };
+    return new Response(cached.body, { status: 200, headers });
+  }
+
+  // Fetch from origin
+  try {
+    const res = await fetch(targetUrl, {
+      headers: { 'User-Agent': 'StarShip/1.0', 'Accept': 'image/*' },
+      signal: AbortSignal.timeout(10000),
+      redirect: 'follow',
+    });
+
+    if (!res.ok) {
+      return new Response(null, { status: res.status, headers: corsHeaders() });
+    }
+
+    const contentType = res.headers.get('Content-Type') || '';
+    if (!contentType.startsWith('image/')) {
+      return jsonResponse({ error: 'Not an image' }, 400);
+    }
+
+    const contentLength = parseInt(res.headers.get('Content-Length') || '0');
+    if (contentLength > CACHE_MAX_IMAGE_SIZE) {
+      return jsonResponse({ error: 'Image too large' }, 413);
+    }
+
+    const imageData = await res.arrayBuffer();
+    if (imageData.byteLength > CACHE_MAX_IMAGE_SIZE) {
+      return jsonResponse({ error: 'Image too large' }, 413);
+    }
+
+    // Store in R2 (non-blocking)
+    if (bucket) {
+      const putPromise = bucket.put(key, imageData, {
+        httpMetadata: { contentType },
+        customMetadata: { cachedAt: String(Date.now()), originalUrl: targetUrl },
+      });
+      // Use waitUntil if available, otherwise await
+      putPromise.catch(() => {});
+    }
+
+    const headers = {
+      'Content-Type': contentType,
+      'Cache-Control': `public, max-age=${CACHE_TTL_IMAGE}`,
+      'X-Cache': 'MISS',
+      ...corsHeaders(),
+    };
+    return new Response(imageData, { status: 200, headers });
+  } catch (err) {
+    return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
+  }
+}
+
 // ===== OG Metadata =====
 
-async function handleOgFetch(url) {
+async function handleOgFetch(url, env) {
   const targetUrl = url.searchParams.get('url');
   if (!targetUrl) {
     return jsonResponse({ error: 'Missing "url" parameter' }, 400);
@@ -529,31 +651,55 @@ async function handleOgFetch(url) {
     return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
   }
 
+  // Check R2 cache
+  const bucket = env.STARSHIP_CACHE;
+  const key = await cacheKey('og', targetUrl);
+  const cached = await r2Get(bucket, key, CACHE_TTL_OG);
+  if (cached) {
+    const data = await cached.json();
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=86400',
+      'X-Cache': 'HIT',
+      ...corsHeaders(),
+    };
+    return new Response(JSON.stringify(data), { status: 200, headers });
+  }
+
   try {
     const hostname = parsed.hostname.replace(/^(?:www\.|m\.|mobile\.)/, '');
 
     // YouTube: direct thumbnail + oEmbed title (never fall through to generic fetch)
     if (hostname === 'youtube.com' || hostname === 'youtu.be') {
       const og = await fetchYoutubeOg(targetUrl);
-      if (og) return ogResponse(og);
-      // Even if extraction failed, don't fall through (YouTube consent page blocks generic fetch)
-      return ogResponse({ title: null, description: null, image: null, siteName: 'YouTube' });
+      const result = og || { title: null, description: null, image: null, siteName: 'YouTube' };
+      r2PutJson(bucket, key, result).catch(() => {});
+      return ogResponse(result);
     }
 
     // X/Twitter: use oEmbed + crawl-friendly fetch
     if (hostname === 'twitter.com' || hostname === 'x.com') {
       const og = await fetchTwitterOg(targetUrl);
-      if (og && (og.title || og.description)) return ogResponse(og);
+      if (og && (og.title || og.description)) {
+        r2PutJson(bucket, key, og).catch(() => {});
+        return ogResponse(og);
+      }
     }
 
     // Generic: fetch HTML with bot UA (sites serve proper OG to crawlers)
-    return await fetchAndParseOg(targetUrl);
+    const response = await fetchAndParseOg(targetUrl);
+    // Cache successful OG responses
+    if (response.status === 200) {
+      const cloned = response.clone();
+      cloned.json().then(data => r2PutJson(bucket, key, data)).catch(() => {});
+    }
+    return response;
   } catch (err) {
     return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
   }
 }
 
-async function handleInstanceTheme(url) {
+async function handleInstanceTheme(url, env) {
   const targetUrl = url.searchParams.get('url');
   if (!targetUrl) {
     return jsonResponse({ error: 'Missing "url" parameter' }, 400);
@@ -568,6 +714,21 @@ async function handleInstanceTheme(url) {
   }
   if (isPrivateHost(parsed.hostname)) {
     return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
+  }
+
+  // Check R2 cache
+  const bucket = env.STARSHIP_CACHE;
+  const key = await cacheKey('theme', targetUrl);
+  const cached = await r2Get(bucket, key, CACHE_TTL_THEME);
+  if (cached) {
+    const data = await cached.json();
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=86400',
+      'X-Cache': 'HIT',
+      ...corsHeaders(),
+    };
+    return new Response(JSON.stringify(data), { status: 200, headers });
   }
 
   try {
@@ -601,12 +762,16 @@ async function handleInstanceTheme(url) {
     if (!color) {
       color = extractMeta(html, 'theme-color', true, true);
     }
+    const result = { color: color || null };
+    // Cache the result
+    r2PutJson(bucket, key, result).catch(() => {});
     const headers = {
       'Content-Type': 'application/json',
       'Cache-Control': 'public, max-age=86400',
+      'X-Cache': 'MISS',
       ...corsHeaders(),
     };
-    return new Response(JSON.stringify({ color: color || null }), { status: 200, headers });
+    return new Response(JSON.stringify(result), { status: 200, headers });
   } catch {
     return jsonResponse({ color: null });
   }

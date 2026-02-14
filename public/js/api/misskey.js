@@ -4,7 +4,7 @@
  * All use the same base API (Misskey API) with minor variations.
  * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
-import { escapeHtml } from '../ui/utils.js';
+import { escapeHtml, cachedImageUrl } from '../ui/utils.js';
 
 export class MisskeyClient {
   constructor(instanceUrl, accessToken, platformType = 'misskey') {
@@ -282,7 +282,7 @@ export class MisskeyClient {
       displayNameHtml,
       username: user.username,
       acct: user.host ? `${user.username}@${user.host}` : user.username,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: cachedImageUrl(user.avatarUrl),
     };
   }
 
@@ -292,11 +292,11 @@ export class MisskeyClient {
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, emojiName) => {
       const url = emojis[emojiName] || emojis[emojiName + '@.'] || null;
       if (url) {
-        return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(url))}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer">`;
       }
       // Fallback: try instance emoji URL for local emojis
       if (!emojiName.includes('@')) {
-        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(`${this.instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp`))}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">`;
       }
       return match;
     });
@@ -516,7 +516,7 @@ export class MisskeyClient {
       type: notif.type,
       icon: notif.type === 'reaction' ? (notif.reaction || info.icon) : info.icon,
       reactionEmoji: notif.type === 'reaction' ? (notif.reaction || null) : null,
-      reactionEmojiUrl,
+      reactionEmojiUrl: cachedImageUrl(reactionEmojiUrl),
       label: info.label,
       createdAt: new Date(notif.createdAt),
       actor: notif.user ? this.normalizeUser(notif.user) : null,
@@ -677,10 +677,10 @@ export class MisskeyClient {
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
       const url = emojis[name] || emojis[name + '@.'] || null;
       if (url) {
-        return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(url))}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
       }
       if (!name.includes('@')) {
-        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(`${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp`))}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
       }
       return match;
     });

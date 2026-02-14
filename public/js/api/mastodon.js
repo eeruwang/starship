@@ -3,7 +3,7 @@
  * Handles communication with Mastodon instances.
  * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
-import { escapeHtml } from '../ui/utils.js';
+import { escapeHtml, cachedImageUrl } from '../ui/utils.js';
 
 export class MastodonClient {
   constructor(instanceUrl, accessToken) {
@@ -298,7 +298,7 @@ export class MastodonClient {
     if (acct.emojis && acct.emojis.length > 0) {
       for (const emoji of acct.emojis) {
         displayNameHtml = displayNameHtml.replaceAll(`:${emoji.shortcode}:`,
-          `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+          `<img class="inline-emoji" src="${cachedImageUrl(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
       }
     }
     return {
@@ -307,7 +307,7 @@ export class MastodonClient {
       displayNameHtml,
       username: acct.username,
       acct: acct.acct,
-      avatarUrl: acct.avatar,
+      avatarUrl: cachedImageUrl(acct.avatar),
     };
   }
 
@@ -369,9 +369,9 @@ export class MastodonClient {
     const emojiMap = {};
     if (status.emojis && status.emojis.length > 0) {
       for (const emoji of status.emojis) {
-        emojiMap[emoji.shortcode] = emoji.url;
+        emojiMap[emoji.shortcode] = cachedImageUrl(emoji.url);
         content = content.replaceAll(`:${emoji.shortcode}:`,
-          `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+          `<img class="inline-emoji" src="${cachedImageUrl(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
       }
     }
     // Enhance HTML with markdown-like formatting
@@ -405,7 +405,7 @@ export class MastodonClient {
       if (quoteSource.emojis && quoteSource.emojis.length > 0) {
         for (const emoji of quoteSource.emojis) {
           qContent = qContent.replaceAll(`:${emoji.shortcode}:`,
-            `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+            `<img class="inline-emoji" src="${cachedImageUrl(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
         }
       }
       qContent = this.enhanceHtml(qContent);
@@ -418,7 +418,7 @@ export class MastodonClient {
         if (nqs.emojis && nqs.emojis.length > 0) {
           for (const emoji of nqs.emojis) {
             nqContent = nqContent.replaceAll(`:${emoji.shortcode}:`,
-              `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+              `<img class="inline-emoji" src="${cachedImageUrl(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
           }
         }
         nqContent = this.enhanceHtml(nqContent);
@@ -587,7 +587,7 @@ export class MastodonClient {
     // Extract reaction emoji from notification (Fedibird, glitch-soc, Pleroma, Akkoma)
     // Some forks include emoji/emoji_url even on 'favourite' notifications
     const reactionEmoji = notif.emoji || notif.emoji_reaction || null;
-    const reactionEmojiUrl = notif.emoji_url || null;
+    const reactionEmojiUrl = cachedImageUrl(notif.emoji_url) || null;
     // For favourite type with reaction emoji, normalize to 'reaction' type
     if (type === 'favourite' && reactionEmoji) {
       type = 'reaction';

@@ -2,7 +2,7 @@
  * Shared Emoji Picker Utility
  * Common logic for compose emoji picker and reaction picker.
  */
-import { escapeHtml } from './utils.js';
+import { escapeHtml, cachedImageUrl } from './utils.js';
 
 export const COMMON_EMOJIS = [
   '👍', '❤️', '😆', '🎉', '😮', '🤔', '😢', '👀',
@@ -32,7 +32,7 @@ export function buildInstanceEmojiSection(emojis, itemClass, dataAttr) {
         <div class="reaction-picker-category" data-category="${escapeHtml(cat)}">
           <div class="reaction-picker-category-name">${escapeHtml(cat)}</div>
           <div class="reaction-picker-grid">
-            ${catEmojis.map(e => `<button class="${itemClass}" data-${dataAttr}=":${e.name}:" title=":${e.name}:"><img src="${escapeHtml(e.url)}" alt=":${e.name}:" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}
+            ${catEmojis.map(e => `<button class="${itemClass}" data-${dataAttr}=":${e.name}:" title=":${e.name}:"><img src="${escapeHtml(cachedImageUrl(e.url))}" alt=":${e.name}:" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}
           </div>
         </div>
       `).join('')}
