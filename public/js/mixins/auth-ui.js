@@ -556,6 +556,7 @@ export const AuthUIMixin = {
     const close = () => {
       picker.classList.remove('visible');
       setTimeout(() => picker.remove(), 200);
+      this.saveToCloud();
     };
 
     picker.querySelector('.reauth-picker-cancel').addEventListener('click', close);
