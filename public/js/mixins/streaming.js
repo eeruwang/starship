@@ -15,6 +15,7 @@ export const StreamingMixin = {
       this._streamBound = true;
       this.streamManager.on('post', (data) => this._onStreamPost(data));
       this.streamManager.on('notification', (data) => this._onStreamNotification(data));
+      this.streamManager.on('postUpdate', (data) => this._onStreamPostUpdate(data));
       this.streamManager.on('postDelete', (data) => this._onStreamPostDelete(data));
     }
 
@@ -109,6 +110,11 @@ export const StreamingMixin = {
       this.cachePosts([notif.post]);
     }
 
+    // Update the post card in timeline columns (reaction/fav/boost counts)
+    if (notif.post && ['reaction', 'favourite', 'reblog', 'renote', 'reply'].includes(notif.type)) {
+      this._updatePostFromNotification(notif);
+    }
+
     const columns = this.columnsContainer.querySelectorAll('.column');
     for (const col of columns) {
       if (col.dataset.columnType !== 'notifications') continue;
@@ -137,6 +143,100 @@ export const StreamingMixin = {
 
       setTimeout(() => el.classList.remove('new-post'), 400);
       this.enrichLinkCards(content);
+    }
+  },
+
+  /**
+   * Update post cards in timeline columns when a reaction/fav/boost notification arrives.
+   * Uses canonicalUri to find the post across platforms (e.g. Misskey reaction → Mastodon card).
+   */
+  _updatePostFromNotification(notif) {
+    const notifDisplay = notif.post.reblog || notif.post;
+    const uri = notifDisplay.canonicalUri;
+    if (!uri) return;
+
+    let updated = false;
+
+    // Find and update all cached posts matching this canonicalUri
+    for (const [, cached] of this.postCache) {
+      const dp = cached.reblog || cached;
+      if (dp.canonicalUri !== uri) continue;
+
+      if (notif.type === 'reaction' && notifDisplay.reactions) {
+        // Misskey: notification includes full updated reactions map
+        dp.reactions = notifDisplay.reactions;
+        dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...(notifDisplay.reactionEmojis || {}) };
+        dp.emojis = { ...(dp.emojis || {}), ...(notifDisplay.emojis || {}) };
+        if (notifDisplay.myReaction) dp.myReaction = notifDisplay.myReaction;
+        this._adjustFavouritesForReactions(dp);
+      } else if (notif.type === 'favourite') {
+        dp.stats.favourites = Math.max(dp.stats.favourites, notifDisplay.stats?.favourites || 0);
+      } else if (notif.type === 'reblog' || notif.type === 'renote') {
+        dp.stats.boosts = Math.max(dp.stats.boosts, notifDisplay.stats?.boosts || 0);
+      } else if (notif.type === 'reply') {
+        dp.stats.replies = Math.max(dp.stats.replies, notifDisplay.stats?.replies || 0);
+      }
+
+      updated = true;
+    }
+
+    if (!updated) return;
+
+    // Re-render matching cards in all timeline columns
+    for (const col of this.columnsContainer.querySelectorAll('.column')) {
+      if (col.dataset.columnType === 'notifications') continue;
+      const content = col.querySelector('.column-content');
+      if (!content) continue;
+
+      const cards = content.querySelectorAll(`.post-card[data-canonical-uri="${CSS.escape(uri)}"]`);
+      for (const card of cards) {
+        if (!card.isConnected) continue;
+        const cardPost = this.postCache.get(`${card.dataset.platform}:${card.dataset.postId}`);
+        if (cardPost) {
+          card.replaceWith(renderPost(cardPost));
+        }
+      }
+    }
+  },
+
+  _onStreamPostUpdate({ account, post }) {
+    // Post was edited — update cache and re-render in all columns
+    post.accountId = account.id;
+    post.accountPlatform = account.platform;
+    post.themeColor = this._accountColor(account);
+    const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
+    post.isOwn = String(ownerId) === String(account.profile.id);
+
+    this.cachePosts([post]);
+
+    const dp = post.reblog || post;
+    const uri = dp.canonicalUri;
+
+    for (const col of this.columnsContainer.querySelectorAll('.column')) {
+      const content = col.querySelector('.column-content');
+      if (!content) continue;
+
+      // Match by platform:id
+      const cards = content.querySelectorAll(`.post-card[data-platform="${post.platform}"][data-post-id="${post.id}"]`);
+      for (const card of cards) {
+        if (card.isConnected) card.replaceWith(renderPost(post));
+      }
+
+      // Also match by canonicalUri (cross-account)
+      if (uri) {
+        const uriCards = content.querySelectorAll(`.post-card[data-canonical-uri="${CSS.escape(uri)}"]`);
+        for (const card of uriCards) {
+          if (!card.isConnected) continue;
+          const cardPost = this.postCache.get(`${card.dataset.platform}:${card.dataset.postId}`);
+          if (cardPost) {
+            const cdp = cardPost.reblog || cardPost;
+            cdp.content = dp.content;
+            cdp.contentWarning = dp.contentWarning;
+            cdp.media = dp.media;
+            card.replaceWith(renderPost(cardPost));
+          }
+        }
+      }
     }
   },
 
