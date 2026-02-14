@@ -3,6 +3,15 @@
  * Real-time WebSocket connections to Fediverse instances.
  * - Misskey/Iceshrimp/CherryPick: wss://{host}/streaming?i={token}
  * - Mastodon: wss://{host}/api/v1/streaming?access_token={token}&stream=user
+ *
+ * Mobile browser considerations (iOS Safari, Firefox iOS, etc.):
+ * - iOS kills WebSocket connections when a tab is backgrounded.
+ * - readyState can show OPEN on a dead "zombie" socket after resume.
+ * - ws.send() on a zombie socket can crash Safari → wrap in try-catch.
+ * - setInterval is fully frozen in background tabs on iOS.
+ * - WiFi→cellular network transitions kill sockets silently (no close event).
+ * - bfcache (back-forward cache) restores pages with dead sockets.
+ * All of these are handled below via visibility/pageshow/online listeners.
  */
 
 export class StreamManager {
@@ -11,6 +20,9 @@ export class StreamManager {
     this.listeners = new Map();   // event → Set<callback>
     this._heartbeatInterval = null;
     this._visibilityHandler = null;
+    this._pageshowHandler = null;
+    this._pagehideHandler = null;
+    this._onlineHandler = null;
   }
 
   on(event, callback) {
@@ -70,11 +82,11 @@ export class StreamManager {
 
         if (account.platform !== 'mastodon') {
           // Misskey: subscribe to homeTimeline + main (notifications)
-          ws.send(JSON.stringify({
+          this._safeSend(state, JSON.stringify({
             type: 'connect',
             body: { channel: 'homeTimeline', id: 'ht' },
           }));
-          ws.send(JSON.stringify({
+          this._safeSend(state, JSON.stringify({
             type: 'connect',
             body: { channel: 'main', id: 'mn' },
           }));
@@ -111,6 +123,24 @@ export class StreamManager {
     } catch (e) {
       console.error(`[Stream] Connection failed: ${account.label}`, e);
       this._scheduleReconnect(state);
+    }
+  }
+
+  /**
+   * Safe send: wraps ws.send() in try-catch to protect against
+   * Safari crashing on zombie sockets after iOS suspend/resume.
+   */
+  _safeSend(state, data) {
+    const ws = state.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(data);
+      return true;
+    } catch {
+      // Zombie socket — force reconnect
+      console.warn(`[Stream] send() failed (zombie?): ${state.account.label}`);
+      this._forceReconnect(state);
+      return false;
     }
   }
 
@@ -191,7 +221,7 @@ export class StreamManager {
     }
     if (state.ws) {
       state.ws.onclose = null;
-      state.ws.close();
+      try { state.ws.close(); } catch { /* zombie */ }
       state.ws = null;
     }
     this.connections.delete(accountId);
@@ -205,20 +235,63 @@ export class StreamManager {
   }
 
   /**
-   * Start heartbeat interval if not already running.
-   * Every 30s: sends Misskey ping and checks all connections for staleness.
+   * Start heartbeat interval and lifecycle listeners if not already running.
+   * Handles:
+   * - 30s heartbeat for connection health
+   * - visibilitychange: probe connections on tab resume
+   * - pageshow: reconnect after bfcache restore
+   * - pagehide: clean close for bfcache eligibility
+   * - online: reconnect after network transitions (WiFi→cellular)
    */
   _ensureHeartbeat() {
     if (this._heartbeatInterval) return;
 
     this._heartbeatInterval = setInterval(() => this._heartbeatTick(), 30_000);
 
-    // Reconnect stale connections when tab becomes visible again
+    // Tab visibility: probe and reconnect on resume
     if (!this._visibilityHandler) {
       this._visibilityHandler = () => {
-        if (document.visibilityState === 'visible') this._heartbeatTick();
+        if (document.visibilityState === 'visible') {
+          // On iOS Safari, connections are guaranteed dead after background.
+          // On desktop, they may be stale. Probe all connections.
+          this._probeAllConnections();
+        }
       };
       document.addEventListener('visibilitychange', this._visibilityHandler);
+    }
+
+    // bfcache: page restored from back-forward cache → sockets are dead
+    if (!this._pageshowHandler) {
+      this._pageshowHandler = (e) => {
+        if (e.persisted) {
+          console.log('[Stream] Restored from bfcache, reconnecting all');
+          this._reconnectAll();
+        }
+      };
+      window.addEventListener('pageshow', this._pageshowHandler);
+    }
+
+    // bfcache: close sockets cleanly so the page is bfcache-eligible
+    if (!this._pagehideHandler) {
+      this._pagehideHandler = () => {
+        for (const state of this.connections.values()) {
+          if (state.ws) {
+            state.ws.onclose = null;
+            try { state.ws.close(1000, 'pagehide'); } catch { /* zombie */ }
+            state.ws = null;
+          }
+        }
+      };
+      window.addEventListener('pagehide', this._pagehideHandler);
+    }
+
+    // Network: WiFi→cellular kills sockets silently (no close event)
+    if (!this._onlineHandler) {
+      this._onlineHandler = () => {
+        // Small delay for the network to stabilize
+        setTimeout(() => this._probeAllConnections(), 1500);
+      };
+      window.addEventListener('online', this._onlineHandler);
     }
   }
 
@@ -230,6 +303,18 @@ export class StreamManager {
     if (this._visibilityHandler) {
       document.removeEventListener('visibilitychange', this._visibilityHandler);
       this._visibilityHandler = null;
+    }
+    if (this._pageshowHandler) {
+      window.removeEventListener('pageshow', this._pageshowHandler);
+      this._pageshowHandler = null;
+    }
+    if (this._pagehideHandler) {
+      window.removeEventListener('pagehide', this._pagehideHandler);
+      this._pagehideHandler = null;
+    }
+    if (this._onlineHandler) {
+      window.removeEventListener('online', this._onlineHandler);
+      this._onlineHandler = null;
     }
   }
 
@@ -257,10 +342,9 @@ export class StreamManager {
       // Send application-level ping per platform
       if (state.account.platform !== 'mastodon') {
         // Misskey/Iceshrimp/CherryPick: JSON ping, expect pong next tick
-        try {
-          ws.send('{"type":"ping"}');
+        if (this._safeSend(state, '{"type":"ping"}')) {
           state.awaitingPong = true;
-        } catch { /* closing */ }
+        }
       } else {
         // Mastodon: no app-level ping protocol, but we can probe the
         // transport. If bufferedAmount keeps growing the socket is dead.
@@ -280,12 +364,68 @@ export class StreamManager {
     }
   }
 
+  /**
+   * Probe all connections to detect zombie sockets (iOS Safari resume,
+   * network transitions). For Misskey, sends a ping and expects pong.
+   * For Mastodon, checks staleness based on lastActivity.
+   * Connections that are clearly dead are reconnected immediately.
+   */
+  _probeAllConnections() {
+    const now = Date.now();
+
+    for (const state of this.connections.values()) {
+      if (state.intentionalClose) continue;
+
+      const ws = state.ws;
+
+      // Already disconnected — reconnect
+      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        state.ws = null;
+        if (!state.reconnectTimer) {
+          state.reconnectDelay = 2000;
+          this._scheduleReconnect(state);
+        }
+        continue;
+      }
+
+      // readyState says OPEN — but it may be a zombie (especially on iOS).
+      // Check how long since last activity.
+      const sinceActivity = state.lastActivity ? now - state.lastActivity : Infinity;
+
+      if (sinceActivity > 60_000) {
+        // Over 60s with no activity — highly likely dead, force reconnect
+        console.warn(`[Stream] Probe: stale ${state.account.label} (${Math.round(sinceActivity / 1000)}s), reconnecting`);
+        this._forceReconnect(state);
+        continue;
+      }
+
+      // For Misskey, send a verification ping
+      if (state.account.platform !== 'mastodon') {
+        state.awaitingPong = false;
+        if (this._safeSend(state, '{"type":"ping"}')) {
+          state.awaitingPong = true;
+          // If no pong within 5s, the next heartbeat tick (or a repeated probe) will catch it
+        }
+      }
+    }
+  }
+
+  /**
+   * Force reconnect all connections (e.g. after bfcache restore).
+   */
+  _reconnectAll() {
+    for (const state of this.connections.values()) {
+      if (state.intentionalClose) continue;
+      this._forceReconnect(state);
+    }
+  }
+
   /** Close and immediately schedule reconnect for a connection */
   _forceReconnect(state) {
     const ws = state.ws;
     if (ws) {
       ws.onclose = null;
-      ws.close();
+      try { ws.close(); } catch { /* zombie socket — ignore */ }
     }
     state.ws = null;
     state.awaitingPong = false;
