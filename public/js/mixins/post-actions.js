@@ -16,13 +16,20 @@ export const PostActionsMixin = {
     // For renotes/reblogs, reply/quote targets the original post
     const originalPostId = this.getOriginalPostId(postId, platform);
 
-    // Determine if we're in a multi-account column (all/notifications)
+    // Determine column context
     const column = btnElement.closest('.column');
     const isMultiAccountColumn = column && column.dataset.columnType !== 'account';
 
+    // Thread context: thread column or thread modal → all visible accounts are valid
+    const isThreadContext = (column?.dataset.columnType === 'thread') ||
+                            !!btnElement.closest('#modal-thread');
+
     // Reply/Quote: open compose modal
     if (action === 'reply') {
-      if (isMultiAccountColumn) {
+      if (isThreadContext) {
+        // Thread context: any visible account can reply to any post in the thread
+        this.openComposeModal(originalPostId, accountId, this.store.getVisible());
+      } else if (isMultiAccountColumn) {
         const cachedPost = this.postCache.get(`${platform}:${originalPostId}`) || this.postCache.get(`${platform}:${postId}`);
         const relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
         this.openComposeModal(originalPostId, accountId, relevantAccounts);
@@ -32,7 +39,9 @@ export const PostActionsMixin = {
       return;
     }
     if (action === 'quote') {
-      if (isMultiAccountColumn) {
+      if (isThreadContext) {
+        this.openQuoteModal(originalPostId, platform, accountId, this.store.getVisible());
+      } else if (isMultiAccountColumn) {
         const cachedPost = this.postCache.get(`${platform}:${originalPostId}`) || this.postCache.get(`${platform}:${postId}`);
         const relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
         this.openQuoteModal(originalPostId, platform, accountId, relevantAccounts);
@@ -49,9 +58,12 @@ export const PostActionsMixin = {
       return;
     }
 
-    // For multi-account columns (all/notifications): show only accounts that received this post
+    // Thread context: all visible accounts can interact with thread posts
+    // Multi-account columns (all/notifications): show only accounts that received this post
     const cachedPost = this.postCache.get(`${platform}:${postId}`);
-    let relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
+    let relevantAccounts = isThreadContext
+      ? this.store.getVisible()
+      : this._getRelevantAccounts(cachedPost, allAccounts);
 
     // Reaction: only Misskey accounts can react
     if (action === 'reaction') {
