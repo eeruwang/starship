@@ -561,7 +561,7 @@ textarea.input {
   color: #fff;
 }
 .profile-follow-btn {
-  min-width: 6.5rem;
+  min-width: 5rem;
   text-align: center;
 }
 .profile-follow-btn.following {
