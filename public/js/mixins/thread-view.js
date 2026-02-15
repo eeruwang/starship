@@ -291,10 +291,21 @@ export const ThreadViewMixin = {
       this.cachePosts(allPosts);
       this._mergeReactionsFromCache(allPosts);
 
+      // Determine Phase 2 availability before Phase 1 render, so we can
+      // skip stale removal when Phase 2 will follow (avoids removing cards
+      // from other accounts that Phase 2 would immediately re-add).
+      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      const canonicalUri = cachedPost ? (cachedPost.reblog || cachedPost).canonicalUri : null;
+      const visibleAccounts = this.store.getVisible();
+      const otherAccounts = visibleAccounts
+        .filter(a => a.id !== accountId)
+        .map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) }));
+      const willMerge = otherAccounts.length > 0 && !!canonicalUri;
+
       if (isFirstLoad) {
         this._renderThread(content, ancestors, targetPost, descendants);
       } else {
-        this._updateThreadInPlace(content, ancestors, targetPost, descendants);
+        this._updateThreadInPlace(content, ancestors, targetPost, descendants, { removeStale: !willMerge });
       }
 
       // Thread columns use solid borders — remove any merged-border styling
@@ -310,14 +321,7 @@ export const ThreadViewMixin = {
       this._fetchMissingReactions(allPosts, content);
 
       // Phase 2: merge other accounts
-      const cachedPost = this.postCache.get(`${platform}:${postId}`);
-      const canonicalUri = cachedPost ? (cachedPost.reblog || cachedPost).canonicalUri : null;
-      const visibleAccounts = this.store.getVisible();
-      const otherAccounts = visibleAccounts
-        .filter(a => a.id !== accountId)
-        .map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) }));
-
-      if (otherAccounts.length > 0 && canonicalUri) {
+      if (willMerge) {
         // Thread columns use solid border (no merged gradient) — the gradient
         // conflicts with thread depth CSS which overrides the background,
         // leaving the border transparent and invisible.
@@ -544,7 +548,7 @@ export const ThreadViewMixin = {
    * Update thread content in-place: replace changed cards, add new ones, remove stale ones.
    * This avoids the flicker caused by innerHTML = '' followed by full rebuild.
    */
-  _updateThreadInPlace(content, ancestors, targetPost, descendants) {
+  _updateThreadInPlace(content, ancestors, targetPost, descendants, { removeStale = true } = {}) {
     // Build map of existing cards by platform:postId
     const existingCards = new Map();
     for (const card of content.querySelectorAll('.post-card.thread-post')) {
@@ -607,13 +611,14 @@ export const ThreadViewMixin = {
       }
     }
 
-    // Remove stale and duplicate cards from DOM.
-    // Uses a DOM scan instead of the existingCards Map to catch duplicates
-    // (Map only stores the last card per key, earlier duplicates remain).
+    // Remove duplicate cards (always) and stale cards (only when removeStale
+    // is true). Stale removal is skipped when a Phase 2 merge will follow,
+    // to avoid removing cards from other accounts that Phase 2 will re-add
+    // (which causes a "new post" flash on every refresh).
     const seenKeys = new Set();
     for (const card of [...content.querySelectorAll('.post-card.thread-post')]) {
       const key = `${card.dataset.platform}:${card.dataset.postId}`;
-      if (!newKeys.has(key) || seenKeys.has(key)) {
+      if (seenKeys.has(key) || (removeStale && !newKeys.has(key))) {
         card.remove();
       } else {
         seenKeys.add(key);
