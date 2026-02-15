@@ -192,6 +192,29 @@ export const DataLoadingMixin = {
           }
         }
 
+        // Phase 1.5: Update existing cards whose stats/reactions/state have changed
+        {
+          const idToCard = new Map();
+          for (const card of existingCards) {
+            idToCard.set(`${card.dataset.platform}:${card.dataset.postId}`, card);
+          }
+          for (const p of allPosts) {
+            const key = `${p.platform}:${p.id}`;
+            const card = idToCard.get(key);
+            if (!card) continue;
+            const cached = this.postCache?.get(key);
+            if (!cached) continue;
+            if (this._postDataChanged(cached, p)) {
+              const newCard = renderPost(p);
+              card.replaceWith(newCard);
+              idToCard.set(key, newCard);
+              // Also update uriToCard reference
+              const dp = p.reblog || p;
+              if (dp.canonicalUri) uriToCard.set(dp.canonicalUri, newCard);
+            }
+          }
+        }
+
         // Phase 2: Filter for truly new posts
         const newPosts = [];
         for (const p of allPosts) {
@@ -548,11 +571,28 @@ export const DataLoadingMixin = {
         // Re-query DOM cards for freshness (existingCards was captured before async API calls)
         const currentCards = container.querySelectorAll('.notif-card');
         const existingKeys = new Set();
+        const dedupToCard = new Map();
         for (const card of currentCards) {
           if (card.dataset.dedupKey) {
             existingKeys.add(card.dataset.dedupKey);
+            dedupToCard.set(card.dataset.dedupKey, card);
           }
           existingKeys.add(`${card.dataset.platform}:${card.dataset.notifId}`);
+        }
+
+        // Update existing notification cards whose post stats/reactions changed
+        for (const n of allNotifs) {
+          if (!n._dedupKey || !dedupToCard.has(n._dedupKey)) continue;
+          if (!n.post) continue;
+          const card = dedupToCard.get(n._dedupKey);
+          // Check if the notification's embedded post data changed
+          const cachedKey = `${n.post.platform || n.platform}:${n.post.id}`;
+          const cached = this.postCache?.get(cachedKey);
+          if (cached && this._postDataChanged(cached, n.post)) {
+            const newCard = renderNotification(n);
+            card.replaceWith(newCard);
+            dedupToCard.set(n._dedupKey, newCard);
+          }
         }
 
         const newNotifs = allNotifs.filter(n => {
@@ -1443,6 +1483,44 @@ export const DataLoadingMixin = {
       if (post.id === postId || dp.id === postId) return post;
     }
     return null;
+  },
+
+  /**
+   * Compare cached post data with fresh API data to detect changes.
+   * Returns true if the post should be re-rendered.
+   */
+  _postDataChanged(cached, fresh) {
+    const cd = cached.reblog || cached;
+    const fd = fresh.reblog || fresh;
+
+    // Stats changed
+    if (cd.stats && fd.stats) {
+      if ((cd.stats.replies || 0) !== (fd.stats.replies || 0)) return true;
+      if ((cd.stats.boosts || 0) !== (fd.stats.boosts || 0)) return true;
+      if ((cd.stats.favourites || 0) !== (fd.stats.favourites || 0)) return true;
+    }
+
+    // Reactions changed
+    const cReactions = cd.reactions ? Object.keys(cd.reactions).length : 0;
+    const fReactions = fd.reactions ? Object.keys(fd.reactions).length : 0;
+    if (cReactions !== fReactions) return true;
+    if (cReactions > 0 && fReactions > 0) {
+      for (const [k, v] of Object.entries(fd.reactions)) {
+        if ((cd.reactions[k] || 0) !== v) return true;
+      }
+    }
+
+    // Favourite/boost state changed
+    if (!!cached.favourited !== !!fresh.favourited) return true;
+    if (!!cached.boosted !== !!fresh.boosted) return true;
+
+    // My reaction changed
+    if ((cd.myReaction || '') !== (fd.myReaction || '')) return true;
+
+    // Content edited
+    if ((cd.content || '') !== (fd.content || '')) return true;
+
+    return false;
   },
 
 };
