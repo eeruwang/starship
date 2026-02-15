@@ -784,7 +784,8 @@ export const ComposeMixin = {
           }
         }
 
-        // Create post
+        // Create post and optimistically inject into timeline
+        let rawPost;
         if (account.platform === 'mastodon') {
           // For Mastodon 4.3+: use native quote_id parameter
           // Only append quote URL as text fallback if quote_id couldn't be resolved
@@ -793,7 +794,7 @@ export const ComposeMixin = {
             statusText = text + '\n\n' + quoteUrl;
           }
           const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || 'public';
-          await client.createStatus(statusText, {
+          rawPost = await client.createStatus(statusText, {
             spoilerText: cw || undefined,
             sensitive: this.composeSensitive || undefined,
             visibility: mastodonVisibility,
@@ -809,13 +810,26 @@ export const ComposeMixin = {
             }
           }
           const misskeyVisibility = ({ public: 'public', home: 'home', followers: 'followers', direct: 'specified' })[visibility] || 'public';
-          await client.createNote(text, {
+          const result = await client.createNote(text, {
             cw: cw || undefined,
             visibility: misskeyVisibility,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
             replyId: resolvedReplyId || undefined,
             renoteId: resolvedQuoteId || undefined,
           });
+          // Misskey returns { createdNote: { ... } }
+          rawPost = result?.createdNote || result;
+        }
+
+        // Optimistic insert: inject the post into timeline immediately
+        // so it appears without waiting for WebSocket stream delivery.
+        // When the stream later delivers the same post, existing dedup
+        // checks (platform:id / canonicalUri) will skip it.
+        if (rawPost) {
+          try {
+            const post = client.normalizePost(rawPost);
+            this._onStreamPost({ account, post });
+          } catch { /* non-critical — stream will deliver it */ }
         }
       } catch (err) {
         errors.push(`${account.profile.displayName}: ${err.message}`);
@@ -833,10 +847,6 @@ export const ComposeMixin = {
         this._saveAccountVisibility(accountId, visibility);
       }
       this.closeModal(this.modalCompose);
-      // Let WebSocket streaming deliver the new post instead of eagerly
-      // re-fetching all timelines.  If a stream is temporarily disconnected,
-      // StreamManager's auto-reconnect + _onStreamReconnected gap-fill
-      // refresh will pick it up — no manual refreshAll needed.
     }
 
     this.btnComposeSubmit.disabled = false;
