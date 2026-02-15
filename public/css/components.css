@@ -350,20 +350,52 @@
 }
 .lightbox-counter.visible { display: block; }
 
-/* Lightbox slide transition */
+/* Lightbox: old image backdrop for crossfade */
+.lightbox-overlay .lb-old-image {
+  position: absolute;
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
+  border-radius: var(--radius);
+  z-index: 0;
+  will-change: transform, opacity;
+}
+.lightbox-overlay #lightbox-img {
+  position: relative;
+  z-index: 1;
+  will-change: transform, opacity;
+}
+
+/* New image slide-in */
 .lightbox-overlay img.lb-slide-left {
-  animation: lb-slide-left 0.2s ease forwards;
+  animation: lb-slide-in-left 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
 }
 .lightbox-overlay img.lb-slide-right {
-  animation: lb-slide-right 0.2s ease forwards;
+  animation: lb-slide-in-right 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
 }
-@keyframes lb-slide-left {
-  from { opacity: 0; transform: translateX(40px); }
-  to   { opacity: 1; transform: translateX(0); }
+@keyframes lb-slide-in-left {
+  from { opacity: 0.3; transform: translateX(60px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
 }
-@keyframes lb-slide-right {
-  from { opacity: 0; transform: translateX(-40px); }
-  to   { opacity: 1; transform: translateX(0); }
+@keyframes lb-slide-in-right {
+  from { opacity: 0.3; transform: translateX(-60px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* Old image slide-out */
+.lightbox-overlay .lb-exit-left {
+  animation: lb-slide-out-left 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.lightbox-overlay .lb-exit-right {
+  animation: lb-slide-out-right 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+@keyframes lb-slide-out-left {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(-60px) scale(0.97); }
+}
+@keyframes lb-slide-out-right {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(60px) scale(0.97); }
 }
 
 @media (max-width: 600px) {

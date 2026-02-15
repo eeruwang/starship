@@ -803,18 +803,47 @@ export const EventsMixin = {
 
   navigateLightbox(direction) {
     if (!this._lightboxMedia || this._lightboxMedia.length <= 1) return;
+    if (this._lightboxTransitioning) return;
     const newIndex = this._lightboxIndex + direction;
     if (newIndex < 0 || newIndex >= this._lightboxMedia.length) return;
 
+    this._lightboxTransitioning = true;
     this._lightboxIndex = newIndex;
     const item = this._lightboxMedia[newIndex];
     this._lightboxSourceImg = item.thumb || null;
 
-    // Slide animation
-    this.lightboxImg.classList.remove('lb-enter', 'lb-exit', 'lb-slide-left', 'lb-slide-right');
-    void this.lightboxImg.offsetWidth;
-    this.lightboxImg.src = item.url;
-    this.lightboxImg.classList.add(direction > 0 ? 'lb-slide-left' : 'lb-slide-right');
+    // Snapshot the current image as a static backdrop
+    const oldClone = this.lightboxImg.cloneNode(true);
+    oldClone.removeAttribute('id');
+    oldClone.className = 'lb-old-image';
+    this.lightboxImg.parentNode.insertBefore(oldClone, this.lightboxImg);
+
+    // Animate old image out
+    const outClass = direction > 0 ? 'lb-exit-left' : 'lb-exit-right';
+    void oldClone.offsetWidth;
+    oldClone.classList.add(outClass);
+
+    // Preload the new image, then animate in
+    const preloader = new Image();
+    const doTransition = () => {
+      this.lightboxImg.src = item.url;
+      this.lightboxImg.classList.remove('lb-enter', 'lb-exit', 'lb-slide-left', 'lb-slide-right');
+      void this.lightboxImg.offsetWidth;
+      this.lightboxImg.classList.add(direction > 0 ? 'lb-slide-left' : 'lb-slide-right');
+    };
+    preloader.onload = doTransition;
+    preloader.onerror = doTransition;
+    preloader.src = item.url;
+    // If already cached, onload might not fire in some browsers
+    if (preloader.complete) doTransition();
+
+    // Clean up after transition
+    const cleanup = () => {
+      oldClone.remove();
+      this._lightboxTransitioning = false;
+    };
+    oldClone.addEventListener('animationend', cleanup);
+    setTimeout(cleanup, 350); // fallback
 
     this._updateLightboxNav();
   },
@@ -877,6 +906,9 @@ export const EventsMixin = {
     this.lightbox.classList.remove('visible');
     this.lightboxImg.classList.remove('lb-enter', 'lb-slide-left', 'lb-slide-right');
     this.lightboxImg.classList.add('lb-exit');
+    // Remove any lingering old-image clones
+    this.lightbox.querySelectorAll('.lb-old-image').forEach(el => el.remove());
+    this._lightboxTransitioning = false;
     const onDone = () => {
       this.lightboxImg.removeEventListener('animationend', onDone);
       this.lightbox.style.display = 'none';
