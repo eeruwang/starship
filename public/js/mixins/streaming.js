@@ -17,6 +17,7 @@ export const StreamingMixin = {
       this.streamManager.on('notification', (data) => this._onStreamNotification(data));
       this.streamManager.on('postUpdate', (data) => this._onStreamPostUpdate(data));
       this.streamManager.on('postDelete', (data) => this._onStreamPostDelete(data));
+      this.streamManager.on('connected', (data) => this._onStreamReconnected(data));
     }
 
     const accounts = this.store.getAll();
@@ -116,26 +117,56 @@ export const StreamingMixin = {
     const replyToId = post.replyToId;
     if (!replyToId) return;
 
-    // Duplicate check
+    // Duplicate check: DOM
     if (content.querySelector(`.post-card[data-platform="${CSS.escape(post.platform)}"][data-post-id="${CSS.escape(post.id)}"]`)) return;
     const displayPost = post.reblog || post;
     if (displayPost.canonicalUri) {
       if (content.querySelector(`.post-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`)) return;
     }
 
+    // Duplicate check: recent insertions guard (Misskey sends mention/reply
+    // as both 'note' and 'notification', which can race into this method)
+    if (!col._recentThreadInserts) col._recentThreadInserts = new Map();
+    const dedupeKey = displayPost.canonicalUri || `${post.platform}:${post.id}`;
+    const now = Date.now();
+    if (col._recentThreadInserts.has(dedupeKey)) return;
+    col._recentThreadInserts.set(dedupeKey, now);
+    // Prune stale entries (older than 10s) to avoid memory leak
+    if (col._recentThreadInserts.size > 50) {
+      for (const [k, t] of col._recentThreadInserts) {
+        if (now - t > 10_000) col._recentThreadInserts.delete(k);
+      }
+    }
+
     // Find the parent card in the thread column
+    // 1) Exact platform:id match
     let parentCard = content.querySelector(
       `.post-card[data-platform="${CSS.escape(post.platform)}"][data-post-id="${CSS.escape(replyToId)}"]`
     );
 
-    // Cross-account: try canonicalUri lookup if direct ID didn't match
+    // 2) Cross-platform: try any platform key in cache, then match by canonicalUri
     if (!parentCard) {
-      const cachedParent = this.postCache.get(`${post.platform}:${replyToId}`);
-      if (cachedParent) {
-        const parentUri = (cachedParent.reblog || cachedParent).canonicalUri;
-        if (parentUri) {
-          parentCard = content.querySelector(`.post-card[data-canonical-uri="${CSS.escape(parentUri)}"]`);
+      let parentUri = null;
+      // Try same-platform cache first
+      const cachedSame = this.postCache.get(`${post.platform}:${replyToId}`);
+      if (cachedSame) {
+        parentUri = (cachedSame.reblog || cachedSame).canonicalUri;
+      }
+      // If not found, scan cache for any platform with this ID
+      if (!parentUri) {
+        for (const [key, cached] of this.postCache) {
+          if (key.endsWith(`:${replyToId}`)) {
+            parentUri = (cached.reblog || cached).canonicalUri;
+            if (parentUri) break;
+          }
         }
+      }
+      // Also try finding parent by data-post-id alone (any platform)
+      if (!parentCard && !parentUri) {
+        parentCard = content.querySelector(`.post-card[data-post-id="${CSS.escape(replyToId)}"]`);
+      }
+      if (!parentCard && parentUri) {
+        parentCard = content.querySelector(`.post-card[data-canonical-uri="${CSS.escape(parentUri)}"]`);
       }
     }
 
@@ -246,8 +277,13 @@ export const StreamingMixin = {
       if (dp.canonicalUri !== uri) continue;
 
       if (notif.type === 'reaction' && notifDisplay.reactions) {
-        // Misskey: notification includes full updated reactions map
-        dp.reactions = notifDisplay.reactions;
+        // Misskey: merge reactions (take max count per emoji to avoid losing
+        // data from other accounts that may have been merged earlier)
+        const merged = { ...(dp.reactions || {}) };
+        for (const [emoji, count] of Object.entries(notifDisplay.reactions)) {
+          merged[emoji] = Math.max(merged[emoji] || 0, count);
+        }
+        dp.reactions = merged;
         dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...(notifDisplay.reactionEmojis || {}) };
         dp.emojis = { ...(dp.emojis || {}), ...(notifDisplay.emojis || {}) };
         if (notifDisplay.myReaction) dp.myReaction = notifDisplay.myReaction;
@@ -350,12 +386,32 @@ export const StreamingMixin = {
     // Remove deleted posts from all columns
     const cards = this.columnsContainer.querySelectorAll(`.post-card[data-platform="${CSS.escape(account.platform)}"][data-post-id="${CSS.escape(postId)}"]`);
     for (const card of cards) {
+      if (!card.isConnected) continue;
       card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
       card.style.opacity = '0';
       card.style.transform = 'scale(0.95)';
-      setTimeout(() => card.remove(), 300);
+      setTimeout(() => { if (card.isConnected) card.remove(); }, 300);
     }
     // Also remove from cache
     this.postCache.delete(`${account.platform}:${postId}`);
+  },
+
+  /**
+   * Catch-up refresh after a WebSocket reconnection.
+   * Debounced: if multiple accounts reconnect in quick succession,
+   * only one refresh fires (after 2s of quiet).
+   */
+  _onStreamReconnected({ accountId }) {
+    // Debounce: reset timer on each reconnection event
+    if (this._reconnectRefreshTimer) clearTimeout(this._reconnectRefreshTimer);
+    this._reconnectRefreshTimer = setTimeout(() => {
+      this._reconnectRefreshTimer = null;
+      // Silent refresh of all non-thread columns to fill the message gap
+      this.refreshAll(false, { skipColumnTypes: ['thread'] });
+      // Thread columns: refresh individually (they have their own loader)
+      for (const col of this.columnsContainer.querySelectorAll('.column[data-column-type="thread"]')) {
+        this.loadThreadForColumn(col);
+      }
+    }, 2000);
   },
 };

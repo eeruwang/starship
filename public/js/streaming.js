@@ -79,6 +79,9 @@ export class StreamManager {
         console.log(`[Stream] Connected: ${account.label}`);
         state.reconnectDelay = 2000;
         state.lastActivity = Date.now();
+        state.awaitingPong = false;
+        state._pongSupported = false;  // re-detect per connection
+        state._lastBuffered = null;
 
         if (account.platform !== 'mastodon') {
           // Misskey: subscribe to homeTimeline + main (notifications)
@@ -468,6 +471,8 @@ export class StreamManager {
     }
     state.ws = null;
     state.awaitingPong = false;
+    state._pongSupported = false;  // re-detect on next connection
+    state._lastBuffered = null;
     this._emit('disconnected', { accountId: state.account.id });
     state.reconnectDelay = 2000;
     this._scheduleReconnect(state);
