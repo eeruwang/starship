@@ -60,17 +60,15 @@ export const ThreadViewMixin = {
       // Deduplicate (API can return overlapping data)
       ancestors = this._deduplicateThreadPosts(ancestors);
       descendants = this._deduplicateThreadPosts(descendants);
+      // Remove target and cross-duplicates (same note in both ancestors and descendants)
+      const _postKey = p => { const dp = p.reblog || p; return dp.canonicalUri || `${dp.platform}:${dp.id}`; };
       if (targetPost) {
-        const targetKey = targetPost.canonicalUri || `${targetPost.platform}:${targetPost.id}`;
-        ancestors = ancestors.filter(p => {
-          const k = (p.reblog || p).canonicalUri || `${p.platform}:${p.id}`;
-          return k !== targetKey;
-        });
-        descendants = descendants.filter(p => {
-          const k = (p.reblog || p).canonicalUri || `${p.platform}:${p.id}`;
-          return k !== targetKey;
-        });
+        const targetKey = _postKey(targetPost);
+        ancestors = ancestors.filter(p => _postKey(p) !== targetKey);
+        descendants = descendants.filter(p => _postKey(p) !== targetKey);
       }
+      const ancestorKeys = new Set(ancestors.map(_postKey));
+      descendants = descendants.filter(p => !ancestorKeys.has(_postKey(p)));
 
       // Render immediately with primary account data
       let allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
@@ -130,6 +128,15 @@ export const ThreadViewMixin = {
 
       ancestors = this._deduplicateThreadPosts(ancestors);
       descendants = this._deduplicateThreadPosts(descendants);
+      // Remove target and cross-duplicates between ancestors and descendants
+      const _pk = p => { const dp = p.reblog || p; return dp.canonicalUri || `${dp.platform}:${dp.id}`; };
+      if (targetPost) {
+        const tk = _pk(targetPost);
+        ancestors = ancestors.filter(p => _pk(p) !== tk);
+        descendants = descendants.filter(p => _pk(p) !== tk);
+      }
+      const aKeys = new Set(ancestors.map(_pk));
+      descendants = descendants.filter(p => !aKeys.has(_pk(p)));
 
       if (targetPost && cachedPost?.mergedAccounts) {
         targetPost.mergedAccounts = cachedPost.mergedAccounts;
@@ -264,17 +271,15 @@ export const ThreadViewMixin = {
       // between notes/conversation and notes/children)
       ancestors = this._deduplicateThreadPosts(ancestors);
       descendants = this._deduplicateThreadPosts(descendants);
+      // Remove target and cross-duplicates (same note in both ancestors and descendants)
+      const _postKey = p => { const dp = p.reblog || p; return dp.canonicalUri || `${dp.platform}:${dp.id}`; };
       if (targetPost) {
-        const targetKey = targetPost.canonicalUri || `${targetPost.platform}:${targetPost.id}`;
-        ancestors = ancestors.filter(p => {
-          const k = (p.reblog || p).canonicalUri || `${p.platform}:${p.id}`;
-          return k !== targetKey;
-        });
-        descendants = descendants.filter(p => {
-          const k = (p.reblog || p).canonicalUri || `${p.platform}:${p.id}`;
-          return k !== targetKey;
-        });
+        const targetKey = _postKey(targetPost);
+        ancestors = ancestors.filter(p => _postKey(p) !== targetKey);
+        descendants = descendants.filter(p => _postKey(p) !== targetKey);
       }
+      const ancestorKeys = new Set(ancestors.map(_postKey));
+      descendants = descendants.filter(p => !ancestorKeys.has(_postKey(p)));
 
       // Update column title with author info
       const h2 = col.querySelector('.column-header h2');
@@ -611,26 +616,31 @@ export const ThreadViewMixin = {
       }
     }
 
-    // Remove duplicate cards (always) and stale cards (only when removeStale
-    // is true). Stale removal is skipped when a Phase 2 merge will follow,
-    // to avoid removing cards from other accounts that Phase 2 will re-add
-    // (which causes a "new post" flash on every refresh).
-    const seenKeys = new Set();
-    for (const card of [...content.querySelectorAll('.post-card.thread-post')]) {
-      const key = `${card.dataset.platform}:${card.dataset.postId}`;
-      if (seenKeys.has(key) || (removeStale && !newKeys.has(key))) {
-        card.remove();
-      } else {
-        seenKeys.add(key);
-      }
-    }
-
-    // Append any new posts at the end
+    // Append new posts first, THEN clean up duplicates/stale from the
+    // complete DOM.  Previous approach (clean before append) missed
+    // duplicates between existing DOM cards and fragment cards, causing
+    // the same note to accumulate on every refresh.
     if (fragment.childNodes.length > 0) {
       content.appendChild(fragment);
       setTimeout(() => {
         content.querySelectorAll('.new-post').forEach(el => el.classList.remove('new-post'));
       }, 400);
+    }
+
+    // Remove stale and duplicate cards from the complete DOM (including
+    // just-appended fragment cards).  For duplicates, keep the LAST
+    // occurrence — it is the most recently rendered version.
+    const lastSeen = new Map();
+    for (const card of [...content.querySelectorAll('.post-card.thread-post')]) {
+      const key = `${card.dataset.platform}:${card.dataset.postId}`;
+      if (removeStale && !newKeys.has(key)) {
+        card.remove();
+      } else if (lastSeen.has(key)) {
+        lastSeen.get(key).remove();   // remove earlier duplicate
+        lastSeen.set(key, card);       // keep current (later) card
+      } else {
+        lastSeen.set(key, card);
+      }
     }
 
     // Remove loading elements
