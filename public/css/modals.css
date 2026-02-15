@@ -576,8 +576,7 @@ textarea.input {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.9rem;
-  align-items: center;
-  flex-wrap: wrap;
+  align-items: stretch;
 }
 /* Inline profile edit */
 .profile-edit-inline {
