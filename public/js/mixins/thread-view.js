@@ -16,6 +16,7 @@
  */
 import { escapeHtml } from '../ui/utils.js';
 import { renderPost } from '../ui/dashboard.js';
+import { iconReplyArrow } from '../ui/icons.js';
 
 export const ThreadViewMixin = {
 
@@ -704,8 +705,8 @@ export const ThreadViewMixin = {
     const avatarUrl = replyAuthor.avatarUrl || '';
     const name = replyAuthor.displayName || replyAuthor.username || '';
     badge.innerHTML =
-      `${avatarUrl ? `<img class="reply-badge-avatar" src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}`
-      + `<span>↩</span>`
+      `<span class="reply-badge-icon">${iconReplyArrow}</span>`
+      + `${avatarUrl ? `<img class="reply-badge-avatar" src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}`
       + `<span class="reply-badge-name">${escapeHtml(name)}</span>`
       + `<span>에게 답글</span>`;
 

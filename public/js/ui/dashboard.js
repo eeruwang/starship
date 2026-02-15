@@ -293,7 +293,10 @@ export function renderPost(post) {
   // Renote / Boost indicator
   if (post.rebloggedBy) {
     const boostLabel = post.platform === 'mastodon' ? '부스트' : '리노트';
-    html += `<div class="renote-indicator"><span class="icon-inline boost-icon">${iconBoost}</span> ${post.rebloggedBy.displayNameHtml || escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
+    const rbAvatar = post.rebloggedBy.avatarUrl
+      ? `<img class="renote-avatar" src="${escapeHtml(post.rebloggedBy.avatarUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+      : '';
+    html += `<div class="renote-indicator">${rbAvatar}<span class="icon-inline boost-icon">${iconBoost}</span> ${post.rebloggedBy.displayNameHtml || escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
   }
 
   const displayPost = post.reblog || post;

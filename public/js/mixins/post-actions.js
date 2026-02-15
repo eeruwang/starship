@@ -4,7 +4,7 @@
  */
 import { escapeHtml } from '../ui/utils.js';
 import { COMMON_EMOJIS, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
-import { buildReactionsHtml } from '../ui/dashboard.js';
+import { buildReactionsHtml, renderPost } from '../ui/dashboard.js';
 
 export const PostActionsMixin = {
 
@@ -158,31 +158,58 @@ export const PostActionsMixin = {
       if (action === 'fav') {
         const displayPost = cachedPost?.reblog || cachedPost;
         const alreadyFaved = cachedPost?.favourited || displayPost?.myReaction;
+
+        // Optimistic update: apply immediately, then send API call
         if (alreadyFaved) {
-          if (accountPlatform === 'mastodon') {
-            await client.unfavourite(actionPostId);
-          } else {
-            await client.deleteReaction(actionPostId);
-          }
           if (cachedPost) {
             cachedPost.favourited = false;
-            if (displayPost) { displayPost.favourited = false; displayPost.myReaction = null; }
+            if (displayPost) {
+              displayPost.favourited = false;
+              // Decrement reaction count
+              if (displayPost.myReaction && displayPost.reactions?.[displayPost.myReaction] > 0) {
+                displayPost.reactions[displayPost.myReaction] = Math.max(0, displayPost.reactions[displayPost.myReaction] - 1);
+                if (displayPost.reactions[displayPost.myReaction] === 0) delete displayPost.reactions[displayPost.myReaction];
+              }
+              displayPost.myReaction = null;
+              if (displayPost.stats) displayPost.stats.favourites = Math.max(0, (displayPost.stats.favourites || 1) - 1);
+            }
+            this._rerenderCachedPost(postId, platform);
           }
           btnElement.classList.remove('processing', 'active');
-        } else {
+          // Background API call
           if (accountPlatform === 'mastodon') {
-            await client.favourite(actionPostId);
+            client.unfavourite(actionPostId).catch(e => console.error('Unfav failed:', e));
           } else {
-            await client.createReaction(actionPostId, '❤');
+            client.deleteReaction(actionPostId).catch(e => console.error('Unreact failed:', e));
           }
+        } else {
           if (cachedPost) {
             cachedPost.favourited = true;
-            if (displayPost) displayPost.favourited = true;
+            if (displayPost) {
+              displayPost.favourited = true;
+              // Increment reaction/fav count
+              if (accountPlatform !== 'mastodon') {
+                if (!displayPost.reactions) displayPost.reactions = {};
+                displayPost.reactions['❤'] = (displayPost.reactions['❤'] || 0) + 1;
+                displayPost.myReaction = '❤';
+              } else {
+                if (displayPost.stats) displayPost.stats.favourites = (displayPost.stats.favourites || 0) + 1;
+              }
+            }
+            this._rerenderCachedPost(postId, platform);
           }
           btnElement.classList.remove('processing');
           btnElement.classList.add('active', 'just-activated');
           setTimeout(() => btnElement.classList.remove('just-activated'), 600);
+          // Background API call
+          if (accountPlatform === 'mastodon') {
+            client.favourite(actionPostId).catch(e => console.error('Fav failed:', e));
+          } else {
+            client.createReaction(actionPostId, '❤').catch(e => console.error('React failed:', e));
+          }
         }
+        // Fav already handled optimistically — background server confirm via streaming
+        return;
       } else if (action === 'boost') {
         const alreadyBoosted = cachedPost?.reblogged;
         if (alreadyBoosted) {
@@ -852,20 +879,34 @@ export const PostActionsMixin = {
     if (!client) return;
     const refreshPostId = originalPostId || actionPostId;
     const isCrossInstance = originalPostId && originalPostId !== actionPostId;
-    try {
-      btnElement.classList.add('processing');
-      const cachedPost = this.postCache.get(`${platform}:${refreshPostId}`);
-      // Misskey only allows one reaction — delete old before adding new
-      // Mastodon forks allow multiple reactions, so skip delete
-      if (cachedPost?.myReaction && platform !== 'mastodon') {
-        await client.deleteReaction(actionPostId);
-      }
-      await client.createReaction(actionPostId, reaction);
 
-      // Pre-populate emoji URL in cache so the badge renders immediately,
-      // even if Misskey's notes/show hasn't propagated reactionEmojis yet
-      if (emojiUrl && cachedPost) {
-        const dp = cachedPost.reblog || cachedPost;
+    const cachedPost = this.postCache.get(`${platform}:${refreshPostId}`);
+
+    // --- Optimistic update: immediately reflect the reaction in UI ---
+    let prevReactions, prevMyReaction, prevReactionEmojis;
+    if (cachedPost) {
+      const dp = cachedPost.reblog || cachedPost;
+      // Save previous state for rollback on error
+      prevReactions = dp.reactions ? { ...dp.reactions } : {};
+      prevMyReaction = dp.myReaction;
+      prevReactionEmojis = dp.reactionEmojis ? { ...dp.reactionEmojis } : {};
+
+      // Remove old reaction count if replacing (Misskey single-reaction mode)
+      if (dp.myReaction && platform !== 'mastodon') {
+        const oldKey = dp.myReaction;
+        if (dp.reactions && dp.reactions[oldKey] > 0) {
+          dp.reactions[oldKey] = Math.max(0, dp.reactions[oldKey] - 1);
+          if (dp.reactions[oldKey] === 0) delete dp.reactions[oldKey];
+        }
+      }
+
+      // Apply new reaction
+      if (!dp.reactions) dp.reactions = {};
+      dp.reactions[reaction] = (dp.reactions[reaction] || 0) + 1;
+      dp.myReaction = reaction;
+
+      // Pre-populate emoji URL for custom emoji
+      if (emojiUrl) {
         const match = reaction.match(/^:(.+):$/);
         if (match) {
           const name = match[1];
@@ -876,17 +917,76 @@ export const PostActionsMixin = {
         }
       }
 
-      btnElement.classList.remove('processing');
-      btnElement.classList.add('active', 'just-activated');
-      setTimeout(() => btnElement.classList.remove('just-activated'), 600);
+      // Immediately re-render all cards showing this post
+      this._rerenderCachedPost(refreshPostId, platform);
+    }
+
+    btnElement.classList.add('active', 'just-activated');
+    setTimeout(() => btnElement.classList.remove('just-activated'), 600);
+
+    // --- API call (background) ---
+    try {
+      // Misskey only allows one reaction — delete old before adding new
+      if (prevMyReaction && platform !== 'mastodon') {
+        await client.deleteReaction(actionPostId);
+      }
+      await client.createReaction(actionPostId, reaction);
+
+      // Confirm with server data (silent, non-blocking)
       if (isCrossInstance) {
-        await this._refreshMergedPost(refreshPostId, platform, accountId, actionPostId);
+        this._refreshMergedPost(refreshPostId, platform, accountId, actionPostId);
       } else {
-        await this.refreshSinglePost(refreshPostId, platform, accountId);
+        this.refreshSinglePost(refreshPostId, platform, accountId);
       }
     } catch (err) {
       console.error('Reaction failed:', err);
-      btnElement.classList.remove('processing');
+      // Rollback optimistic update on failure
+      if (cachedPost) {
+        const dp = cachedPost.reblog || cachedPost;
+        dp.reactions = prevReactions;
+        dp.myReaction = prevMyReaction;
+        dp.reactionEmojis = prevReactionEmojis;
+        this._rerenderCachedPost(refreshPostId, platform);
+      }
+      btnElement.classList.remove('active');
+      this.showToast('리액션 실패', 'error');
+    }
+  },
+
+  /**
+   * Re-render all visible cards for a cached post across all columns.
+   */
+  _rerenderCachedPost(postId, platform) {
+    const cacheKey = `${platform}:${postId}`;
+    const cachedPost = this.postCache.get(cacheKey);
+    if (!cachedPost) return;
+
+    const dp = cachedPost.reblog || cachedPost;
+    const uri = dp.canonicalUri;
+    const selectors = [
+      `.post-card[data-platform="${CSS.escape(platform)}"][data-post-id="${CSS.escape(postId)}"]`,
+    ];
+    if (uri) selectors.push(`.post-card[data-canonical-uri="${CSS.escape(uri)}"]`);
+
+    for (const col of this.columnsContainer.querySelectorAll('.column')) {
+      if (col.dataset.columnType === 'notifications') continue;
+      const content = col.querySelector('.column-content');
+      if (!content) continue;
+      const isThread = col.dataset.columnType === 'thread';
+
+      for (const sel of selectors) {
+        for (const card of content.querySelectorAll(sel)) {
+          if (!card.isConnected) continue;
+          const cardPost = this.postCache.get(`${card.dataset.platform}:${card.dataset.postId}`) || cachedPost;
+          const newEl = renderPost(cardPost);
+          if (isThread) {
+            for (const cls of card.classList) {
+              if (cls.startsWith('thread-')) newEl.classList.add(cls);
+            }
+          }
+          card.replaceWith(newEl);
+        }
+      }
     }
   },
 

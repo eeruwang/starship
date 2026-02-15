@@ -86,6 +86,13 @@
   padding-bottom: 0.4rem;
   border-bottom: 1px dashed var(--border-color);
 }
+.renote-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
 
 /* ===== CW / Content Warning ===== */
 .cw-warning {
@@ -193,6 +200,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.thread-reply-badge .reply-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 .thread-reply-badge .reply-badge-avatar {
   width: 14px;
