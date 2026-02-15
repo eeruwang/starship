@@ -833,14 +833,10 @@ export const ComposeMixin = {
         this._saveAccountVisibility(accountId, visibility);
       }
       this.closeModal(this.modalCompose);
-      // Prefer streaming push over eager refresh: the WebSocket will deliver
-      // the new post within moments, avoiding a redundant full timeline fetch.
-      // Fall back to refreshAll only when streaming is disconnected for any
-      // of the accounts that just posted.
-      const allStreamsUp = selectedIds.every(id => this.streamManager?.isConnected(id));
-      if (!allStreamsUp) {
-        this.refreshAll(false, { skipColumnTypes: ['all'] });
-      }
+      // Let WebSocket streaming deliver the new post instead of eagerly
+      // re-fetching all timelines.  If a stream is temporarily disconnected,
+      // StreamManager's auto-reconnect + _onStreamReconnected gap-fill
+      // refresh will pick it up — no manual refreshAll needed.
     }
 
     this.btnComposeSubmit.disabled = false;
