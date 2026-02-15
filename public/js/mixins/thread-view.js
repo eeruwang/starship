@@ -382,6 +382,10 @@ export const ThreadViewMixin = {
       target = note ? client.normalizePost(note) : null;
       ancestors = (conversation || []).map(n => client.normalizePost(n)).reverse();
       descendants = (children || []).map(n => client.normalizePost(n));
+      // Filter out pure renotes — they don't contribute to the conversation
+      // thread and cause key mismatches (renderPost uses reblog.id for
+      // data-post-id but _updateThreadInPlace uses the wrapper post.id).
+      descendants = descendants.filter(p => !p.reblog);
     }
 
     // Add account metadata to all posts
@@ -577,7 +581,10 @@ export const ThreadViewMixin = {
 
     for (const entry of newPosts) {
       const { post, classes, branch, parentPost } = entry;
-      const key = `${post.platform}:${post.id}`;
+      // Use the same key as renderPost (which uses post.reblog || post for
+      // data-post-id/data-platform) so lookup matches DOM card attributes.
+      const displayPost = post.reblog || post;
+      const key = `${displayPost.platform}:${displayPost.id}`;
       // Skip duplicate keys (same post in both ancestors and descendants)
       if (newKeys.has(key)) continue;
       newKeys.add(key);
