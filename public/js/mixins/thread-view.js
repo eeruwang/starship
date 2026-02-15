@@ -296,9 +296,7 @@ export const ThreadViewMixin = {
       this.cachePosts(allPosts);
       this._mergeReactionsFromCache(allPosts);
 
-      // Determine Phase 2 availability before Phase 1 render, so we can
-      // skip stale removal when Phase 2 will follow (avoids removing cards
-      // from other accounts that Phase 2 would immediately re-add).
+      // Phase 2 setup (computed early so Phase 2 can reuse variables)
       const cachedPost = this.postCache.get(`${platform}:${postId}`);
       const canonicalUri = cachedPost ? (cachedPost.reblog || cachedPost).canonicalUri : null;
       const visibleAccounts = this.store.getVisible();
@@ -307,11 +305,12 @@ export const ThreadViewMixin = {
         .map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) }));
       const willMerge = otherAccounts.length > 0 && !!canonicalUri;
 
-      if (isFirstLoad) {
-        this._renderThread(content, ancestors, targetPost, descendants);
-      } else {
-        this._updateThreadInPlace(content, ancestors, targetPost, descendants, { removeStale: !willMerge });
-      }
+      // Always use _renderThread (full re-render) to avoid card accumulation
+      // bugs from in-place updates.  Scroll position is saved and restored
+      // to keep the user's reading position stable across refreshes.
+      const savedScrollTop = isFirstLoad ? 0 : content.scrollTop;
+      this._renderThread(content, ancestors, targetPost, descendants);
+      if (savedScrollTop > 0) content.scrollTop = savedScrollTop;
 
       // Thread columns use solid borders — remove any merged-border styling
       // inherited from cache (posts seen by multiple accounts in other columns).
