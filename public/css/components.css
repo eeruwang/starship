@@ -156,6 +156,7 @@
   padding: 0.5rem;
   flex: 1;
   min-height: 0;
+  --connector-color: var(--border-color);
 }
 
 .thread-loading {
@@ -167,67 +168,165 @@
   font-size: 0.85rem;
 }
 
-/* Hide reply context in thread view (conversation already visible) */
-.thread-content .reply-context,
+/* Hide full reply context in thread view (conversation already visible) */
+.thread-content .reply-context {
+  display: none;
+}
+/* Keep reply-indicator visible in thread but restyle as compact badge */
 .thread-content .reply-indicator {
   display: none;
 }
 
+/* --- Thread reply badge (injected by JS) --- */
+.thread-reply-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--border-color) 25%, transparent);
+  line-height: 1.4;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-reply-badge .reply-badge-avatar {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.thread-reply-badge .reply-badge-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Thread post base --- */
 .thread-content .post-card {
   cursor: default;
   position: relative;
-  margin-bottom: 2px;
+  margin-bottom: 0;
   border-radius: 8px;
   transition: opacity 0.15s;
 }
 
-/* Ancestors: slightly dimmed, connected */
+/* Gap between posts (space for connector) */
+.thread-content .post-card + .post-card {
+  margin-top: 2px;
+}
+
+/* --- Connector line between posts --- */
+.thread-content .post-card + .post-card::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 21px; /* align with avatar center (padding ~16px + half of 40px avatar ≈ 36px / 2) */
+  width: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--connector-color, var(--border-color));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Taller connector for ancestors chain */
+.thread-content .thread-ancestor + .thread-ancestor::before {
+  height: 6px;
+  top: -6px;
+}
+.thread-content .thread-ancestor + .thread-target::before {
+  height: 8px;
+  top: -8px;
+  width: 3px;
+  background: var(--accent-primary);
+  border-radius: 1.5px;
+}
+.thread-content .thread-target + .thread-descendant::before,
+.thread-content .thread-descendant + .thread-descendant::before {
+  height: 6px;
+  top: -6px;
+}
+
+/* Connector gap for descendants */
+.thread-content .thread-target + .post-card { margin-top: 8px; }
+.thread-content .thread-descendant + .thread-descendant { margin-top: 2px; }
+
+/* --- Branch indicator: when switching depth (branching) --- */
+.thread-content .thread-descendant[data-thread-branch="true"] {
+  margin-top: 6px;
+}
+.thread-content .thread-descendant[data-thread-branch="true"]::before {
+  height: 10px;
+  top: -10px;
+  width: 2px;
+  border-radius: 1px;
+}
+
+/* --- Ancestors: slightly dimmed --- */
 .thread-content .post-card.thread-ancestor {
   opacity: 0.65;
   border-left: 2px solid var(--border-color);
   margin-left: 4px;
 }
-
 .thread-content .post-card.thread-ancestor:hover {
   opacity: 1;
 }
 
-/* Connector line from ancestor posts */
-.thread-content .post-card.thread-ancestor::after {
-  content: '';
-  position: absolute;
-  left: -2px;
-  bottom: -2px;
-  width: 2px;
-  height: 2px;
-  background: var(--border-color);
-}
-
-/* Highlighted target post */
+/* --- Highlighted target post --- */
 .thread-content .post-card.thread-target {
   border-left: 3px solid var(--accent-primary);
   background: rgba(99, 100, 255, 0.08);
   opacity: 1;
   margin-top: 4px;
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 
-/* Descendants: full width, depth shown via left border color + thickness */
+/* --- Descendants: depth-based styling --- */
 .thread-content .post-card.thread-descendant {
-  opacity: 0.75;
+  opacity: 0.8;
   border-left: 3px solid var(--border-color);
-  transition: opacity 0.15s, border-color 0.15s;
+  transition: opacity 0.15s, border-color 0.15s, background 0.15s;
 }
-
 .thread-content .post-card.thread-descendant:hover {
   opacity: 1;
 }
 
-/* Depth-based colored left border for reply tree */
-.thread-content .post-card.thread-depth-1 { border-left-color: var(--accent-primary); }
-.thread-content .post-card.thread-depth-2 { border-left-color: #96d04a; border-left-width: 3px; }
-.thread-content .post-card.thread-depth-3 { border-left-color: #e36a8a; border-left-width: 3px; }
-.thread-content .post-card.thread-depth-4 { border-left-color: #ff9f43; border-left-width: 3px; }
+/* Depth-based colored left border + subtle background tinting */
+.thread-content .post-card.thread-depth-1 {
+  border-left-color: var(--accent-primary);
+  --connector-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 4%, var(--bg-card));
+}
+.thread-content .post-card.thread-depth-2 {
+  border-left-color: #96d04a;
+  border-left-width: 3px;
+  --connector-color: #96d04a;
+  background: color-mix(in srgb, #96d04a 4%, var(--bg-card));
+}
+.thread-content .post-card.thread-depth-3 {
+  border-left-color: #e36a8a;
+  border-left-width: 3px;
+  --connector-color: #e36a8a;
+  background: color-mix(in srgb, #e36a8a 4%, var(--bg-card));
+}
+.thread-content .post-card.thread-depth-4 {
+  border-left-color: #ff9f43;
+  border-left-width: 3px;
+  --connector-color: #ff9f43;
+  background: color-mix(in srgb, #ff9f43 4%, var(--bg-card));
+}
+
+/* Depth hover: stronger tinting */
+.thread-content .post-card.thread-depth-1:hover { background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-card)); }
+.thread-content .post-card.thread-depth-2:hover { background: color-mix(in srgb, #96d04a 8%, var(--bg-card)); }
+.thread-content .post-card.thread-depth-3:hover { background: color-mix(in srgb, #e36a8a 8%, var(--bg-card)); }
+.thread-content .post-card.thread-depth-4:hover { background: color-mix(in srgb, #ff9f43 8%, var(--bg-card)); }
 
 /* Post cards in thread should be clickable for actions but not for thread-open */
 .thread-content .post-card .post-content {

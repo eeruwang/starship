@@ -473,7 +473,7 @@ export const ThreadViewMixin = {
 
     // Descendants: build a reply tree and render with indentation
     if (descendants.length > 0) {
-      this._renderDescendantTree(fragment, descendants, targetPost?.id);
+      this._renderDescendantTree(fragment, descendants, targetPost);
     }
 
     content.appendChild(fragment);
@@ -519,7 +519,7 @@ export const ThreadViewMixin = {
       newPosts.push({ post: targetPost, classes: ['thread-post', 'thread-target'] });
     }
     // Build descendant tree for ordering and depth classes
-    const descendantEntries = this._buildDescendantEntries(descendants, targetPost?.id);
+    const descendantEntries = this._buildDescendantEntries(descendants, targetPost);
     for (const entry of descendantEntries) {
       newPosts.push(entry);
     }
@@ -527,7 +527,8 @@ export const ThreadViewMixin = {
     const newKeys = new Set();
     const fragment = document.createDocumentFragment();
 
-    for (const { post, classes } of newPosts) {
+    for (const entry of newPosts) {
+      const { post, classes, branch, parentPost } = entry;
       const key = `${post.platform}:${post.id}`;
       newKeys.add(key);
       const existing = existingCards.get(key);
@@ -535,11 +536,15 @@ export const ThreadViewMixin = {
         // Update existing card in-place with fresh data
         const newCard = renderPost(post);
         for (const cls of classes) newCard.classList.add(cls);
+        if (branch) newCard.dataset.threadBranch = 'true';
+        if (parentPost) this._injectReplyBadge(newCard, post, parentPost);
         existing.replaceWith(newCard);
       } else {
         // New post - create and append to fragment
         const el = renderPost(post);
         for (const cls of classes) el.classList.add(cls);
+        if (branch) el.dataset.threadBranch = 'true';
+        if (parentPost) this._injectReplyBadge(el, post, parentPost);
         el.classList.add('new-post');
         fragment.appendChild(el);
       }
@@ -568,11 +573,14 @@ export const ThreadViewMixin = {
   },
 
   /**
-   * Build an ordered list of descendant entries with depth classes (without rendering).
+   * Build an ordered list of descendant entries with depth classes and metadata.
    */
-  _buildDescendantEntries(descendants, targetPostId) {
+  _buildDescendantEntries(descendants, targetPost) {
+    const targetPostId = targetPost?.id;
     const childrenMap = new Map();
+    const postMap = new Map();
     for (const post of descendants) {
+      postMap.set(String(post.id), post);
       const parentId = String(post.replyToId || targetPostId || '');
       if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
       childrenMap.get(parentId).push(post);
@@ -581,22 +589,32 @@ export const ThreadViewMixin = {
     const maxDepth = 4;
     const entries = [];
     const rendered = new Set();
+    let prevDepth = 0;
 
-    const walk = (postId, depth) => {
+    const walk = (postId, depth, parentPost) => {
       const children = childrenMap.get(String(postId)) || [];
-      for (const child of children) {
+      const hasBranch = children.length > 1;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         rendered.add(String(child.id));
         const level = Math.min(depth, maxDepth);
-        entries.push({ post: child, classes: ['thread-post', 'thread-descendant', `thread-depth-${level}`] });
-        walk(child.id, depth + 1);
+        const isBranch = (hasBranch && i > 0) || (depth < prevDepth);
+        prevDepth = depth;
+        entries.push({
+          post: child,
+          classes: ['thread-post', 'thread-descendant', `thread-depth-${level}`],
+          branch: isBranch,
+          parentPost,
+        });
+        walk(child.id, depth + 1, child);
       }
     };
-    walk(targetPostId, 1);
+    walk(targetPostId, 1, targetPost);
 
     // Orphaned descendants
     for (const post of descendants) {
       if (!rendered.has(String(post.id))) {
-        entries.push({ post, classes: ['thread-post', 'thread-descendant'] });
+        entries.push({ post, classes: ['thread-post', 'thread-descendant'], branch: false, parentPost: null });
       }
     }
 
@@ -605,8 +623,10 @@ export const ThreadViewMixin = {
 
   /**
    * Build a tree from descendants based on replyToId and render with indentation.
+   * Adds reply-target badges and branch indicators for visual threading.
    */
-  _renderDescendantTree(container, descendants, targetPostId) {
+  _renderDescendantTree(container, descendants, targetPost) {
+    const targetPostId = targetPost?.id;
     const childrenMap = new Map();
     const postMap = new Map();
 
@@ -618,19 +638,36 @@ export const ThreadViewMixin = {
     }
 
     const maxDepth = 4;
-    const renderNode = (postId, depth) => {
+    let prevDepth = 0;
+
+    const renderNode = (postId, depth, parentPost) => {
       const children = childrenMap.get(String(postId)) || [];
-      for (const child of children) {
+      const hasBranch = children.length > 1;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
         const el = renderPost(child);
         el.classList.add('thread-post', 'thread-descendant');
         const level = Math.min(depth, maxDepth);
         el.classList.add(`thread-depth-${level}`);
+
+        // Branch indicator: mark when depth changes or multiple siblings
+        if (hasBranch && i > 0) {
+          el.dataset.threadBranch = 'true';
+        }
+        if (depth < prevDepth) {
+          el.dataset.threadBranch = 'true';
+        }
+        prevDepth = depth;
+
+        // Reply badge: show who this replies to
+        this._injectReplyBadge(el, child, parentPost);
+
         container.appendChild(el);
-        renderNode(child.id, depth + 1);
+        renderNode(child.id, depth + 1, child);
       }
     };
 
-    renderNode(targetPostId, 1);
+    renderNode(targetPostId, 1, targetPost);
 
     // Orphaned descendants (replyToId doesn't match any known post)
     const rendered = new Set();
@@ -650,6 +687,30 @@ export const ThreadViewMixin = {
         container.appendChild(el);
       }
     }
+  },
+
+  /**
+   * Inject a compact reply badge into a thread descendant card.
+   * Shows who this post is replying to, with avatar and name.
+   */
+  _injectReplyBadge(cardEl, post, parentPost) {
+    // Determine reply target author
+    const replyAuthor = post.replyTo?.author || parentPost?.author;
+    if (!replyAuthor) return;
+
+    const badge = document.createElement('div');
+    badge.className = 'thread-reply-badge';
+
+    const avatarUrl = replyAuthor.avatarUrl || '';
+    const name = replyAuthor.displayName || replyAuthor.username || '';
+    badge.innerHTML =
+      `${avatarUrl ? `<img class="reply-badge-avatar" src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}`
+      + `<span>↩</span>`
+      + `<span class="reply-badge-name">${escapeHtml(name)}</span>`
+      + `<span>에게 답글</span>`;
+
+    // Insert at the very top of the card (before any other content)
+    cardEl.insertBefore(badge, cardEl.firstChild);
   },
 
 };
