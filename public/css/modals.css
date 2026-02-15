@@ -560,9 +560,12 @@ textarea.input {
   background: rgba(150, 208, 74, 0.8);
   color: #fff;
 }
+.profile-actions .btn {
+  text-decoration: none;
+}
 .profile-follow-btn {
   min-width: 5rem;
-  text-align: center;
+  justify-content: center;
 }
 .profile-follow-btn.following {
   border-color: var(--border-color);
@@ -678,6 +681,11 @@ textarea.input {
 .profile-posts .media-grid img,
 .profile-posts .media-grid video {
   max-height: 150px;
+}
+.profile-posts .video-embed {
+  max-height: 200px;
+  padding-bottom: 0;
+  height: 200px;
 }
 .profile-posts-empty {
   text-align: center;

@@ -89,6 +89,22 @@ function isFediPostUrl(url) {
 }
 
 /**
+ * Extract YouTube video ID from a URL, or return null.
+ */
+function extractYouTubeId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1).split('/')[0];
+    if (u.hostname.includes('youtube.com')) {
+      if (u.pathname === '/watch') return u.searchParams.get('v');
+      const m = u.pathname.match(/^\/(?:shorts|embed)\/([^/?]+)/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return null;
+}
+
+/**
  * Strip fedi post URL link from content HTML when it will be shown as a card/embed.
  * Prevents duplicate display of the URL as both inline text and link card.
  */
@@ -163,6 +179,14 @@ function renderReplyMedia(media) {
 
 function renderLinkCardHtml(lc, extraClass = '') {
   if (!lc || !lc.url) return '';
+
+  // YouTube → inline embed player
+  const ytId = extractYouTubeId(lc.url);
+  if (ytId) {
+    const cls = extraClass ? `video-embed ${extraClass}` : 'video-embed';
+    return `<div class="${cls}"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(ytId)}" frameborder="0" allowfullscreen loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe></div>`;
+  }
+
   const hasImage = lc.image;
   const hasTitle = lc.title;
   const needsOg = !hasTitle && !hasImage;
