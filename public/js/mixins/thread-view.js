@@ -265,6 +265,17 @@ export const ThreadViewMixin = {
       } else {
         this._updateThreadInPlace(content, ancestors, targetPost, descendants);
       }
+
+      // Thread columns use solid borders — remove any merged-border styling
+      // inherited from cache (posts seen by multiple accounts in other columns).
+      const primaryAccount = this.store.getById(accountId);
+      const primaryColor = primaryAccount ? this._accountColor(primaryAccount) : null;
+      for (const el of content.querySelectorAll('.merged-border')) {
+        el.classList.remove('merged-border');
+        el.style.removeProperty('--merged-gradient');
+        if (primaryColor) el.style.borderLeftColor = primaryColor;
+      }
+
       this._fetchMissingReactions(allPosts, content);
 
       // Phase 2: merge other accounts
@@ -276,10 +287,13 @@ export const ThreadViewMixin = {
         .map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) }));
 
       if (otherAccounts.length > 0 && canonicalUri) {
+        // Thread columns use solid border (no merged gradient) — the gradient
+        // conflicts with thread depth CSS which overrides the background,
+        // leaving the border transparent and invisible.
         await this._mergeOtherAccountThreads(
           content, otherAccounts, canonicalUri, platform,
           ancestors, targetPost, descendants, cachedPost,
-          true, visibleAccounts.map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) })),
+          false, visibleAccounts.map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) })),
           accountId
         );
       }
