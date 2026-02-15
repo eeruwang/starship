@@ -195,15 +195,27 @@ export const StreamingMixin = {
       sibling = sibling.nextElementSibling;
     }
 
+    // Defensive: ensure metadata is present even if called from an unexpected path
+    if (!post.themeColor && post.accountId) {
+      const account = this.store.getById(post.accountId);
+      if (account) {
+        post.themeColor = this._accountColor(account);
+        post.accountPlatform = post.accountPlatform || account.platform;
+        post.accountSoftware = post.accountSoftware || account.software || account.platform;
+      }
+    }
+
     const el = renderPost(post);
     el.classList.add('thread-post', 'thread-descendant', `thread-depth-${newDepth}`, 'new-post');
 
     const scrollTop = content.scrollTop;
+    const scrollHeight = content.scrollHeight;
     insertAfter.insertAdjacentElement('afterend', el);
 
-    // Keep scroll stable if user has scrolled up from the bottom
-    if (scrollTop > 0) {
-      content.scrollTop = scrollTop + el.offsetHeight + 8;
+    // Keep scroll stable: only adjust if the insertion shifted content above the viewport
+    const heightDelta = content.scrollHeight - scrollHeight;
+    if (scrollTop > 0 && heightDelta > 0) {
+      content.scrollTop = scrollTop + heightDelta;
     }
 
     setTimeout(() => el.classList.remove('new-post'), 400);

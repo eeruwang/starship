@@ -682,8 +682,9 @@ export class MisskeyClient {
       return `<h${level} class="mfm-heading">${content}</h${level}>`;
     });
 
-    // Bold
+    // Bold (MFM **text** and <b> tags)
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/&lt;b&gt;([\s\S]*?)&lt;\/b&gt;/g, '<strong>$1</strong>');
     // Italic (MFM <i> tags are escaped by escapeHtml)
     html = html.replace(/&lt;i&gt;(.+?)&lt;\/i&gt;/g, '<em>$1</em>');
     // Strikethrough

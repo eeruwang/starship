@@ -124,11 +124,9 @@ export const ThreadViewMixin = {
       this.cachePosts(allPosts);
       this._mergeReactionsFromCache(allPosts);
 
-      // Update in-place to avoid flicker (preserve scroll position)
-      const scrollTop = content.scrollTop;
+      // Update in-place (_updateThreadInPlace preserves scroll internally)
       this._updateThreadInPlace(content, ancestors, targetPost, descendants);
       this._applyMergedBorderUI(content, showMergedUI, allAccounts, clickedAccountId);
-      content.scrollTop = scrollTop;
 
       this._fetchMissingReactions(allPosts, content);
     } catch (err) {
@@ -511,6 +509,10 @@ export const ThreadViewMixin = {
       return;
     }
 
+    // Save scroll state for stable restoration
+    const savedScrollTop = content.scrollTop;
+    const savedScrollHeight = content.scrollHeight;
+
     // Build the new post list in order
     const newPosts = [];
     for (const post of ancestors) {
@@ -569,6 +571,12 @@ export const ThreadViewMixin = {
     // Remove loading elements
     const loadingEl = content.querySelector('.thread-loading');
     if (loadingEl) loadingEl.remove();
+
+    // Restore scroll: compensate for any height changes above the viewport
+    if (savedScrollTop > 0) {
+      const heightDelta = content.scrollHeight - savedScrollHeight;
+      content.scrollTop = savedScrollTop + heightDelta;
+    }
 
     this.enrichLinkCards(content);
   },
