@@ -105,11 +105,18 @@ function extractYouTubeId(url) {
 }
 
 /**
- * Strip fedi post URL link from content HTML when it will be shown as a card/embed.
- * Prevents duplicate display of the URL as both inline text and link card.
+ * Check whether a URL should be embedded (fedi post or YouTube video).
+ */
+function isEmbeddableUrl(url) {
+  return isFediPostUrl(url) || !!extractYouTubeId(url);
+}
+
+/**
+ * Strip embeddable URL link from content HTML when it will be shown as a card/embed.
+ * Prevents duplicate display of the URL as both inline text and link card / video embed.
  */
 function stripFediLinkFromContent(content, linkCard) {
-  if (!content || !linkCard?.url || !isFediPostUrl(linkCard.url)) return content;
+  if (!content || !linkCard?.url || !isEmbeddableUrl(linkCard.url)) return content;
   const escaped = linkCard.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const escapedAmp = linkCard.url.replace(/&/g, '&amp;').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const urlPattern = escaped === escapedAmp ? escaped : `(?:${escaped}|${escapedAmp})`;
