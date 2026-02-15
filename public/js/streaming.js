@@ -100,8 +100,8 @@ export class StreamManager {
         state.awaitingPong = false;
         try {
           const msg = JSON.parse(event.data);
-          // Misskey pong — just an activity signal, no further handling
-          if (msg.type === 'pong') return;
+          // Misskey pong — mark this connection as pong-capable
+          if (msg.type === 'pong') { state._pongSupported = true; return; }
           this._handleMessage(state, msg);
         } catch {
           // ignore non-JSON (ping frames, etc.)
@@ -347,18 +347,29 @@ export class StreamManager {
         continue;
       }
 
-      // Misskey: if we sent a ping last tick and got no pong, treat as stale
+      // Misskey-family: check pong response from last tick
       if (state.account.platform !== 'mastodon' && state.awaitingPong) {
-        console.warn(`[Stream] No pong from: ${state.account.label}, reconnecting`);
-        this._forceReconnect(state);
-        continue;
+        if (state._pongSupported) {
+          // This server previously responded to pings — no pong means dead
+          console.warn(`[Stream] No pong from: ${state.account.label}, reconnecting`);
+          this._forceReconnect(state);
+          continue;
+        }
+        // Server never sent a pong (e.g. Iceshrimp.NET) — don't force-
+        // reconnect; fall through to the stale threshold check below.
+        state.awaitingPong = false;
       }
 
       // Send application-level ping per platform
       if (state.account.platform !== 'mastodon') {
-        // Misskey/Iceshrimp/CherryPick: JSON ping, expect pong next tick
+        // Misskey/Iceshrimp/CherryPick: JSON ping
         if (this._safeSend(state, '{"type":"ping"}')) {
           state.awaitingPong = true;
+          // For forks that don't respond with pong, treat a successful
+          // send as a liveness signal (same approach as Mastodon).
+          if (!state._pongSupported) {
+            state.lastActivity = now;
+          }
         }
       } else {
         // Mastodon: no app-level ping/pong, but the server sends WebSocket-
@@ -368,14 +379,15 @@ export class StreamManager {
         if (this._safeSend(state, '{"type":"ping"}')) {
           state.lastActivity = now;
         }
-        // If bufferedAmount keeps growing the socket is dead.
-        if (state._lastBuffered != null && ws.bufferedAmount >= state._lastBuffered && state._lastBuffered > 0) {
-          console.warn(`[Stream] Socket stuck: ${state.account.label}, reconnecting`);
-          this._forceReconnect(state);
-          continue;
-        }
-        state._lastBuffered = ws.bufferedAmount;
       }
+
+      // Check for stuck socket (bufferedAmount growing = data not being sent)
+      if (state._lastBuffered != null && ws.bufferedAmount >= state._lastBuffered && state._lastBuffered > 0) {
+        console.warn(`[Stream] Socket stuck: ${state.account.label}, reconnecting`);
+        this._forceReconnect(state);
+        continue;
+      }
+      state._lastBuffered = ws.bufferedAmount;
 
       // Force reconnect if no activity for too long (covers both platforms)
       if (state.lastActivity && now - state.lastActivity > staleThreshold) {
@@ -414,9 +426,9 @@ export class StreamManager {
       const probeOk = this._safeSend(state, '{"type":"ping"}');
       if (!probeOk) continue; // already reconnecting
 
-      // Successful send — update lastActivity for Mastodon (no app-level
-      // pong, so the send itself is our best health indicator)
-      if (state.account.platform === 'mastodon') {
+      // Successful send — update lastActivity for platforms without pong
+      // (Mastodon, or Misskey forks that don't respond to pings)
+      if (state.account.platform === 'mastodon' || !state._pongSupported) {
         state.lastActivity = now;
       }
 
@@ -430,10 +442,9 @@ export class StreamManager {
         continue;
       }
 
-      // For Misskey, expect a pong response to the probe we just sent
-      if (state.account.platform !== 'mastodon') {
+      // For Misskey-family with pong support, expect a response
+      if (state.account.platform !== 'mastodon' && state._pongSupported) {
         state.awaitingPong = true;
-        // If no pong within 5s, the next heartbeat tick (or a repeated probe) will catch it
       }
     }
   }
