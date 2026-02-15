@@ -221,6 +221,7 @@ export const StreamingMixin = {
       notif.post.accountId = account.id;
       notif.post.accountPlatform = account.platform;
       notif.post.accountSoftware = account.software || account.platform;
+      notif.post.themeColor = this._accountColor(account);
       this.cachePosts([notif.post]);
     }
 
