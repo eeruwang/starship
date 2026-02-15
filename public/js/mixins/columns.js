@@ -424,7 +424,7 @@ export const ColumnsMixin = {
     if (!this.AUTO_REFRESH_INTERVAL || this.AUTO_REFRESH_INTERVAL <= 0) return;
     this.autoRefreshTimer = setInterval(() => {
       if (!this.store.isEmpty()) {
-        this.refreshAll();
+        this.refreshAll(false, { skipColumnTypes: ['thread'] });
       }
     }, this.AUTO_REFRESH_INTERVAL);
 
@@ -441,7 +441,7 @@ export const ColumnsMixin = {
           this._lastHiddenAt = null;
           // Only refresh if tab was hidden for more than 30 seconds
           if (away > 30_000 && !this.store.isEmpty()) {
-            this.refreshAll();
+            this.refreshAll(false, { skipColumnTypes: ['thread'] });
           }
         }
       };
