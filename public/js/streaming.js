@@ -361,8 +361,14 @@ export class StreamManager {
           state.awaitingPong = true;
         }
       } else {
-        // Mastodon: no app-level ping protocol, but we can probe the
-        // transport. If bufferedAmount keeps growing the socket is dead.
+        // Mastodon: no app-level ping/pong, but the server sends WebSocket-
+        // level pings (invisible to JS onmessage). Probe the transport with
+        // a small send to detect zombie sockets and update lastActivity so
+        // the stale check below doesn't false-positive on quiet timelines.
+        if (this._safeSend(state, '{"type":"ping"}')) {
+          state.lastActivity = now;
+        }
+        // If bufferedAmount keeps growing the socket is dead.
         if (state._lastBuffered != null && ws.bufferedAmount >= state._lastBuffered && state._lastBuffered > 0) {
           console.warn(`[Stream] Socket stuck: ${state.account.label}, reconnecting`);
           this._forceReconnect(state);
@@ -381,9 +387,8 @@ export class StreamManager {
 
   /**
    * Probe all connections to detect zombie sockets (iOS Safari resume,
-   * network transitions). For Misskey, sends a ping and expects pong.
-   * For Mastodon, checks staleness based on lastActivity.
-   * Connections that are clearly dead are reconnected immediately.
+   * network transitions). Sends a probe ping per platform and checks
+   * staleness. Connections that are clearly dead are reconnected immediately.
    */
   _probeAllConnections() {
     const now = Date.now();
@@ -404,6 +409,17 @@ export class StreamManager {
       }
 
       // readyState says OPEN — but it may be a zombie (especially on iOS).
+      // Send a probe to detect zombie sockets first. If send fails,
+      // _safeSend triggers _forceReconnect automatically.
+      const probeOk = this._safeSend(state, '{"type":"ping"}');
+      if (!probeOk) continue; // already reconnecting
+
+      // Successful send — update lastActivity for Mastodon (no app-level
+      // pong, so the send itself is our best health indicator)
+      if (state.account.platform === 'mastodon') {
+        state.lastActivity = now;
+      }
+
       // Check how long since last activity.
       const sinceActivity = state.lastActivity ? now - state.lastActivity : Infinity;
 
@@ -414,13 +430,10 @@ export class StreamManager {
         continue;
       }
 
-      // For Misskey, send a verification ping
+      // For Misskey, expect a pong response to the probe we just sent
       if (state.account.platform !== 'mastodon') {
-        state.awaitingPong = false;
-        if (this._safeSend(state, '{"type":"ping"}')) {
-          state.awaitingPong = true;
-          // If no pong within 5s, the next heartbeat tick (or a repeated probe) will catch it
-        }
+        state.awaitingPong = true;
+        // If no pong within 5s, the next heartbeat tick (or a repeated probe) will catch it
       }
     }
   }

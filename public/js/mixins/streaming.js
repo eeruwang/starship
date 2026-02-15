@@ -72,7 +72,7 @@ export const StreamingMixin = {
         if (!shouldAdd) continue;
 
         // Duplicate check by platform:id
-        if (content.querySelector(`.post-card[data-platform="${post.platform}"][data-post-id="${post.id}"]`)) continue;
+        if (content.querySelector(`.post-card[data-platform="${CSS.escape(post.platform)}"][data-post-id="${CSS.escape(post.id)}"]`)) continue;
 
         // Duplicate check by canonicalUri (same post from another account)
         const displayPost = post.reblog || post;
@@ -117,7 +117,7 @@ export const StreamingMixin = {
     if (!replyToId) return;
 
     // Duplicate check
-    if (content.querySelector(`.post-card[data-platform="${post.platform}"][data-post-id="${post.id}"]`)) return;
+    if (content.querySelector(`.post-card[data-platform="${CSS.escape(post.platform)}"][data-post-id="${CSS.escape(post.id)}"]`)) return;
     const displayPost = post.reblog || post;
     if (displayPost.canonicalUri) {
       if (content.querySelector(`.post-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`)) return;
@@ -125,7 +125,7 @@ export const StreamingMixin = {
 
     // Find the parent card in the thread column
     let parentCard = content.querySelector(
-      `.post-card[data-platform="${post.platform}"][data-post-id="${CSS.escape(replyToId)}"]`
+      `.post-card[data-platform="${CSS.escape(post.platform)}"][data-post-id="${CSS.escape(replyToId)}"]`
     );
 
     // Cross-account: try canonicalUri lookup if direct ID didn't match
@@ -208,7 +208,7 @@ export const StreamingMixin = {
       if (account.hidden) continue;
 
       // Duplicate check
-      if (content.querySelector(`.notif-card[data-platform="${notif.platform}"][data-notif-id="${notif.id}"]`)) continue;
+      if (content.querySelector(`.notif-card[data-platform="${CSS.escape(notif.platform)}"][data-notif-id="${CSS.escape(notif.id)}"]`)) continue;
 
       // Remove "empty" placeholder
       const placeholder = content.querySelector('.loading-text');
@@ -310,7 +310,7 @@ export const StreamingMixin = {
       const isThread = col.dataset.columnType === 'thread';
 
       // Match by platform:id
-      const cards = content.querySelectorAll(`.post-card[data-platform="${post.platform}"][data-post-id="${post.id}"]`);
+      const cards = content.querySelectorAll(`.post-card[data-platform="${CSS.escape(post.platform)}"][data-post-id="${CSS.escape(post.id)}"]`);
       for (const card of cards) {
         if (!card.isConnected) continue;
         const newEl = renderPost(post);
@@ -348,7 +348,7 @@ export const StreamingMixin = {
 
   _onStreamPostDelete({ account, postId }) {
     // Remove deleted posts from all columns
-    const cards = this.columnsContainer.querySelectorAll(`.post-card[data-platform="${account.platform}"][data-post-id="${postId}"]`);
+    const cards = this.columnsContainer.querySelectorAll(`.post-card[data-platform="${CSS.escape(account.platform)}"][data-post-id="${CSS.escape(postId)}"]`);
     for (const card of cards) {
       card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
       card.style.opacity = '0';
