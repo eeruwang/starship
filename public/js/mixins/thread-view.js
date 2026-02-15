@@ -123,9 +123,9 @@ export const ThreadViewMixin = {
       this.cachePosts(allPosts);
       this._mergeReactionsFromCache(allPosts);
 
-      // Re-render with merged data (preserve scroll position)
+      // Update in-place to avoid flicker (preserve scroll position)
       const scrollTop = content.scrollTop;
-      this._renderThread(content, ancestors, targetPost, descendants);
+      this._updateThreadInPlace(content, ancestors, targetPost, descendants);
       this._applyMergedBorderUI(content, showMergedUI, allAccounts, clickedAccountId);
       content.scrollTop = scrollTop;
 
@@ -219,6 +219,7 @@ export const ThreadViewMixin = {
   /**
    * Load thread data into a thread column.
    * Guarded against concurrent calls for the same column.
+   * On subsequent loads (refresh), preserves existing content to avoid flicker.
    */
   async loadThreadForColumn(col) {
     // Prevent overlapping loads for the same column
@@ -232,7 +233,10 @@ export const ThreadViewMixin = {
     if (!content) { col._threadLoading = false; return; }
 
     content.classList.add('thread-content');
-    content.innerHTML = '<div class="thread-loading"><div class="spinner"></div></div>';
+    const isFirstLoad = !content.querySelector('.thread-post');
+    if (isFirstLoad) {
+      content.innerHTML = '<div class="thread-loading"><div class="spinner"></div></div>';
+    }
 
     try {
       // Fetch from the primary account
@@ -256,7 +260,12 @@ export const ThreadViewMixin = {
       let allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
       this.cachePosts(allPosts);
       this._mergeReactionsFromCache(allPosts);
-      this._renderThread(content, ancestors, targetPost, descendants);
+
+      if (isFirstLoad) {
+        this._renderThread(content, ancestors, targetPost, descendants);
+      } else {
+        this._updateThreadInPlace(content, ancestors, targetPost, descendants);
+      }
       this._fetchMissingReactions(allPosts, content);
 
       // Phase 2: merge other accounts
@@ -277,7 +286,9 @@ export const ThreadViewMixin = {
       }
     } catch (err) {
       console.error('Thread column load failed:', err);
-      content.innerHTML = `<div class="thread-loading">스레드를 불러올 수 없습니다.</div>`;
+      if (isFirstLoad) {
+        content.innerHTML = `<div class="thread-loading">스레드를 불러올 수 없습니다.</div>`;
+      }
     } finally {
       col._threadLoading = false;
     }
@@ -479,6 +490,117 @@ export const ThreadViewMixin = {
         }
       });
     }
+  },
+
+  /**
+   * Update thread content in-place: replace changed cards, add new ones, remove stale ones.
+   * This avoids the flicker caused by innerHTML = '' followed by full rebuild.
+   */
+  _updateThreadInPlace(content, ancestors, targetPost, descendants) {
+    // Build map of existing cards by platform:postId
+    const existingCards = new Map();
+    for (const card of content.querySelectorAll('.post-card.thread-post')) {
+      const key = `${card.dataset.platform}:${card.dataset.postId}`;
+      existingCards.set(key, card);
+    }
+
+    // If no existing content, fall back to full render
+    if (existingCards.size === 0) {
+      this._renderThread(content, ancestors, targetPost, descendants);
+      return;
+    }
+
+    // Build the new post list in order
+    const newPosts = [];
+    for (const post of ancestors) {
+      newPosts.push({ post, classes: ['thread-post', 'thread-ancestor'] });
+    }
+    if (targetPost) {
+      newPosts.push({ post: targetPost, classes: ['thread-post', 'thread-target'] });
+    }
+    // Build descendant tree for ordering and depth classes
+    const descendantEntries = this._buildDescendantEntries(descendants, targetPost?.id);
+    for (const entry of descendantEntries) {
+      newPosts.push(entry);
+    }
+
+    const newKeys = new Set();
+    const fragment = document.createDocumentFragment();
+
+    for (const { post, classes } of newPosts) {
+      const key = `${post.platform}:${post.id}`;
+      newKeys.add(key);
+      const existing = existingCards.get(key);
+      if (existing) {
+        // Update existing card in-place with fresh data
+        const newCard = renderPost(post);
+        for (const cls of classes) newCard.classList.add(cls);
+        existing.replaceWith(newCard);
+      } else {
+        // New post - create and append to fragment
+        const el = renderPost(post);
+        for (const cls of classes) el.classList.add(cls);
+        el.classList.add('new-post');
+        fragment.appendChild(el);
+      }
+    }
+
+    // Remove stale cards that are no longer in the thread
+    for (const [key, card] of existingCards) {
+      if (!newKeys.has(key)) {
+        card.remove();
+      }
+    }
+
+    // Append any new posts at the end
+    if (fragment.childNodes.length > 0) {
+      content.appendChild(fragment);
+      setTimeout(() => {
+        content.querySelectorAll('.new-post').forEach(el => el.classList.remove('new-post'));
+      }, 400);
+    }
+
+    // Remove loading elements
+    const loadingEl = content.querySelector('.thread-loading');
+    if (loadingEl) loadingEl.remove();
+
+    this.enrichLinkCards(content);
+  },
+
+  /**
+   * Build an ordered list of descendant entries with depth classes (without rendering).
+   */
+  _buildDescendantEntries(descendants, targetPostId) {
+    const childrenMap = new Map();
+    for (const post of descendants) {
+      const parentId = String(post.replyToId || targetPostId || '');
+      if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+      childrenMap.get(parentId).push(post);
+    }
+
+    const maxDepth = 4;
+    const entries = [];
+    const rendered = new Set();
+
+    const walk = (postId, depth) => {
+      const children = childrenMap.get(String(postId)) || [];
+      for (const child of children) {
+        rendered.add(String(child.id));
+        const level = Math.min(depth, maxDepth);
+        entries.push({ post: child, classes: ['thread-post', 'thread-descendant', `thread-depth-${level}`] });
+        walk(child.id, depth + 1);
+      }
+    };
+    walk(targetPostId, 1);
+
+    // Orphaned descendants
+    for (const post of descendants) {
+      if (!rendered.has(String(post.id))) {
+        entries.push({ post, classes: ['thread-post', 'thread-descendant'] });
+      }
+    }
+
+    return entries;
   },
 
   /**
