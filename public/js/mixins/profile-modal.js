@@ -569,12 +569,15 @@ export const ProfileModalMixin = {
     this.enrichLinkCards(container);
   },
 
-  async _loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl) {
+  async _loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl, knownState) {
     try {
       let isFollowing = false;
       let isFollowedBy = false;
 
-      if (isMisskey) {
+      if (knownState) {
+        isFollowing = knownState.isFollowing;
+        isFollowedBy = knownState.isFollowedBy;
+      } else if (isMisskey) {
         const rel = await client.getRelation(user.id);
         isFollowing = !!rel?.isFollowing;
         isFollowedBy = !!rel?.isFollowed;
@@ -628,16 +631,15 @@ export const ProfileModalMixin = {
         followBtn.disabled = true;
         try {
           if (isFollowing) {
-            if (isMisskey) await client.unfollowUser(user.id);
-            else await client.unfollowUser(user.id);
+            await client.unfollowUser(user.id);
             isFollowing = false;
           } else {
-            if (isMisskey) await client.followUser(user.id);
-            else await client.followUser(user.id);
+            await client.followUser(user.id);
             isFollowing = true;
           }
-          // Refresh the UI
-          this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl);
+          // Optimistic UI update — pass known state to skip API re-fetch
+          this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl,
+            { isFollowing, isFollowedBy });
         } catch (err) {
           this.showToast('팔로우 처리 실패: ' + err.message);
         } finally {

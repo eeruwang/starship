@@ -560,6 +560,10 @@ textarea.input {
   background: rgba(150, 208, 74, 0.8);
   color: #fff;
 }
+.profile-follow-btn {
+  min-width: 6.5rem;
+  text-align: center;
+}
 .profile-follow-btn.following {
   border-color: var(--border-color);
 }
