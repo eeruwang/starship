@@ -57,6 +57,21 @@ export const ThreadViewMixin = {
       let targetPost = primaryResult?.target || null;
       let descendants = primaryResult?.descendants || [];
 
+      // Deduplicate (API can return overlapping data)
+      ancestors = this._deduplicateThreadPosts(ancestors);
+      descendants = this._deduplicateThreadPosts(descendants);
+      if (targetPost) {
+        const targetKey = targetPost.canonicalUri || `${targetPost.platform}:${targetPost.id}`;
+        ancestors = ancestors.filter(p => {
+          const k = (p.reblog || p).canonicalUri || `${p.platform}:${p.id}`;
+          return k !== targetKey;
+        });
+        descendants = descendants.filter(p => {
+          const k = (p.reblog || p).canonicalUri || `${p.platform}:${p.id}`;
+          return k !== targetKey;
+        });
+      }
+
       // Render immediately with primary account data
       let allPosts = [...ancestors, ...(targetPost ? [targetPost] : []), ...descendants];
       this.cachePosts(allPosts);
@@ -244,6 +259,22 @@ export const ThreadViewMixin = {
       let ancestors = primaryResult?.ancestors || [];
       let targetPost = primaryResult?.target || null;
       let descendants = primaryResult?.descendants || [];
+
+      // Deduplicate Phase 1 results (API can return overlapping data
+      // between notes/conversation and notes/children)
+      ancestors = this._deduplicateThreadPosts(ancestors);
+      descendants = this._deduplicateThreadPosts(descendants);
+      if (targetPost) {
+        const targetKey = targetPost.canonicalUri || `${targetPost.platform}:${targetPost.id}`;
+        ancestors = ancestors.filter(p => {
+          const k = (p.reblog || p).canonicalUri || `${p.platform}:${p.id}`;
+          return k !== targetKey;
+        });
+        descendants = descendants.filter(p => {
+          const k = (p.reblog || p).canonicalUri || `${p.platform}:${p.id}`;
+          return k !== targetKey;
+        });
+      }
 
       // Update column title with author info
       const h2 = col.querySelector('.column-header h2');
@@ -547,6 +578,8 @@ export const ThreadViewMixin = {
     for (const entry of newPosts) {
       const { post, classes, branch, parentPost } = entry;
       const key = `${post.platform}:${post.id}`;
+      // Skip duplicate keys (same post in both ancestors and descendants)
+      if (newKeys.has(key)) continue;
       newKeys.add(key);
       const existing = existingCards.get(key);
       if (existing) {
@@ -567,10 +600,16 @@ export const ThreadViewMixin = {
       }
     }
 
-    // Remove stale cards that are no longer in the thread
-    for (const [key, card] of existingCards) {
-      if (!newKeys.has(key)) {
+    // Remove stale and duplicate cards from DOM.
+    // Uses a DOM scan instead of the existingCards Map to catch duplicates
+    // (Map only stores the last card per key, earlier duplicates remain).
+    const seenKeys = new Set();
+    for (const card of [...content.querySelectorAll('.post-card.thread-post')]) {
+      const key = `${card.dataset.platform}:${card.dataset.postId}`;
+      if (!newKeys.has(key) || seenKeys.has(key)) {
         card.remove();
+      } else {
+        seenKeys.add(key);
       }
     }
 
