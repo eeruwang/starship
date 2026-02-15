@@ -296,7 +296,7 @@ export function renderPost(post) {
     const rbAvatar = post.rebloggedBy.avatarUrl
       ? `<img class="renote-avatar" src="${escapeHtml(post.rebloggedBy.avatarUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
       : '';
-    html += `<div class="renote-indicator">${rbAvatar}<span class="icon-inline boost-icon">${iconBoost}</span> ${post.rebloggedBy.displayNameHtml || escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
+    html += `<div class="renote-indicator"><span class="icon-inline boost-icon">${iconBoost}</span>${rbAvatar} ${post.rebloggedBy.displayNameHtml || escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
   }
 
   const displayPost = post.reblog || post;
