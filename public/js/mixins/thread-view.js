@@ -303,11 +303,8 @@ export const ThreadViewMixin = {
       const otherAccounts = visibleAccounts
         .filter(a => a.id !== accountId)
         .map(a => ({ id: a.id, platform: a.platform, themeColor: this._accountColor(a) }));
-      const willMerge = otherAccounts.length > 0 && !!canonicalUri;
-
-      // Always use _renderThread (full re-render) to avoid card accumulation
-      // bugs from in-place updates.  Scroll position is saved and restored
-      // to keep the user's reading position stable across refreshes.
+      // Full re-render to avoid card accumulation bugs from in-place updates.
+      // Scroll position is saved and restored for reading stability.
       const savedScrollTop = isFirstLoad ? 0 : content.scrollTop;
       this._renderThread(content, ancestors, targetPost, descendants);
       if (savedScrollTop > 0) content.scrollTop = savedScrollTop;
@@ -325,7 +322,7 @@ export const ThreadViewMixin = {
       this._fetchMissingReactions(allPosts, content);
 
       // Phase 2: merge other accounts
-      if (willMerge) {
+      if (otherAccounts.length > 0 && canonicalUri) {
         // Thread columns use solid border (no merged gradient) — the gradient
         // conflicts with thread depth CSS which overrides the background,
         // leaving the border transparent and invisible.
@@ -552,7 +549,7 @@ export const ThreadViewMixin = {
    * Update thread content in-place: replace changed cards, add new ones, remove stale ones.
    * This avoids the flicker caused by innerHTML = '' followed by full rebuild.
    */
-  _updateThreadInPlace(content, ancestors, targetPost, descendants, { removeStale = true } = {}) {
+  _updateThreadInPlace(content, ancestors, targetPost, descendants) {
     // Build map of existing cards by platform:postId
     const existingCards = new Map();
     for (const card of content.querySelectorAll('.post-card.thread-post')) {
@@ -632,7 +629,7 @@ export const ThreadViewMixin = {
     const lastSeen = new Map();
     for (const card of [...content.querySelectorAll('.post-card.thread-post')]) {
       const key = `${card.dataset.platform}:${card.dataset.postId}`;
-      if (removeStale && !newKeys.has(key)) {
+      if (!newKeys.has(key)) {
         card.remove();
       } else if (lastSeen.has(key)) {
         lastSeen.get(key).remove();   // remove earlier duplicate
