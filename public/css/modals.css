@@ -507,6 +507,12 @@ textarea.input {
 .profile-stat-clickable:hover {
   background: var(--bg-hover);
 }
+.profile-stat-active {
+  background: var(--bg-hover);
+}
+.profile-stat-active strong {
+  color: var(--accent-primary);
+}
 .profile-fields {
   margin-top: 0.75rem;
   border-radius: var(--radius);

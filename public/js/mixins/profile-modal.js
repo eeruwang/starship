@@ -134,27 +134,31 @@ export const ProfileModalMixin = {
       if (myAccount) {
         tabsEl.style.display = 'flex';
         postsEl.style.display = 'block';
-        // Add followers/following tabs for own profile
-        tabsEl.innerHTML = `
-          <button class="profile-tab active" data-profile-tab="notes">노트</button>
-          <button class="profile-tab" data-profile-tab="renotes">리노트</button>
-          <button class="profile-tab" data-profile-tab="replies">댓글</button>
-          <button class="profile-tab" data-profile-tab="followers">팔로워</button>
-          <button class="profile-tab" data-profile-tab="following">팔로잉</button>
-        `;
         this._loadProfileNotes(user.id, platform, effectiveAccountId, client, isMisskey, account);
 
-        // Make stats clickable to jump to followers/following tabs
-        const statsClickHandler = (e) => {
+        // Make follower/following stats clickable to show list directly
+        statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.add('profile-stat-clickable'));
+        statsEl.addEventListener('click', async (e) => {
           const stat = e.target.closest('[data-stat-tab]');
           if (!stat) return;
           const tabName = stat.dataset.statTab;
-          const tabBtn = tabsEl.querySelector(`[data-profile-tab="${tabName}"]`);
-          if (tabBtn) tabBtn.click();
-        };
-        statsEl.addEventListener('click', statsClickHandler);
-        // Add clickable style
-        statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.add('profile-stat-clickable'));
+
+          // Deactivate all tabs visually
+          const currentTabsEl = document.getElementById('profile-tabs');
+          if (currentTabsEl) currentTabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+
+          // Highlight clicked stat
+          statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.remove('profile-stat-active'));
+          stat.classList.add('profile-stat-active');
+
+          // Show list in posts area
+          postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+          if (tabName === 'followers') {
+            await this._loadProfileFollowersWithActions(postsEl, client, account, user.id);
+          } else {
+            await this._loadProfileFollowingWithActions(postsEl, client, account, user.id);
+          }
+        });
       }
 
       // Follow relationship for other users
@@ -462,27 +466,18 @@ export const ProfileModalMixin = {
       this._renderProfileTab('notes', postsEl);
 
       // Tab click
-      newTabs.addEventListener('click', async (e) => {
+      newTabs.addEventListener('click', (e) => {
         const tab = e.target.closest('.profile-tab');
         if (!tab) return;
         const tabName = tab.dataset.profileTab;
         if (!tabName) return;
         newTabs.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-
-        if (tabName === 'followers' || tabName === 'following') {
-          // Show follower/following list with follow buttons for own profile
-          this._profileState.activeTab = tabName;
-          postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
-          if (tabName === 'followers') {
-            await this._loadProfileFollowersWithActions(postsEl, client, account, userId);
-          } else {
-            await this._loadProfileFollowingWithActions(postsEl, client, account, userId);
-          }
-        } else {
-          this._profileState.activeTab = tabName;
-          this._renderProfileTab(tabName, postsEl);
-        }
+        // Clear stat highlight when returning to a tab
+        const statsEl = document.getElementById('profile-stats');
+        if (statsEl) statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.remove('profile-stat-active'));
+        this._profileState.activeTab = tabName;
+        this._renderProfileTab(tabName, postsEl);
       });
 
       // Infinite scroll on the profile-scroll container
