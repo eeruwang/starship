@@ -544,9 +544,6 @@ export function renderPost(post) {
       <button class="post-action${post.bookmarked ? ' active' : ''}" data-action="bookmark" title="북마크">
         <span class="action-icon">${post.bookmarked ? iconBookmarkFill : iconBookmark}</span>
       </button>
-      ${post.isOwn && !post.rebloggedBy ? `<button class="post-action${post.pinned ? ' active' : ''}" data-action="pin" title="${post.pinned ? '고정 해제' : '프로필에 고정'}">
-        <span class="action-icon">${iconPin}</span>
-      </button>` : ''}
       <button class="post-action action-end" data-action="open" title="원본 열기">
         <span class="action-icon">${iconLink}</span>
       </button>
