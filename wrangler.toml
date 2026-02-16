@@ -34,7 +34,7 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["StreamRelay"]
+new_sqlite_classes = ["StreamRelay"]
 
 # R2 이미지 캐시 (아바타, 미디어, 이모지)
 [[r2_buckets]]
