@@ -134,7 +134,27 @@ export const ProfileModalMixin = {
       if (myAccount) {
         tabsEl.style.display = 'flex';
         postsEl.style.display = 'block';
+        // Add followers/following tabs for own profile
+        tabsEl.innerHTML = `
+          <button class="profile-tab active" data-profile-tab="notes">노트</button>
+          <button class="profile-tab" data-profile-tab="renotes">리노트</button>
+          <button class="profile-tab" data-profile-tab="replies">댓글</button>
+          <button class="profile-tab" data-profile-tab="followers">팔로워</button>
+          <button class="profile-tab" data-profile-tab="following">팔로잉</button>
+        `;
         this._loadProfileNotes(user.id, platform, effectiveAccountId, client, isMisskey, account);
+
+        // Make stats clickable to jump to followers/following tabs
+        const statsClickHandler = (e) => {
+          const stat = e.target.closest('[data-stat-tab]');
+          if (!stat) return;
+          const tabName = stat.dataset.statTab;
+          const tabBtn = tabsEl.querySelector(`[data-profile-tab="${tabName}"]`);
+          if (tabBtn) tabBtn.click();
+        };
+        statsEl.addEventListener('click', statsClickHandler);
+        // Add clickable style
+        statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.add('profile-stat-clickable'));
       }
 
       // Follow relationship for other users
@@ -228,8 +248,8 @@ export const ProfileModalMixin = {
     const following = user.followingCount ?? user.following_count ?? 0;
     const posts = user.notesCount ?? user.statuses_count ?? 0;
     statsEl.innerHTML = `
-      <span class="profile-stat"><strong>${followers}</strong> 팔로워</span>
-      <span class="profile-stat"><strong>${following}</strong> 팔로잉</span>
+      <span class="profile-stat profile-stat-followers" data-stat-tab="followers"><strong>${followers}</strong> 팔로워</span>
+      <span class="profile-stat profile-stat-following" data-stat-tab="following"><strong>${following}</strong> 팔로잉</span>
       <span class="profile-stat"><strong>${posts}</strong> ${isMisskey ? '노트' : '게시물'}</span>
     `;
 
@@ -442,15 +462,27 @@ export const ProfileModalMixin = {
       this._renderProfileTab('notes', postsEl);
 
       // Tab click
-      newTabs.addEventListener('click', (e) => {
+      newTabs.addEventListener('click', async (e) => {
         const tab = e.target.closest('.profile-tab');
         if (!tab) return;
         const tabName = tab.dataset.profileTab;
         if (!tabName) return;
         newTabs.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        this._profileState.activeTab = tabName;
-        this._renderProfileTab(tabName, postsEl);
+
+        if (tabName === 'followers' || tabName === 'following') {
+          // Show follower/following list with follow buttons for own profile
+          this._profileState.activeTab = tabName;
+          postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+          if (tabName === 'followers') {
+            await this._loadProfileFollowersWithActions(postsEl, client, account, userId);
+          } else {
+            await this._loadProfileFollowingWithActions(postsEl, client, account, userId);
+          }
+        } else {
+          this._profileState.activeTab = tabName;
+          this._renderProfileTab(tabName, postsEl);
+        }
       });
 
       // Infinite scroll on the profile-scroll container
@@ -982,6 +1014,125 @@ export const ProfileModalMixin = {
         card.addEventListener('click', () => {
           this.openProfileModal(user, account.platform, account.id);
         });
+        container.appendChild(card);
+      }
+    } catch (err) {
+      container.innerHTML = `<div class="profile-posts-empty">팔로잉 로딩 오류: ${err.message}</div>`;
+    }
+  },
+
+  _createUserListItemWithAction(user, account, client, isFollowing) {
+    const card = document.createElement('div');
+    card.className = 'user-list-item';
+
+    const infoArea = document.createElement('div');
+    infoArea.className = 'user-list-item-left';
+    infoArea.innerHTML = `
+      <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+      <div class="user-list-info">
+        <div class="user-list-name">${user.displayNameHtml || ''}</div>
+        <div class="user-list-acct">@${user.acct || user.username || ''}</div>
+      </div>
+    `;
+    infoArea.addEventListener('click', () => {
+      this.openProfileModal(user, account.platform, account.id);
+    });
+
+    const btn = document.createElement('button');
+    btn.className = isFollowing ? 'btn btn-small user-list-follow-btn following' : 'btn btn-small user-list-follow-btn';
+    btn.textContent = isFollowing ? '팔로잉' : '팔로우';
+
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      btn.disabled = true;
+      try {
+        const currentlyFollowing = btn.classList.contains('following');
+        if (currentlyFollowing) {
+          await client.unfollowUser(user.id);
+          btn.classList.remove('following');
+          btn.textContent = '팔로우';
+        } else {
+          await client.followUser(user.id);
+          btn.classList.add('following');
+          btn.textContent = '팔로잉';
+        }
+      } catch (err) {
+        this.showToast('팔로우 변경 실패: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    card.appendChild(infoArea);
+    card.appendChild(btn);
+    return card;
+  },
+
+  async _loadProfileFollowersWithActions(container, client, account, userId) {
+    container.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+    try {
+      let users;
+      const isMisskey = account.platform !== 'mastodon';
+      if (isMisskey) {
+        const items = await client.getFollowers(userId, 40);
+        users = items.map(f => client.normalizeUser(f.follower || f));
+      } else {
+        const items = await client.getFollowers(userId, 40);
+        users = items.map(u => client.normalizeUser(u));
+      }
+      container.innerHTML = '';
+      if (users.length === 0) {
+        container.innerHTML = '<div class="profile-posts-empty">팔로워가 없습니다.</div>';
+        return;
+      }
+
+      // Batch-fetch follow relationships
+      let followingSet = new Set();
+      try {
+        if (isMisskey) {
+          for (const user of users) {
+            const rel = await client.getRelation(user.id);
+            if (rel?.isFollowing) followingSet.add(user.id);
+          }
+        } else {
+          const ids = users.map(u => u.id);
+          const rels = await client.getRelationships(ids);
+          for (const r of rels) {
+            if (r.following) followingSet.add(r.id);
+          }
+        }
+      } catch (_) { /* proceed without relation info */ }
+
+      for (const user of users) {
+        const card = this._createUserListItemWithAction(user, account, client, followingSet.has(user.id));
+        container.appendChild(card);
+      }
+    } catch (err) {
+      container.innerHTML = `<div class="profile-posts-empty">팔로워 로딩 오류: ${err.message}</div>`;
+    }
+  },
+
+  async _loadProfileFollowingWithActions(container, client, account, userId) {
+    container.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+    try {
+      let users;
+      const isMisskey = account.platform !== 'mastodon';
+      if (isMisskey) {
+        const items = await client.getFollowing(userId, 40);
+        users = items.map(f => client.normalizeUser(f.followee || f));
+      } else {
+        const items = await client.getFollowing(userId, 40);
+        users = items.map(u => client.normalizeUser(u));
+      }
+      container.innerHTML = '';
+      if (users.length === 0) {
+        container.innerHTML = '<div class="profile-posts-empty">팔로잉이 없습니다.</div>';
+        return;
+      }
+
+      // All users in following list are followed by me
+      for (const user of users) {
+        const card = this._createUserListItemWithAction(user, account, client, true);
         container.appendChild(card);
       }
     } catch (err) {

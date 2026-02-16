@@ -499,6 +499,14 @@ textarea.input {
   font-size: 1rem;
   margin-bottom: 1px;
 }
+.profile-stat-clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.profile-stat-clickable:hover {
+  background: var(--bg-hover);
+}
 .profile-fields {
   margin-top: 0.75rem;
   border-radius: var(--radius);
@@ -1412,6 +1420,39 @@ textarea.input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.user-list-item-left {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.user-list-follow-btn {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-primary);
+  background: var(--accent-primary);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.user-list-follow-btn.following {
+  background: transparent;
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+.user-list-follow-btn.following:hover {
+  border-color: #e74c3c;
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.08);
+}
+.user-list-follow-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ===== Profile Mute/Block Buttons ===== */
