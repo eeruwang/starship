@@ -10,6 +10,8 @@ import {
   iconHeartSmall, iconStarSmall,
   iconReplyNotif, iconBoostNotif, iconMegaphone,
   iconVisPublic, iconVisHome, iconVisFollowers, iconVisDirect,
+  iconBookmark, iconBookmarkFill, iconPin,
+  iconCheckCircle, iconXCircle,
   getNotifIcon,
 } from './icons.js';
 
@@ -313,6 +315,55 @@ function renderMediaGridHtml(mediaItems, isSensitive, extraClass = '') {
   return html;
 }
 
+function renderPollHtml(poll, postId, platform) {
+  if (!poll || !poll.options) return '';
+  const totalVotes = poll.votesCount || poll.options.reduce((s, o) => s + (o.votesCount || 0), 0);
+  const hasVoted = poll.voted;
+  const isExpired = poll.expired;
+  const canVote = !hasVoted && !isExpired;
+
+  let html = `<div class="post-poll" data-poll-id="${escapeHtml(poll.id)}" data-post-id="${escapeHtml(postId)}" data-platform="${escapeHtml(platform)}" data-multiple="${poll.multiple ? 'true' : 'false'}">`;
+
+  for (let i = 0; i < poll.options.length; i++) {
+    const opt = poll.options[i];
+    const pct = totalVotes > 0 ? Math.round((opt.votesCount / totalVotes) * 100) : 0;
+    const isOwn = poll.ownVotes && poll.ownVotes.includes(i);
+    const inputType = poll.multiple ? 'checkbox' : 'radio';
+
+    if (canVote) {
+      html += `<label class="poll-option poll-option-votable">
+        <input type="${inputType}" name="poll-${escapeHtml(postId)}" value="${i}" class="poll-input">
+        <span class="poll-option-text">${escapeHtml(opt.title)}</span>
+      </label>`;
+    } else {
+      html += `<div class="poll-option poll-option-result${isOwn ? ' poll-own-vote' : ''}">
+        <div class="poll-bar" style="width:${pct}%"></div>
+        <span class="poll-option-text">${escapeHtml(opt.title)}</span>
+        <span class="poll-pct">${pct}%</span>
+      </div>`;
+    }
+  }
+
+  if (canVote) {
+    html += `<button class="poll-vote-btn btn btn-small" data-action="vote-poll">투표</button>`;
+  }
+
+  html += `<div class="poll-info">${totalVotes}표`;
+  if (poll.expiresAt) {
+    if (isExpired) {
+      html += ' · 종료됨';
+    } else {
+      const remaining = poll.expiresAt - new Date();
+      if (remaining > 86400000) html += ` · ${Math.floor(remaining / 86400000)}일 남음`;
+      else if (remaining > 3600000) html += ` · ${Math.floor(remaining / 3600000)}시간 남음`;
+      else if (remaining > 60000) html += ` · ${Math.floor(remaining / 60000)}분 남음`;
+      else html += ' · 곧 종료';
+    }
+  }
+  html += '</div></div>';
+  return html;
+}
+
 function renderReplyContextHtml(displayPost, ctxId) {
   if (displayPost.replyTo) {
     const replyAuthor = displayPost.replyTo.author;
@@ -365,6 +416,11 @@ export function renderPost(post) {
   }
 
   let html = '';
+
+  // Pin indicator
+  if (post.pinned) {
+    html += `<div class="pin-indicator"><span class="icon-inline">${iconPin}</span> 프로필에 고정됨</div>`;
+  }
 
   // Renote / Boost indicator
   if (post.rebloggedBy) {
@@ -426,6 +482,11 @@ export function renderPost(post) {
     html += renderMediaGridHtml(displayPost.media, displayPost.sensitive || displayPost.media.some(m => m.sensitive));
   }
 
+  // Poll
+  if (displayPost.poll) {
+    html += renderPollHtml(displayPost.poll, post.id, post.platform);
+  }
+
   // Link card — suppress fedi link card when reply/quote context already shows the referenced post
   const suppressPostLinkCard = displayPost.linkCard?.url
     && isFediPostUrl(displayPost.linkCard.url)
@@ -479,6 +540,12 @@ export function renderPost(post) {
         <span class="action-icon">${iconEdit}</span>
       </button>` : ''}${post.isOwn ? `<button class="post-action action-delete" data-action="delete" title="삭제">
         <span class="action-icon">${iconTrash}</span>
+      </button>` : ''}
+      <button class="post-action${post.bookmarked ? ' active' : ''}" data-action="bookmark" title="북마크">
+        <span class="action-icon">${post.bookmarked ? iconBookmarkFill : iconBookmark}</span>
+      </button>
+      ${post.isOwn && !post.rebloggedBy ? `<button class="post-action${post.pinned ? ' active' : ''}" data-action="pin" title="${post.pinned ? '고정 해제' : '프로필에 고정'}">
+        <span class="action-icon">${iconPin}</span>
       </button>` : ''}
       <button class="post-action action-end" data-action="open" title="원본 열기">
         <span class="action-icon">${iconLink}</span>
@@ -581,6 +648,11 @@ export function renderNotification(notif) {
       html += renderQuotePost(displayPost.quotePost, 0);
     }
 
+    // Poll
+    if (displayPost.poll) {
+      html += renderPollHtml(displayPost.poll, notif.post?.id || notif.id, notif.platform);
+    }
+
     // Media
     if (displayPost.media && displayPost.media.length > 0) {
       html += renderMediaGridHtml(displayPost.media.slice(0, 4), displayPost.sensitive || displayPost.media.some(m => m.sensitive));
@@ -661,6 +733,14 @@ export function renderNotification(notif) {
     </div>
   `;
 
+  // Follow request: accept/reject buttons
+  if (notif.type === 'receiveFollowRequest' || notif.type === 'follow_request') {
+    html += `<div class="follow-request-actions">
+      <button class="btn btn-small btn-primary follow-req-btn" data-action="accept-follow" data-actor-id="${escapeHtml(notif.actor?.id || '')}" data-account-id="${escapeHtml(notif.accountId || '')}" data-platform="${escapeHtml(notif.platform)}">${iconCheckCircle} 수락</button>
+      <button class="btn btn-small btn-danger follow-req-btn" data-action="reject-follow" data-actor-id="${escapeHtml(notif.actor?.id || '')}" data-account-id="${escapeHtml(notif.accountId || '')}" data-platform="${escapeHtml(notif.platform)}">${iconXCircle} 거절</button>
+    </div>`;
+  }
+
   // Reply context (full content + CW toggle) for reply/mention/quote notifications
   if (['reply', 'quote'].includes(notif.type) && displayPost) {
     if (displayPost.replyTo) {
@@ -718,6 +798,11 @@ export function renderNotification(notif) {
     // Quote post (embedded)
     if (displayPost.quotePost) {
       html += renderQuotePost(displayPost.quotePost, 0);
+    }
+
+    // Poll
+    if (displayPost.poll) {
+      html += renderPollHtml(displayPost.poll, displayPost.id, notif.platform);
     }
 
     // Media grid with sensitive overlay
@@ -856,7 +941,7 @@ export function renderLoadingText(message = '불러오는 중...') {
 }
 
 // Export icons for use in main.js column headers
-export { iconRefresh, iconClose, iconImage };
+export { iconRefresh, iconClose, iconImage, renderPollHtml };
 
 /** Build inner HTML for the .post-reactions section */
 export function buildReactionsHtml(displayPost, wrapperPost) {

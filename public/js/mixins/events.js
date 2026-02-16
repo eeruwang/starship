@@ -240,10 +240,38 @@ export const EventsMixin = {
         this.handlePostAction('quote', postId, platform, accountId, btn);
       } else if (action === 'reaction') {
         this.handlePostAction('reaction', postId, platform, accountId, btn);
+      } else if (action === 'bookmark') {
+        this.handlePostAction('bookmark', postId, platform, accountId, btn);
+      } else if (action === 'pin') {
+        this.handlePostAction('pin', postId, platform, accountId, btn);
       } else if (action === 'edit') {
         this.openEditModal(postId, platform, accountId);
       } else if (action === 'delete') {
         this.handleDeletePost(postId, platform, accountId, btn);
+      }
+    });
+
+    // Poll vote button
+    document.addEventListener('click', (e) => {
+      const voteBtn = e.target.closest('.poll-vote-btn');
+      if (!voteBtn) return;
+      e.stopPropagation();
+      const pollEl = voteBtn.closest('.post-poll');
+      if (pollEl) this.handleVotePoll(pollEl);
+    });
+
+    // Follow request accept/reject buttons
+    document.addEventListener('click', (e) => {
+      const reqBtn = e.target.closest('.follow-req-btn');
+      if (!reqBtn) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const action = reqBtn.dataset.action;
+      const actorId = reqBtn.dataset.actorId;
+      const accountId = reqBtn.dataset.accountId;
+      const platform = reqBtn.dataset.platform;
+      if (action && actorId && accountId) {
+        this.handleFollowRequest(action, actorId, accountId, platform, reqBtn);
       }
     });
 

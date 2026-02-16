@@ -47,6 +47,10 @@ export const DataLoadingMixin = {
           if (account) {
             loadPromise = this.loadTimelineForColumn(content, [account]);
           }
+        } else if (type === 'bookmarks') {
+          loadPromise = this.loadBookmarksForColumn(content, this.store.getVisible());
+        } else if (type === 'dm') {
+          loadPromise = this.loadConversationsForColumn(content, this.store.getVisible());
         } else if (type === 'thread') {
           loadPromise = this.loadThreadForColumn(col);
         }
@@ -1358,6 +1362,138 @@ export const DataLoadingMixin = {
       pagination.loading = false;
       const spinner = container.querySelector('.load-more-spinner');
       if (spinner) spinner.remove();
+    }
+  },
+
+  async loadBookmarksForColumn(container, accounts) {
+    if (accounts.length === 0) {
+      container.innerHTML = '<div class="loading-text">북마크를 표시할 계정이 없습니다.</div>';
+      return;
+    }
+
+    const isFirstLoad = container.querySelectorAll('.post-card').length === 0;
+    if (isFirstLoad) {
+      container.innerHTML = '';
+      container.appendChild(renderLoading());
+    }
+
+    try {
+      const allPosts = [];
+      const results = await Promise.allSettled(
+        accounts.map(async (account) => {
+          const client = this.store.getClient(account.id);
+          if (!client) return [];
+          try {
+            let items;
+            if (account.platform === 'mastodon') {
+              items = await client.getBookmarks(30);
+            } else {
+              const favs = await client.getBookmarks(30);
+              items = favs.map(f => f.note || f);
+            }
+            return items.map(item => this._addPostMeta(client.normalizePost(item), account));
+          } catch (err) {
+            console.error(`Bookmarks error for ${account.label}:`, err);
+            return [];
+          }
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          allPosts.push(...result.value);
+        }
+      }
+
+      allPosts.sort((a, b) => b.createdAt - a.createdAt);
+
+      if (accounts.length > 1) {
+        const deduped = this._deduplicatePosts(allPosts);
+        allPosts.length = 0;
+        allPosts.push(...deduped);
+      }
+
+      this.cachePosts(allPosts);
+
+      container.innerHTML = '';
+      if (allPosts.length === 0) {
+        container.appendChild(renderLoadingText('북마크가 없습니다.'));
+        return;
+      }
+
+      for (const post of allPosts) {
+        post.bookmarked = true;
+        container.appendChild(renderPost(post));
+      }
+      this.enrichLinkCards(container);
+    } catch (err) {
+      container.innerHTML = `<div class="loading-text">북마크 로딩 오류: ${escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  async loadConversationsForColumn(container, accounts) {
+    if (accounts.length === 0) {
+      container.innerHTML = '<div class="loading-text">DM을 표시할 계정이 없습니다.</div>';
+      return;
+    }
+
+    const isFirstLoad = container.querySelectorAll('.dm-card, .post-card').length === 0;
+    if (isFirstLoad) {
+      container.innerHTML = '';
+      container.appendChild(renderLoading());
+    }
+
+    try {
+      const allConversations = [];
+      const results = await Promise.allSettled(
+        accounts.map(async (account) => {
+          const client = this.store.getClient(account.id);
+          if (!client) return [];
+          try {
+            if (account.platform === 'mastodon') {
+              const convos = await client.getConversations(20);
+              return convos.map(conv => {
+                const lastStatus = conv.last_status;
+                if (!lastStatus) return null;
+                const post = client.normalizePost(lastStatus);
+                post.accountId = account.id;
+                post.accountPlatform = account.platform;
+                post.themeColor = this._accountColor(account);
+                post._conversationId = conv.id;
+                post._conversationAccounts = conv.accounts || [];
+                return post;
+              }).filter(Boolean);
+            }
+            // Misskey doesn't have a direct conversations API
+            return [];
+          } catch (err) {
+            console.error(`Conversations error for ${account.label}:`, err);
+            return [];
+          }
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          allConversations.push(...result.value);
+        }
+      }
+
+      allConversations.sort((a, b) => b.createdAt - a.createdAt);
+      this.cachePosts(allConversations);
+
+      container.innerHTML = '';
+      if (allConversations.length === 0) {
+        container.appendChild(renderLoadingText('다이렉트 메시지가 없습니다.'));
+        return;
+      }
+
+      for (const post of allConversations) {
+        container.appendChild(renderPost(post));
+      }
+      this.enrichLinkCards(container);
+    } catch (err) {
+      container.innerHTML = `<div class="loading-text">DM 로딩 오류: ${escapeHtml(err.message)}</div>`;
     }
   },
 

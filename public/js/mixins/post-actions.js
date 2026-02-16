@@ -24,6 +24,47 @@ export const PostActionsMixin = {
     const isThreadContext = (column?.dataset.columnType === 'thread') ||
                             !!btnElement.closest('#modal-thread');
 
+    // If the card is inside an account-specific column, use that account directly
+    const columnAccountId = column?.dataset.columnType === 'account' ? column.dataset.accountId : null;
+
+    // Bookmark: toggle directly (no account picker needed for single-account)
+    if (action === 'bookmark') {
+      if (columnAccountId) {
+        await this.executeBookmark(postId, platform, columnAccountId, btnElement);
+        return;
+      }
+      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      let relevantAccounts = this._getRelevantAccounts(cachedPost, allAccounts);
+      if (relevantAccounts.length === 1) {
+        await this.executeBookmark(postId, platform, relevantAccounts[0].id, btnElement);
+        return;
+      }
+      this.showAccountPicker(btnElement, relevantAccounts, async (selectedAccountId) => {
+        await this.executeBookmark(postId, platform, selectedAccountId, btnElement);
+      });
+      return;
+    }
+
+    // Pin: own post only
+    if (action === 'pin') {
+      if (columnAccountId) {
+        await this.executePin(postId, platform, columnAccountId, btnElement);
+        return;
+      }
+      const cachedPost = this.postCache.get(`${platform}:${postId}`);
+      const ownerAccountId = cachedPost?.accountId;
+      if (ownerAccountId) {
+        await this.executePin(postId, platform, ownerAccountId, btnElement);
+      }
+      return;
+    }
+
+    // Boosted-by: show list
+    if (action === 'boosted-by') {
+      await this.showBoostedByList(postId, platform, accountId, btnElement);
+      return;
+    }
+
     // Reply/Quote: open compose modal
     if (action === 'reply') {
       if (isThreadContext) {
@@ -51,8 +92,6 @@ export const PostActionsMixin = {
       return;
     }
 
-    // If the card is inside an account-specific column, use that account directly
-    const columnAccountId = column?.dataset.columnType === 'account' ? column.dataset.accountId : null;
     if (columnAccountId) {
       await this.executePostAction(action, postId, platform, columnAccountId, btnElement);
       return;
@@ -1330,6 +1369,240 @@ export const PostActionsMixin = {
     }
     html += '</div>';
     return html;
+  },
+
+  async executeBookmark(postId, platform, accountId, btnElement) {
+    const client = this.store.getClient(accountId);
+    if (!client) return;
+    const account = this.store.getById(accountId);
+    if (!account) return;
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    const isBookmarked = cachedPost?.bookmarked;
+
+    // Optimistic update
+    if (cachedPost) {
+      cachedPost.bookmarked = !isBookmarked;
+      this._rerenderCachedPost(postId, platform);
+    }
+    btnElement.classList.toggle('active', !isBookmarked);
+
+    try {
+      if (account.platform === 'mastodon') {
+        if (isBookmarked) {
+          await client.unbookmark(postId);
+        } else {
+          await client.bookmark(postId);
+        }
+      } else {
+        if (isBookmarked) {
+          await client.removeBookmark(postId);
+        } else {
+          await client.addBookmark(postId);
+        }
+      }
+      this.showToast(isBookmarked ? '북마크 해제됨' : '북마크에 추가됨', 'info');
+    } catch (err) {
+      // Rollback
+      if (cachedPost) {
+        cachedPost.bookmarked = isBookmarked;
+        this._rerenderCachedPost(postId, platform);
+      }
+      btnElement.classList.toggle('active', !!isBookmarked);
+      this.showToast('북마크 실패: ' + err.message);
+    }
+  },
+
+  async executePin(postId, platform, accountId, btnElement) {
+    const client = this.store.getClient(accountId);
+    if (!client) return;
+    const account = this.store.getById(accountId);
+    if (!account) return;
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    const isPinned = cachedPost?.pinned;
+
+    btnElement.classList.add('processing');
+    try {
+      if (account.platform === 'mastodon') {
+        if (isPinned) {
+          await client.unpinStatus(postId);
+        } else {
+          await client.pinStatus(postId);
+        }
+      } else {
+        if (isPinned) {
+          await client.unpinNote(postId);
+        } else {
+          await client.pinNote(postId);
+        }
+      }
+      if (cachedPost) {
+        cachedPost.pinned = !isPinned;
+        this._rerenderCachedPost(postId, platform);
+      }
+      this.showToast(isPinned ? '고정 해제됨' : '프로필에 고정됨', 'info');
+    } catch (err) {
+      this.showToast('고정 실패: ' + err.message);
+    }
+    btnElement.classList.remove('processing');
+  },
+
+  async showBoostedByList(postId, platform, accountId, btnElement) {
+    const client = this.store.getClient(accountId);
+    if (!client) return;
+    const account = this.store.getById(accountId);
+    if (!account) return;
+
+    // Use the cached post to find the original post ID for reblogs
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    const displayPost = cachedPost?.reblog || cachedPost;
+    const targetId = displayPost?.id || postId;
+
+    try {
+      let users;
+      if (account.platform === 'mastodon') {
+        const rawUsers = await client.getRebloggedBy(targetId);
+        users = rawUsers.map(u => ({
+          displayNameHtml: client.normalizeUser(u).displayNameHtml,
+          username: u.acct || u.username,
+          avatarUrl: u.avatar || '',
+        }));
+      } else {
+        // Misskey doesn't have a direct "renoted by" API easily accessible,
+        // so we skip for now
+        this.showToast('미스키에서는 리노트한 사용자 목록을 지원하지 않습니다.', 'info');
+        return;
+      }
+
+      if (users.length === 0) {
+        this.showToast('부스트한 사용자가 없습니다.', 'info');
+        return;
+      }
+
+      // Reuse reaction users popup style
+      this.closeReactionPopup();
+      const popup = document.createElement('div');
+      popup.className = 'reaction-users-popup';
+      popup.id = 'reaction-users-popup';
+      popup.innerHTML = this._renderReactionUsersHtml(users);
+
+      const rect = btnElement.getBoundingClientRect();
+      popup.style.left = `${rect.left}px`;
+      popup.style.top = `${rect.bottom + 4}px`;
+      document.body.appendChild(popup);
+
+      // Reposition if off-screen
+      const pw = popup.offsetWidth || 180;
+      if (rect.left + pw > window.innerWidth) {
+        popup.style.left = `${window.innerWidth - pw - 8}px`;
+      }
+
+      setTimeout(() => {
+        const handler = (e) => {
+          if (!popup.contains(e.target) && !btnElement.contains(e.target)) {
+            this.closeReactionPopup();
+          }
+        };
+        document.addEventListener('click', handler);
+        this._reactionPopupClose = handler;
+      }, 0);
+    } catch (err) {
+      this.showToast('부스트 목록 로딩 실패: ' + err.message);
+    }
+  },
+
+  async handleVotePoll(pollElement) {
+    const postId = pollElement.dataset.postId;
+    const platform = pollElement.dataset.platform;
+    const pollId = pollElement.dataset.pollId;
+    const isMultiple = pollElement.dataset.multiple === 'true';
+
+    const selected = [...pollElement.querySelectorAll('.poll-input:checked')].map(el => parseInt(el.value));
+    if (selected.length === 0) {
+      this.showToast('투표할 항목을 선택하세요.', 'info');
+      return;
+    }
+
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    const accountId = cachedPost?.accountId;
+    if (!accountId) return;
+
+    const client = this.store.getClient(accountId);
+    const account = this.store.getById(accountId);
+    if (!client || !account) return;
+
+    const voteBtn = pollElement.querySelector('.poll-vote-btn');
+    if (voteBtn) {
+      voteBtn.disabled = true;
+      voteBtn.textContent = '투표 중...';
+    }
+
+    try {
+      if (account.platform === 'mastodon') {
+        await client.votePoll(pollId, selected);
+      } else {
+        // Misskey: vote one at a time
+        for (const choice of selected) {
+          await client.votePoll(postId, choice);
+        }
+      }
+
+      // Update cached post poll state
+      if (cachedPost) {
+        const dp = cachedPost.reblog || cachedPost;
+        if (dp.poll) {
+          dp.poll.voted = true;
+          dp.poll.ownVotes = selected;
+          for (const idx of selected) {
+            if (dp.poll.options[idx]) {
+              dp.poll.options[idx].votesCount = (dp.poll.options[idx].votesCount || 0) + 1;
+            }
+          }
+          dp.poll.votesCount = (dp.poll.votesCount || 0) + selected.length;
+        }
+        this._rerenderCachedPost(postId, platform);
+      }
+      this.showToast('투표 완료!', 'info');
+    } catch (err) {
+      this.showToast('투표 실패: ' + err.message);
+      if (voteBtn) {
+        voteBtn.disabled = false;
+        voteBtn.textContent = '투표';
+      }
+    }
+  },
+
+  async handleFollowRequest(action, actorId, accountId, platform, btnElement) {
+    const client = this.store.getClient(accountId);
+    if (!client) return;
+    const account = this.store.getById(accountId);
+    if (!account) return;
+
+    const container = btnElement.closest('.follow-request-actions');
+    if (container) {
+      container.innerHTML = '<span class="follow-req-processing">처리 중...</span>';
+    }
+
+    try {
+      if (action === 'accept-follow') {
+        if (account.platform === 'mastodon') {
+          await client.acceptFollowRequest(actorId);
+        } else {
+          await client.acceptFollowRequest(actorId);
+        }
+        if (container) container.innerHTML = '<span class="follow-req-done">✓ 수락됨</span>';
+      } else {
+        if (account.platform === 'mastodon') {
+          await client.rejectFollowRequest(actorId);
+        } else {
+          await client.rejectFollowRequest(actorId);
+        }
+        if (container) container.innerHTML = '<span class="follow-req-done">✗ 거절됨</span>';
+      }
+    } catch (err) {
+      if (container) {
+        container.innerHTML = `<span class="follow-req-error">실패: ${escapeHtml(err.message)}</span>`;
+      }
+    }
   },
 
   closeReactionPopup() {

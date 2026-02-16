@@ -70,6 +70,20 @@ export const ColumnsMixin = {
     notifToggle.textContent = '알림';
     this.toggleBar.appendChild(notifToggle);
 
+    // "북마크" toggle
+    const bmToggle = document.createElement('button');
+    bmToggle.className = `col-toggle fixed ${this.columnState.bookmarks ? 'active' : ''}`;
+    bmToggle.dataset.toggleType = 'bookmarks';
+    bmToggle.textContent = '북마크';
+    this.toggleBar.appendChild(bmToggle);
+
+    // "DM" toggle
+    const dmToggle = document.createElement('button');
+    dmToggle.className = `col-toggle fixed ${this.columnState.dm ? 'active' : ''}`;
+    dmToggle.dataset.toggleType = 'dm';
+    dmToggle.textContent = 'DM';
+    this.toggleBar.appendChild(dmToggle);
+
     if (accounts.length > 0) {
       // Separator
       const sep = document.createElement('div');
@@ -128,6 +142,18 @@ export const ColumnsMixin = {
       this.saveColumnState();
       this.renderToggleBar();
       this.toggleColumnSmooth('notifications', this.columnState.notifications);
+    } else if (type === 'bookmarks') {
+      this.columnState.bookmarks = !this.columnState.bookmarks;
+      this.updateColumnOrder('bookmarks', this.columnState.bookmarks);
+      this.saveColumnState();
+      this.renderToggleBar();
+      this.toggleColumnSmooth('bookmarks', this.columnState.bookmarks);
+    } else if (type === 'dm') {
+      this.columnState.dm = !this.columnState.dm;
+      this.updateColumnOrder('dm', this.columnState.dm);
+      this.saveColumnState();
+      this.renderToggleBar();
+      this.toggleColumnSmooth('dm', this.columnState.dm);
     } else if (type === 'account') {
       const accountId = toggle.dataset.accountId;
       this.columnState.accounts[accountId] = !this.columnState.accounts[accountId];
@@ -191,6 +217,10 @@ export const ColumnsMixin = {
       return this.createColumn('전체', 'all', null);
     } else if (type === 'notifications') {
       return this.createColumn('알림', 'notifications', null);
+    } else if (type === 'bookmarks') {
+      return this.createColumn('북마크', 'bookmarks', null);
+    } else if (type === 'dm') {
+      return this.createColumn('DM', 'dm', null);
     } else if (type === 'account' && accountId) {
       const account = this.store.getById(accountId);
       if (!account) return null;
@@ -221,6 +251,10 @@ export const ColumnsMixin = {
       if (account) {
         this.loadTimelineForColumn(content, [account]);
       }
+    } else if (type === 'bookmarks') {
+      this.loadBookmarksForColumn(content, accounts);
+    } else if (type === 'dm') {
+      this.loadConversationsForColumn(content, accounts);
     } else if (type === 'thread') {
       this.loadThreadForColumn(col);
     }
@@ -285,6 +319,14 @@ export const ColumnsMixin = {
         const col = this.createColumn('알림', 'notifications', null);
         this.columnsContainer.appendChild(col);
         this.loadNotificationsForColumn(col.querySelector('.column-content'), visibleAccounts);
+      } else if (key === 'bookmarks' && this.columnState.bookmarks) {
+        const col = this.createColumn('북마크', 'bookmarks', null);
+        this.columnsContainer.appendChild(col);
+        this.loadBookmarksForColumn(col.querySelector('.column-content'), visibleAccounts);
+      } else if (key === 'dm' && this.columnState.dm) {
+        const col = this.createColumn('DM', 'dm', null);
+        this.columnsContainer.appendChild(col);
+        this.loadConversationsForColumn(col.querySelector('.column-content'), visibleAccounts);
       } else if (key.startsWith('account:')) {
         const accountId = key.slice('account:'.length);
         if (this.columnState.accounts[accountId]) {
@@ -414,6 +456,10 @@ export const ColumnsMixin = {
             if (account) {
               await this.loadTimelineForColumn(content, [account]);
             }
+          } else if (colType === 'bookmarks') {
+            await this.loadBookmarksForColumn(content, this.store.getVisible());
+          } else if (colType === 'dm') {
+            await this.loadConversationsForColumn(content, this.store.getVisible());
           } else if (colType === 'thread') {
             await this.loadThreadForColumn(col);
           }

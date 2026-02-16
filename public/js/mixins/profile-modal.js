@@ -135,6 +135,11 @@ export const ProfileModalMixin = {
       // Follow relationship for other users
       if (!myAccount) {
         this._loadFollowRelation(user, platform, effectiveAccountId, client, isMisskey, instanceUrl, actionsEl);
+
+        // Show tabs and posts for other users' profiles
+        tabsEl.style.display = 'flex';
+        postsEl.style.display = 'block';
+        this._loadOtherProfileTabs(user.id, platform, effectiveAccountId, client, isMisskey, account, tabsEl, postsEl);
       }
 
       // Edit handlers
@@ -575,19 +580,22 @@ export const ProfileModalMixin = {
     try {
       let isFollowing = false;
       let isFollowedBy = false;
+      let relation = null;
 
       if (knownState) {
         isFollowing = knownState.isFollowing;
         isFollowedBy = knownState.isFollowedBy;
+        relation = knownState.relation || null;
       } else if (isMisskey) {
-        const rel = await client.getRelation(user.id);
-        isFollowing = !!rel?.isFollowing;
-        isFollowedBy = !!rel?.isFollowed;
+        relation = await client.getRelation(user.id);
+        isFollowing = !!relation?.isFollowing;
+        isFollowedBy = !!relation?.isFollowed;
       } else {
         const rels = await client.getRelationships([user.id]);
         if (rels && rels.length > 0) {
-          isFollowing = !!rels[0].following;
-          isFollowedBy = !!rels[0].followed_by;
+          relation = rels[0];
+          isFollowing = !!relation.following;
+          isFollowedBy = !!relation.followed_by;
         }
       }
 
@@ -641,7 +649,7 @@ export const ProfileModalMixin = {
           }
           // Optimistic UI update — pass known state to skip API re-fetch
           this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl,
-            { isFollowing, isFollowedBy });
+            { isFollowing, isFollowedBy, relation });
         } catch (err) {
           this.showToast('팔로우 처리 실패: ' + err.message);
         } finally {
@@ -650,8 +658,260 @@ export const ProfileModalMixin = {
       });
 
       actionsEl.appendChild(followBtn);
+
+      // Mute/Block buttons
+      // Remove existing mute/block buttons before re-adding
+      const existingMuteBtn = actionsEl.querySelector('.btn-profile-mute');
+      if (existingMuteBtn) existingMuteBtn.remove();
+      const existingBlockBtn = actionsEl.querySelector('.btn-profile-block');
+      if (existingBlockBtn) existingBlockBtn.remove();
+
+      const isMuting = isMisskey ? !!relation?.isMuting : !!relation?.muting;
+      const isBlocking = isMisskey ? !!relation?.isBlocking : !!relation?.blocking;
+
+      const muteBtn = document.createElement('button');
+      muteBtn.className = 'btn btn-small btn-secondary btn-profile-mute';
+      muteBtn.textContent = isMuting ? '뮤트 해제' : '뮤트';
+      muteBtn.addEventListener('click', async () => {
+        muteBtn.disabled = true;
+        try {
+          const currentlyMuting = isMisskey ? !!relation?.isMuting : !!relation?.muting;
+          if (isMisskey) {
+            currentlyMuting ? await client.unmuteUser(user.id) : await client.muteUser(user.id);
+            if (relation) relation.isMuting = !currentlyMuting;
+          } else {
+            currentlyMuting ? await client.unmuteAccount(user.id) : await client.muteAccount(user.id);
+            if (relation) relation.muting = !currentlyMuting;
+          }
+          muteBtn.textContent = (isMisskey ? relation?.isMuting : relation?.muting) ? '뮤트 해제' : '뮤트';
+        } catch (err) {
+          this.showToast('뮤트 실패: ' + err.message);
+        } finally {
+          muteBtn.disabled = false;
+        }
+      });
+
+      const blockBtn = document.createElement('button');
+      blockBtn.className = 'btn btn-small btn-danger btn-profile-block';
+      blockBtn.textContent = isBlocking ? '차단 해제' : '차단';
+      blockBtn.addEventListener('click', async () => {
+        const currentlyBlocking = isMisskey ? !!relation?.isBlocking : !!relation?.blocking;
+        if (!currentlyBlocking && !confirm('이 사용자를 차단하시겠습니까?')) return;
+        blockBtn.disabled = true;
+        try {
+          if (isMisskey) {
+            currentlyBlocking ? await client.unblockUser(user.id) : await client.blockUser(user.id);
+            if (relation) relation.isBlocking = !currentlyBlocking;
+          } else {
+            currentlyBlocking ? await client.unblockAccount(user.id) : await client.blockAccount(user.id);
+            if (relation) relation.blocking = !currentlyBlocking;
+          }
+          blockBtn.textContent = (isMisskey ? relation?.isBlocking : relation?.blocking) ? '차단 해제' : '차단';
+        } catch (err) {
+          this.showToast('차단 실패: ' + err.message);
+        } finally {
+          blockBtn.disabled = false;
+        }
+      });
+
+      actionsEl.appendChild(muteBtn);
+      actionsEl.appendChild(blockBtn);
     } catch (err) {
       console.error('Failed to load follow relation:', err);
+    }
+  },
+
+  async _loadOtherProfileTabs(userId, platform, accountId, client, isMisskey, account, tabsEl, postsEl) {
+    // Replace default tab buttons with Posts/Pinned/Followers/Following
+    tabsEl.innerHTML = `
+      <button class="profile-tab active" data-profile-tab="posts">게시물</button>
+      <button class="profile-tab" data-profile-tab="pinned">고정됨</button>
+      <button class="profile-tab" data-profile-tab="followers">팔로워</button>
+      <button class="profile-tab" data-profile-tab="following">팔로잉</button>
+    `;
+
+    // Tab switching
+    tabsEl.addEventListener('click', async (e) => {
+      const tab = e.target.closest('.profile-tab');
+      if (!tab) return;
+      const tabName = tab.dataset.profileTab;
+      if (!tabName) return;
+      tabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+
+      try {
+        if (tabName === 'posts') {
+          await this._loadProfilePosts(postsEl, client, account, userId);
+        } else if (tabName === 'pinned') {
+          await this._loadProfilePinned(postsEl, client, account, userId);
+        } else if (tabName === 'followers') {
+          await this._loadProfileFollowers(postsEl, client, account, userId);
+        } else if (tabName === 'following') {
+          await this._loadProfileFollowing(postsEl, client, account, userId);
+        }
+      } catch (err) {
+        postsEl.innerHTML = `<div class="profile-posts-empty">로딩 오류: ${err.message}</div>`;
+      }
+    });
+
+    // Load default tab (posts)
+    await this._loadProfilePosts(postsEl, client, account, userId);
+  },
+
+  async _loadProfilePosts(container, client, account, userId) {
+    container.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+    try {
+      let posts;
+      if (account.platform === 'mastodon') {
+        const items = await client.getUserStatuses(userId, 20);
+        posts = items.map(s => {
+          const p = client.normalizePost(s);
+          p.accountId = account.id;
+          p.accountPlatform = account.platform;
+          p.themeColor = account.themeColor;
+          const ownerId = p.rebloggedBy ? p.rebloggedBy.id : p.author.id;
+          p.isOwn = String(ownerId) === String(account.profile?.id);
+          return p;
+        });
+      } else {
+        const items = await client.getUserNotes(userId, 20);
+        posts = items.map(n => {
+          const p = client.normalizePost(n);
+          p.accountId = account.id;
+          p.accountPlatform = account.platform;
+          p.themeColor = account.themeColor;
+          const ownerId = p.rebloggedBy ? p.rebloggedBy.id : p.author.id;
+          p.isOwn = String(ownerId) === String(account.profile?.id);
+          return p;
+        });
+      }
+      container.innerHTML = '';
+      if (posts.length === 0) {
+        container.innerHTML = '<div class="profile-posts-empty">게시물이 없습니다.</div>';
+        return;
+      }
+      for (const post of posts) {
+        if (this.postCache) this.postCache.set(`${post.platform}:${post.id}`, post);
+        container.appendChild(renderPost(post));
+      }
+      this.enrichLinkCards(container);
+    } catch (err) {
+      container.innerHTML = `<div class="profile-posts-empty">게시물 로딩 오류: ${err.message}</div>`;
+    }
+  },
+
+  async _loadProfilePinned(container, client, account, userId) {
+    container.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+    try {
+      let posts;
+      if (account.platform === 'mastodon') {
+        const items = await client.getPinnedStatuses(userId);
+        posts = items.map(s => {
+          const p = client.normalizePost(s);
+          p.accountId = account.id;
+          p.accountPlatform = account.platform;
+          p.themeColor = account.themeColor;
+          p.pinned = true;
+          p.isOwn = String(p.author.id) === String(account.profile?.id);
+          return p;
+        });
+      } else {
+        const items = await client.getPinnedNotes(userId);
+        posts = items.map(n => {
+          const p = client.normalizePost(n);
+          p.accountId = account.id;
+          p.accountPlatform = account.platform;
+          p.themeColor = account.themeColor;
+          p.pinned = true;
+          p.isOwn = String(p.author.id) === String(account.profile?.id);
+          return p;
+        });
+      }
+      container.innerHTML = '';
+      if (posts.length === 0) {
+        container.innerHTML = '<div class="profile-posts-empty">고정된 게시물이 없습니다.</div>';
+        return;
+      }
+      for (const post of posts) {
+        if (this.postCache) this.postCache.set(`${post.platform}:${post.id}`, post);
+        container.appendChild(renderPost(post));
+      }
+      this.enrichLinkCards(container);
+    } catch (err) {
+      container.innerHTML = `<div class="profile-posts-empty">고정 게시물 로딩 오류: ${err.message}</div>`;
+    }
+  },
+
+  async _loadProfileFollowers(container, client, account, userId) {
+    container.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+    try {
+      let users;
+      if (account.platform === 'mastodon') {
+        const items = await client.getFollowers(userId, 40);
+        users = items.map(u => client.normalizeUser(u));
+      } else {
+        const items = await client.getFollowers(userId, 40);
+        users = items.map(f => client.normalizeUser(f.follower || f));
+      }
+      container.innerHTML = '';
+      if (users.length === 0) {
+        container.innerHTML = '<div class="profile-posts-empty">팔로워가 없습니다.</div>';
+        return;
+      }
+      for (const user of users) {
+        const card = document.createElement('div');
+        card.className = 'user-list-item';
+        card.innerHTML = `
+          <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="user-list-info">
+            <div class="user-list-name">${user.displayNameHtml || ''}</div>
+            <div class="user-list-acct">@${user.acct || user.username || ''}</div>
+          </div>
+        `;
+        card.addEventListener('click', () => {
+          this.openProfileModal(user, account.platform, account.id);
+        });
+        container.appendChild(card);
+      }
+    } catch (err) {
+      container.innerHTML = `<div class="profile-posts-empty">팔로워 로딩 오류: ${err.message}</div>`;
+    }
+  },
+
+  async _loadProfileFollowing(container, client, account, userId) {
+    container.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+    try {
+      let users;
+      if (account.platform === 'mastodon') {
+        const items = await client.getFollowing(userId, 40);
+        users = items.map(u => client.normalizeUser(u));
+      } else {
+        const items = await client.getFollowing(userId, 40);
+        users = items.map(f => client.normalizeUser(f.followee || f));
+      }
+      container.innerHTML = '';
+      if (users.length === 0) {
+        container.innerHTML = '<div class="profile-posts-empty">팔로잉이 없습니다.</div>';
+        return;
+      }
+      for (const user of users) {
+        const card = document.createElement('div');
+        card.className = 'user-list-item';
+        card.innerHTML = `
+          <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="user-list-info">
+            <div class="user-list-name">${user.displayNameHtml || ''}</div>
+            <div class="user-list-acct">@${user.acct || user.username || ''}</div>
+          </div>
+        `;
+        card.addEventListener('click', () => {
+          this.openProfileModal(user, account.platform, account.id);
+        });
+        container.appendChild(card);
+      }
+    } catch (err) {
+      container.innerHTML = `<div class="profile-posts-empty">팔로잉 로딩 오류: ${err.message}</div>`;
     }
   },
 };
