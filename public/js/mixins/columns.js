@@ -41,6 +41,15 @@ export const ColumnsMixin = {
 
     this.renderToggleBar();
     this.renderColumns();
+
+    // Refresh account profiles in the background on initial load
+    // so follower counts and display names stay up to date
+    if (hasAccounts) {
+      this.store.refreshAllProfiles().then(() => {
+        this.renderToggleBar();
+        this._refreshColumnHeaders();
+      }).catch(() => {});
+    }
   },
 
   renderToggleBar() {

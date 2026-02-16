@@ -96,7 +96,13 @@ export const ProfileModalMixin = {
     this.openModal(modal);
 
     // Fetch full profile
-    const client = this.store.getClient(accountId);
+    // Check if this is my account early, so we can use own client for full data access
+    // (avoids ffVisibility restrictions when viewing own profile from another account's context)
+    const myAccount = this.store.getAll().find(a =>
+      String(a.profile?.id) === String(author.id) && a.platform === platform
+    );
+    const effectiveAccountId = myAccount ? myAccount.id : accountId;
+    const client = this.store.getClient(effectiveAccountId);
     if (!client) return;
 
     try {
@@ -108,11 +114,7 @@ export const ProfileModalMixin = {
         stickyAvatar, stickyName, stickyHandle, client,
       });
 
-      // Check if this is my account
-      const myAccount = this.store.getAll().find(a =>
-        String(a.profile?.id) === String(user.id) && a.platform === platform
-      );
-      const account = this.store.getById(accountId);
+      const account = this.store.getById(effectiveAccountId);
       const instanceUrl = account?.instanceUrl || '';
       const isMisskey = platform !== 'mastodon';
 
@@ -127,12 +129,12 @@ export const ProfileModalMixin = {
       if (myAccount) {
         tabsEl.style.display = 'flex';
         postsEl.style.display = 'block';
-        this._loadProfileNotes(user.id, platform, accountId, client, isMisskey, account);
+        this._loadProfileNotes(user.id, platform, effectiveAccountId, client, isMisskey, account);
       }
 
       // Follow relationship for other users
       if (!myAccount) {
-        this._loadFollowRelation(user, platform, accountId, client, isMisskey, instanceUrl, actionsEl);
+        this._loadFollowRelation(user, platform, effectiveAccountId, client, isMisskey, instanceUrl, actionsEl);
       }
 
       // Edit handlers
