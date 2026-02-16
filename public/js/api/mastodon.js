@@ -373,6 +373,101 @@ export class MastodonClient {
     });
   }
 
+  // === New API methods ===
+
+  async unbookmark(id) {
+    return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/unbookmark`);
+  }
+
+  async getBookmarks(limit = 20, maxId = null) {
+    let path = `/api/v1/bookmarks?limit=${limit}`;
+    if (maxId) path += `&max_id=${maxId}`;
+    return this.request('GET', path);
+  }
+
+  async pinStatus(id) {
+    return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/pin`);
+  }
+
+  async unpinStatus(id) {
+    return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/unpin`);
+  }
+
+  async votePoll(pollId, choices) {
+    return this.request('POST', `/api/v1/polls/${encodeURIComponent(pollId)}/votes`, { choices });
+  }
+
+  async muteAccount(userId) {
+    return this.request('POST', `/api/v1/accounts/${encodeURIComponent(userId)}/mute`);
+  }
+
+  async unmuteAccount(userId) {
+    return this.request('POST', `/api/v1/accounts/${encodeURIComponent(userId)}/unmute`);
+  }
+
+  async blockAccount(userId) {
+    return this.request('POST', `/api/v1/accounts/${encodeURIComponent(userId)}/block`);
+  }
+
+  async unblockAccount(userId) {
+    return this.request('POST', `/api/v1/accounts/${encodeURIComponent(userId)}/unblock`);
+  }
+
+  async searchAccounts(query, limit = 10) {
+    return this.request('GET', `/api/v2/search?q=${encodeURIComponent(query)}&type=accounts&limit=${limit}&resolve=true`);
+  }
+
+  async getFollowRequests(limit = 40) {
+    return this.request('GET', `/api/v1/follow_requests?limit=${limit}`);
+  }
+
+  async acceptFollowRequest(userId) {
+    return this.request('POST', `/api/v1/follow_requests/${encodeURIComponent(userId)}/authorize`);
+  }
+
+  async rejectFollowRequest(userId) {
+    return this.request('POST', `/api/v1/follow_requests/${encodeURIComponent(userId)}/reject`);
+  }
+
+  async getFollowers(userId, limit = 40, maxId = null) {
+    let path = `/api/v1/accounts/${encodeURIComponent(userId)}/followers?limit=${limit}`;
+    if (maxId) path += `&max_id=${maxId}`;
+    return this.request('GET', path);
+  }
+
+  async getFollowing(userId, limit = 40, maxId = null) {
+    let path = `/api/v1/accounts/${encodeURIComponent(userId)}/following?limit=${limit}`;
+    if (maxId) path += `&max_id=${maxId}`;
+    return this.request('GET', path);
+  }
+
+  async getRebloggedBy(id, limit = 40) {
+    return this.request('GET', `/api/v1/statuses/${encodeURIComponent(id)}/reblogged_by?limit=${limit}`);
+  }
+
+  async getConversations(limit = 20, maxId = null) {
+    let path = `/api/v1/conversations?limit=${limit}`;
+    if (maxId) path += `&max_id=${maxId}`;
+    return this.request('GET', path);
+  }
+
+  async getPublicTimeline(limit = 30, maxId = null, local = false) {
+    let path = `/api/v1/timelines/public?limit=${limit}`;
+    if (maxId) path += `&max_id=${maxId}`;
+    if (local) path += `&local=true`;
+    return this.request('GET', path);
+  }
+
+  async getHashtagTimeline(hashtag, limit = 30, maxId = null) {
+    let path = `/api/v1/timelines/tag/${encodeURIComponent(hashtag)}?limit=${limit}`;
+    if (maxId) path += `&max_id=${maxId}`;
+    return this.request('GET', path);
+  }
+
+  async getPinnedStatuses(userId) {
+    return this.request('GET', `/api/v1/accounts/${encodeURIComponent(userId)}/statuses?pinned=true`);
+  }
+
   normalizeUser(acct) {
     const displayName = acct.display_name || acct.username;
     let displayNameHtml = escapeHtml(displayName);
@@ -636,6 +731,22 @@ export class MastodonClient {
       replyToAcct: status.in_reply_to_id
         ? ((status.mentions || []).find(m => m.id === status.in_reply_to_account_id)?.acct || null)
         : null,
+      bookmarked: !!status.bookmarked,
+      pinned: !!status.pinned,
+      poll: status.poll ? {
+        id: status.poll.id,
+        expiresAt: status.poll.expires_at ? new Date(status.poll.expires_at) : null,
+        expired: !!status.poll.expired,
+        multiple: !!status.poll.multiple,
+        votesCount: status.poll.votes_count || 0,
+        votersCount: status.poll.voters_count || 0,
+        voted: !!status.poll.voted,
+        ownVotes: status.poll.own_votes || [],
+        options: (status.poll.options || []).map(o => ({
+          title: o.title,
+          votesCount: o.votes_count || 0,
+        })),
+      } : null,
       visibility: ({ public: 'public', unlisted: 'home', private: 'followers', direct: 'direct' })[status.visibility] || 'public',
       url: status.url,
       raw: status,

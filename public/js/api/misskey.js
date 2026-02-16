@@ -286,6 +286,100 @@ export class MisskeyClient {
     });
   }
 
+  // === New API methods ===
+
+  async votePoll(noteId, choice) {
+    return this.request('notes/polls/vote', { noteId, choice });
+  }
+
+  async getBookmarks(limit = 20, untilId = null) {
+    const body = { limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('i/favorites', body);
+  }
+
+  async addBookmark(noteId) {
+    return this.request('notes/favorites/create', { noteId });
+  }
+
+  async removeBookmark(noteId) {
+    return this.request('notes/favorites/delete', { noteId });
+  }
+
+  async pinNote(noteId) {
+    return this.request('i/pin', { noteId });
+  }
+
+  async unpinNote(noteId) {
+    return this.request('i/unpin', { noteId });
+  }
+
+  async muteUser(userId) {
+    return this.request('mute/create', { userId });
+  }
+
+  async unmuteUser(userId) {
+    return this.request('mute/delete', { userId });
+  }
+
+  async blockUser(userId) {
+    return this.request('blocking/create', { userId });
+  }
+
+  async unblockUser(userId) {
+    return this.request('blocking/delete', { userId });
+  }
+
+  async searchUsers(query, limit = 10) {
+    return this.request('users/search', { query, limit });
+  }
+
+  async getFollowRequests(limit = 30) {
+    return this.request('following/requests/list', { limit });
+  }
+
+  async acceptFollowRequest(userId) {
+    return this.request('following/requests/accept', { userId });
+  }
+
+  async rejectFollowRequest(userId) {
+    return this.request('following/requests/reject', { userId });
+  }
+
+  async getFollowers(userId, limit = 30, untilId = null) {
+    const body = { userId, limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('users/followers', body);
+  }
+
+  async getFollowing(userId, limit = 30, untilId = null) {
+    const body = { userId, limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('users/following', body);
+  }
+
+  async getGlobalTimeline(limit = 30, untilId = null) {
+    const body = { limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('notes/global-timeline', body);
+  }
+
+  async getLocalTimeline(limit = 30, untilId = null) {
+    const body = { limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('notes/local-timeline', body);
+  }
+
+  async searchByTag(tag, limit = 30, untilId = null) {
+    const body = { tag, limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('notes/search-by-tag', body);
+  }
+
+  async getPinnedNotes(userId) {
+    return this.request('users/show', { userId }).then(u => u?.pinnedNotes || []);
+  }
+
   normalizeUser(user) {
     const displayName = user.name || user.username;
     // Build emoji map from user's emojis
@@ -464,6 +558,22 @@ export class MisskeyClient {
       replyToId: actualNote.replyId || null,
       instanceUrl: this.instanceUrl,
       visibility: actualNote.visibility || 'public',
+      bookmarked: !!note.isFavorited,
+      pinned: false,
+      poll: actualNote.poll ? {
+        id: actualNote.id,
+        expiresAt: actualNote.poll.expiresAt ? new Date(actualNote.poll.expiresAt) : null,
+        expired: !!(actualNote.poll.expiresAt && new Date(actualNote.poll.expiresAt) < new Date()),
+        multiple: !!actualNote.poll.multiple,
+        votesCount: (actualNote.poll.choices || []).reduce((s, c) => s + (c.votes || 0), 0),
+        votersCount: 0,
+        voted: (actualNote.poll.choices || []).some(c => c.isVoted),
+        ownVotes: (actualNote.poll.choices || []).map((c, i) => c.isVoted ? i : -1).filter(i => i >= 0),
+        options: (actualNote.poll.choices || []).map(c => ({
+          title: c.text,
+          votesCount: c.votes || 0,
+        })),
+      } : null,
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
     };
