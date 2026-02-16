@@ -170,8 +170,9 @@ function embedYouTubeInContent(content) {
   );
 
   // 4. Raw YouTube <iframe> already in content → normalize and wrap in .video-embed
+  //    Use negative lookbehind to skip iframes already wrapped by cases 1-3 above
   result = result.replace(
-    /<iframe[^>]*\bsrc="([^"]*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)[^"]*)"[^>]*>(?:\s*<\/iframe>)?/g,
+    /(?<!video-embed">)<iframe[^>]*\bsrc="([^"]*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)[^"]*)"[^>]*>(?:\s*<\/iframe>)?/g,
     tryEmbed
   );
 
@@ -408,8 +409,11 @@ export function renderPost(post) {
   }
 
   // Content — strip fedi link URL from text when it will be shown as a card,
-  // then convert standalone YouTube links/iframes to inline embed players
-  const postContentHtml = embedYouTubeInContent(stripFediLinkFromContent(displayPost.content, displayPost.linkCard));
+  // then convert standalone YouTube links/iframes to inline embed players.
+  // Skip embedYouTubeInContent when a YouTube link card exists to avoid double embeds.
+  const strippedContent = stripFediLinkFromContent(displayPost.content, displayPost.linkCard);
+  const isYtLinkCard = displayPost.linkCard?.url && extractYouTubeId(displayPost.linkCard.url);
+  const postContentHtml = isYtLinkCard ? strippedContent : embedYouTubeInContent(strippedContent);
   html += `<div class="post-content">${postContentHtml}</div>`;
 
   // Quote post (embedded) — supports nested quotes
