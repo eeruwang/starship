@@ -67,6 +67,11 @@ export const ProfileModalMixin = {
     this._profileEditAvatarFile = null;
     this._profileEditBannerFile = null;
     tabsEl.style.display = 'none';
+    tabsEl.innerHTML = `
+      <button class="profile-tab active" data-profile-tab="notes">노트</button>
+      <button class="profile-tab" data-profile-tab="renotes">리노트</button>
+      <button class="profile-tab" data-profile-tab="replies">댓글</button>
+    `;
     postsEl.style.display = 'none';
     postsEl.innerHTML = '';
 
