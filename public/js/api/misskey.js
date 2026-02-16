@@ -314,8 +314,10 @@ export class MisskeyClient {
     return this.request('i/unpin', { noteId });
   }
 
-  async muteUser(userId) {
-    return this.request('mute/create', { userId });
+  async muteUser(userId, expiresAt = null) {
+    const body = { userId };
+    if (expiresAt) body.expiresAt = expiresAt;
+    return this.request('mute/create', body);
   }
 
   async unmuteUser(userId) {

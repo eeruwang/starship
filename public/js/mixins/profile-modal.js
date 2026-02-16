@@ -666,35 +666,104 @@ export const ProfileModalMixin = {
 
       // Mute/Block buttons
       // Remove existing mute/block buttons before re-adding
-      const existingMuteBtn = actionsEl.querySelector('.btn-profile-mute');
-      if (existingMuteBtn) existingMuteBtn.remove();
+      const existingMuteWrap = actionsEl.querySelector('.mute-btn-wrap');
+      if (existingMuteWrap) existingMuteWrap.remove();
       const existingBlockBtn = actionsEl.querySelector('.btn-profile-block');
       if (existingBlockBtn) existingBlockBtn.remove();
 
       const isMuting = isMisskey ? !!relation?.isMuting : !!relation?.muting;
       const isBlocking = isMisskey ? !!relation?.isBlocking : !!relation?.blocking;
 
+      // Mute button with duration picker
+      const muteWrap = document.createElement('div');
+      muteWrap.className = 'mute-btn-wrap';
+
       const muteBtn = document.createElement('button');
       muteBtn.className = 'btn btn-small btn-secondary btn-profile-mute';
       muteBtn.textContent = isMuting ? '뮤트 해제' : '뮤트';
-      muteBtn.addEventListener('click', async () => {
-        muteBtn.disabled = true;
-        try {
-          const currentlyMuting = isMisskey ? !!relation?.isMuting : !!relation?.muting;
-          if (isMisskey) {
-            currentlyMuting ? await client.unmuteUser(user.id) : await client.muteUser(user.id);
-            if (relation) relation.isMuting = !currentlyMuting;
-          } else {
-            currentlyMuting ? await client.unmuteAccount(user.id) : await client.muteAccount(user.id);
-            if (relation) relation.muting = !currentlyMuting;
+
+      const muteDurations = [
+        { label: '무기한', seconds: 0 },
+        { label: '30분', seconds: 1800 },
+        { label: '1시간', seconds: 3600 },
+        { label: '6시간', seconds: 21600 },
+        { label: '1일', seconds: 86400 },
+        { label: '3일', seconds: 259200 },
+        { label: '7일', seconds: 604800 },
+      ];
+
+      const durationMenu = document.createElement('div');
+      durationMenu.className = 'mute-duration-menu';
+      durationMenu.style.display = 'none';
+      for (const dur of muteDurations) {
+        const opt = document.createElement('button');
+        opt.className = 'mute-duration-opt';
+        opt.textContent = dur.label;
+        opt.addEventListener('click', async () => {
+          durationMenu.style.display = 'none';
+          muteBtn.disabled = true;
+          try {
+            if (isMisskey) {
+              const expiresAt = dur.seconds > 0 ? new Date(Date.now() + dur.seconds * 1000).toISOString() : null;
+              await client.muteUser(user.id, expiresAt);
+              if (relation) relation.isMuting = true;
+            } else {
+              await client.muteAccount(user.id, dur.seconds);
+              if (relation) relation.muting = true;
+            }
+            muteBtn.textContent = '뮤트 해제';
+            this.showToast(dur.seconds > 0 ? `${dur.label}간 뮤트됨` : '뮤트됨');
+          } catch (err) {
+            this.showToast('뮤트 실패: ' + err.message);
+          } finally {
+            muteBtn.disabled = false;
           }
-          muteBtn.textContent = (isMisskey ? relation?.isMuting : relation?.muting) ? '뮤트 해제' : '뮤트';
-        } catch (err) {
-          this.showToast('뮤트 실패: ' + err.message);
-        } finally {
-          muteBtn.disabled = false;
+        });
+        durationMenu.appendChild(opt);
+      }
+
+      muteBtn.addEventListener('click', async () => {
+        const currentlyMuting = isMisskey ? !!relation?.isMuting : !!relation?.muting;
+        if (currentlyMuting) {
+          // Unmute directly
+          muteBtn.disabled = true;
+          try {
+            if (isMisskey) {
+              await client.unmuteUser(user.id);
+              if (relation) relation.isMuting = false;
+            } else {
+              await client.unmuteAccount(user.id);
+              if (relation) relation.muting = false;
+            }
+            muteBtn.textContent = '뮤트';
+          } catch (err) {
+            this.showToast('뮤트 해제 실패: ' + err.message);
+          } finally {
+            muteBtn.disabled = false;
+          }
+        } else {
+          // Show duration picker
+          const isVisible = durationMenu.style.display !== 'none';
+          durationMenu.style.display = isVisible ? 'none' : '';
         }
       });
+
+      // Close menu on outside click
+      const closeMuteMenu = (e) => {
+        if (!muteWrap.contains(e.target)) durationMenu.style.display = 'none';
+      };
+      document.addEventListener('click', closeMuteMenu);
+      // Cleanup when modal closes
+      const observer = new MutationObserver(() => {
+        if (!muteWrap.isConnected) {
+          document.removeEventListener('click', closeMuteMenu);
+          observer.disconnect();
+        }
+      });
+      observer.observe(actionsEl.closest('.modal') || document.body, { childList: true, subtree: true });
+
+      muteWrap.appendChild(muteBtn);
+      muteWrap.appendChild(durationMenu);
 
       const blockBtn = document.createElement('button');
       blockBtn.className = 'btn btn-small btn-danger btn-profile-block';
@@ -719,7 +788,7 @@ export const ProfileModalMixin = {
         }
       });
 
-      actionsEl.appendChild(muteBtn);
+      actionsEl.appendChild(muteWrap);
       actionsEl.appendChild(blockBtn);
     } catch (err) {
       console.error('Failed to load follow relation:', err);

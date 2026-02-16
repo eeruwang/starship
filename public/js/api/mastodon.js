@@ -397,8 +397,8 @@ export class MastodonClient {
     return this.request('POST', `/api/v1/polls/${encodeURIComponent(pollId)}/votes`, { choices });
   }
 
-  async muteAccount(userId) {
-    return this.request('POST', `/api/v1/accounts/${encodeURIComponent(userId)}/mute`);
+  async muteAccount(userId, duration = 0) {
+    return this.request('POST', `/api/v1/accounts/${encodeURIComponent(userId)}/mute`, { duration });
   }
 
   async unmuteAccount(userId) {
