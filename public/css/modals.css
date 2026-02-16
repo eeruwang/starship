@@ -501,17 +501,6 @@ textarea.input {
 }
 .profile-stat-clickable {
   cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.15s;
-}
-.profile-stat-clickable:hover {
-  background: var(--bg-hover);
-}
-.profile-stat-active {
-  background: var(--bg-hover);
-}
-.profile-stat-active strong {
-  color: var(--accent-primary);
 }
 .profile-fields {
   margin-top: 0.75rem;

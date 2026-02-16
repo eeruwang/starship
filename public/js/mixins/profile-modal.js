@@ -147,10 +147,6 @@ export const ProfileModalMixin = {
           const currentTabsEl = document.getElementById('profile-tabs');
           if (currentTabsEl) currentTabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
 
-          // Highlight clicked stat
-          statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.remove('profile-stat-active'));
-          stat.classList.add('profile-stat-active');
-
           // Show list in posts area
           postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
           if (tabName === 'followers') {
@@ -473,9 +469,6 @@ export const ProfileModalMixin = {
         if (!tabName) return;
         newTabs.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        // Clear stat highlight when returning to a tab
-        const statsEl = document.getElementById('profile-stats');
-        if (statsEl) statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.remove('profile-stat-active'));
         this._profileState.activeTab = tabName;
         this._renderProfileTab(tabName, postsEl);
       });
