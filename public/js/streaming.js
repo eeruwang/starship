@@ -1,8 +1,19 @@
 /**
  * Streaming Manager
  * Real-time WebSocket connections to Fediverse instances.
- * - Misskey/Iceshrimp/CherryPick: wss://{host}/streaming?i={token}
- * - Mastodon: wss://{host}/api/v1/streaming?access_token={token}&stream=user
+ *
+ * Two modes:
+ *   1. Relay mode (preferred): Single WebSocket to the Durable Object relay
+ *      at /api/stream. The DO maintains upstream connections to all Fediverse
+ *      instances and fans out events. Benefits: shared across tabs, fewer
+ *      connections to instances, event buffering on reconnect.
+ *
+ *   2. Direct mode (fallback): Each account gets its own WebSocket directly
+ *      to its Fediverse instance. Used when the user is not logged in or
+ *      the relay is unavailable.
+ *
+ * The public API (on/off/connect/disconnect/isConnected) is identical in
+ * both modes. The StreamingMixin doesn't need to know which mode is active.
  *
  * Mobile browser considerations (iOS Safari, Firefox iOS, etc.):
  * - iOS kills WebSocket connections when a tab is backgrounded.
@@ -16,14 +27,36 @@
 
 export class StreamManager {
   constructor() {
-    this.connections = new Map(); // accountId → ConnectionState
     this.listeners = new Map();   // event → Set<callback>
+
+    // Account registry: accountId → { account, client }
+    this._accounts = new Map();
+
+    // Mode: null = undetermined, 'relay', 'direct'
+    this._mode = null;
+    this._intentionalClose = false;
+
+    // --- Relay state ---
+    this._relayWs = null;
+    this._relayConnecting = false;
+    this._relayReconnectTimer = null;
+    this._relayReconnectDelay = 2000;
+    this._relayPingInterval = null;
+    this._relayConnectedAccounts = new Set();
+    this._lastEventTimestamp = 0;
+
+    // --- Direct state ---
+    this._directConnections = new Map(); // accountId → ConnectionState
+
+    // --- Lifecycle handlers ---
     this._heartbeatInterval = null;
     this._visibilityHandler = null;
     this._pageshowHandler = null;
     this._pagehideHandler = null;
     this._onlineHandler = null;
   }
+
+  // ===== Event system =====
 
   on(event, callback) {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
@@ -42,8 +75,233 @@ export class StreamManager {
     }
   }
 
+  // ===== Public API =====
+
   connect(account, client) {
-    if (this.connections.has(account.id)) return;
+    if (this._accounts.has(account.id)) return;
+    this._accounts.set(account.id, { account, client });
+
+    if (this._mode === 'direct') {
+      this._connectDirect(account, client);
+    } else {
+      // Try relay (first connect triggers mode detection)
+      this._ensureRelay();
+    }
+
+    this._ensureLifecycle();
+  }
+
+  disconnect(accountId) {
+    this._accounts.delete(accountId);
+    this._relayConnectedAccounts.delete(accountId);
+
+    // Notify relay
+    if (this._relayWs?.readyState === WebSocket.OPEN) {
+      try { this._relayWs.send(JSON.stringify({ type: 'unsubscribe', accountId })); } catch {}
+    }
+
+    // Close direct connection if any
+    this._disconnectDirect(accountId);
+  }
+
+  disconnectAll() {
+    this._intentionalClose = true;
+
+    // Close relay
+    this._closeRelay();
+
+    // Close all direct connections
+    for (const id of [...this._directConnections.keys()]) {
+      this._disconnectDirect(id);
+    }
+
+    this._accounts.clear();
+    this._relayConnectedAccounts.clear();
+    this._mode = null;
+    this._stopLifecycle();
+  }
+
+  isConnected(accountId) {
+    if (this._mode === 'relay') {
+      return this._relayConnectedAccounts.has(accountId);
+    }
+    const state = this._directConnections.get(accountId);
+    return state?.ws?.readyState === WebSocket.OPEN;
+  }
+
+  get connectedCount() {
+    if (this._mode === 'relay') {
+      return this._relayConnectedAccounts.size;
+    }
+    let count = 0;
+    for (const state of this._directConnections.values()) {
+      if (state.ws?.readyState === WebSocket.OPEN) count++;
+    }
+    return count;
+  }
+
+  // ===== Relay mode =====
+
+  _ensureRelay() {
+    if (this._relayWs || this._relayConnecting) return;
+    this._relayConnecting = true;
+
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${location.host}/api/stream`;
+
+    try {
+      const ws = new WebSocket(wsUrl);
+      this._relayWs = ws;
+
+      // Timeout: if not connected within 5s, fall back to direct
+      const timeout = setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          console.warn('[Stream] Relay timeout, falling back to direct');
+          ws.onclose = null;
+          ws.onerror = null;
+          try { ws.close(); } catch {}
+          this._relayWs = null;
+          this._relayConnecting = false;
+          this._fallbackToDirect();
+        }
+      }, 5000);
+
+      ws.onopen = () => {
+        clearTimeout(timeout);
+        this._relayConnecting = false;
+        this._mode = 'relay';
+        this._relayReconnectDelay = 2000;
+        console.log('[Stream] Relay connected');
+
+        // Subscribe all registered accounts
+        const accounts = Array.from(this._accounts.values()).map(({ account }) => ({
+          id: account.id,
+          instanceUrl: account.instanceUrl,
+          accessToken: account.accessToken,
+          platform: account.platform,
+        }));
+
+        if (accounts.length > 0) {
+          ws.send(JSON.stringify({
+            type: 'subscribe',
+            accounts,
+            since: this._lastEventTimestamp || undefined,
+          }));
+        }
+
+        // Keep-alive ping every 30s
+        this._relayPingInterval = setInterval(() => {
+          if (this._relayWs?.readyState === WebSocket.OPEN) {
+            try { this._relayWs.send('{"type":"ping"}'); } catch {}
+          }
+        }, 30_000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          this._handleRelayMessage(msg);
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        clearTimeout(timeout);
+        this._relayWs = null;
+        this._relayConnecting = false;
+        this._clearRelayPing();
+
+        if (this._mode === null) {
+          // Never connected — fall back to direct
+          this._fallbackToDirect();
+        } else if (!this._intentionalClose) {
+          // Was working — try to reconnect
+          // Mark all accounts as disconnected
+          for (const accountId of this._relayConnectedAccounts) {
+            this._emit('disconnected', { accountId });
+          }
+          this._relayConnectedAccounts.clear();
+          this._scheduleRelayReconnect();
+        }
+      };
+
+      ws.onerror = () => {
+        // onclose fires after onerror
+      };
+    } catch {
+      this._relayConnecting = false;
+      this._fallbackToDirect();
+    }
+  }
+
+  _handleRelayMessage(msg) {
+    if (msg.type === 'event') {
+      this._lastEventTimestamp = Math.max(this._lastEventTimestamp, msg.timestamp || 0);
+
+      const data = this._accounts.get(msg.accountId);
+      if (!data) return;
+
+      const { account, client } = data;
+
+      // Normalize using platform-specific client (same as direct mode)
+      if (msg.platform === 'mastodon') {
+        this._handleMastodon(account, client, msg.raw);
+      } else {
+        this._handleMisskey(account, client, msg.raw);
+      }
+    } else if (msg.type === 'connected') {
+      this._relayConnectedAccounts.add(msg.accountId);
+      this._emit('connected', { accountId: msg.accountId });
+    } else if (msg.type === 'disconnected') {
+      this._relayConnectedAccounts.delete(msg.accountId);
+      this._emit('disconnected', { accountId: msg.accountId });
+    }
+    // 'pong' — just a keep-alive ack, no action needed
+  }
+
+  _scheduleRelayReconnect() {
+    if (this._relayReconnectTimer || this._intentionalClose) return;
+
+    this._relayReconnectTimer = setTimeout(() => {
+      this._relayReconnectTimer = null;
+      this._relayReconnectDelay = Math.min(this._relayReconnectDelay * 1.5, 60000);
+      this._ensureRelay();
+    }, this._relayReconnectDelay);
+  }
+
+  _closeRelay() {
+    if (this._relayReconnectTimer) {
+      clearTimeout(this._relayReconnectTimer);
+      this._relayReconnectTimer = null;
+    }
+    this._clearRelayPing();
+    if (this._relayWs) {
+      this._relayWs.onclose = null;
+      try { this._relayWs.close(); } catch {}
+      this._relayWs = null;
+    }
+    this._relayConnecting = false;
+  }
+
+  _clearRelayPing() {
+    if (this._relayPingInterval) {
+      clearInterval(this._relayPingInterval);
+      this._relayPingInterval = null;
+    }
+  }
+
+  _fallbackToDirect() {
+    console.log('[Stream] Falling back to direct connections');
+    this._mode = 'direct';
+
+    for (const [, { account, client }] of this._accounts) {
+      this._connectDirect(account, client);
+    }
+  }
+
+  // ===== Direct mode (original behavior) =====
+
+  _connectDirect(account, client) {
+    if (this._directConnections.has(account.id)) return;
 
     const state = {
       account,
@@ -53,12 +311,12 @@ export class StreamManager {
       reconnectDelay: 2000,
       intentionalClose: false,
     };
-    this.connections.set(account.id, state);
-    this._open(state);
-    this._ensureHeartbeat();
+    this._directConnections.set(account.id, state);
+    this._openDirect(state);
+    this._ensureDirectHeartbeat();
   }
 
-  _open(state) {
+  _openDirect(state) {
     const { account } = state;
 
     try {
@@ -68,7 +326,6 @@ export class StreamManager {
       if (account.platform === 'mastodon') {
         wsUrl = `wss://${host}/api/v1/streaming?access_token=${encodeURIComponent(account.accessToken)}&stream=user`;
       } else {
-        // Misskey, Iceshrimp, CherryPick
         wsUrl = `wss://${host}/streaming?i=${encodeURIComponent(account.accessToken)}`;
       }
 
@@ -80,11 +337,10 @@ export class StreamManager {
         state.reconnectDelay = 2000;
         state.lastActivity = Date.now();
         state.awaitingPong = false;
-        state._pongSupported = false;  // re-detect per connection
+        state._pongSupported = false;
         state._lastBuffered = null;
 
         if (account.platform !== 'mastodon') {
-          // Misskey: subscribe to homeTimeline + main (notifications)
           this._safeSend(state, JSON.stringify({
             type: 'connect',
             body: { channel: 'homeTimeline', id: 'ht' },
@@ -103,11 +359,10 @@ export class StreamManager {
         state.awaitingPong = false;
         try {
           const msg = JSON.parse(event.data);
-          // Misskey pong — mark this connection as pong-capable
           if (msg.type === 'pong') { state._pongSupported = true; return; }
-          this._handleMessage(state, msg);
+          this._handleDirectMessage(state, msg);
         } catch {
-          // ignore non-JSON (ping frames, etc.)
+          // ignore non-JSON
         }
       };
 
@@ -115,24 +370,19 @@ export class StreamManager {
         state.ws = null;
         if (!state.intentionalClose) {
           this._emit('disconnected', { accountId: account.id });
-          this._scheduleReconnect(state);
+          this._scheduleDirectReconnect(state);
         }
       };
 
       ws.onerror = (e) => {
         console.warn(`[Stream] Error: ${account.label}`, e);
-        // onclose fires after onerror — reconnection handled there
       };
     } catch (e) {
       console.error(`[Stream] Connection failed: ${account.label}`, e);
-      this._scheduleReconnect(state);
+      this._scheduleDirectReconnect(state);
     }
   }
 
-  /**
-   * Safe send: wraps ws.send() in try-catch to protect against
-   * Safari crashing on zombie sockets after iOS suspend/resume.
-   */
   _safeSend(state, data) {
     const ws = state.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
@@ -140,22 +390,68 @@ export class StreamManager {
       ws.send(data);
       return true;
     } catch {
-      // Zombie socket — force reconnect
       console.warn(`[Stream] send() failed (zombie?): ${state.account.label}`);
-      this._forceReconnect(state);
+      this._forceDirectReconnect(state);
       return false;
     }
   }
 
-  _handleMessage(state, msg) {
+  _handleDirectMessage(state, msg) {
     const { account, client } = state;
-
     if (account.platform === 'mastodon') {
       this._handleMastodon(account, client, msg);
     } else {
       this._handleMisskey(account, client, msg);
     }
   }
+
+  _scheduleDirectReconnect(state) {
+    if (state.intentionalClose || state.reconnectTimer) return;
+
+    const delay = state.reconnectDelay;
+    state.reconnectTimer = setTimeout(() => {
+      state.reconnectTimer = null;
+      if (!state.intentionalClose) {
+        state.reconnectDelay = Math.min(state.reconnectDelay * 1.5, 60000);
+        this._openDirect(state);
+      }
+    }, delay);
+  }
+
+  _disconnectDirect(accountId) {
+    const state = this._directConnections.get(accountId);
+    if (!state) return;
+
+    state.intentionalClose = true;
+    if (state.reconnectTimer) {
+      clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = null;
+    }
+    if (state.ws) {
+      state.ws.onclose = null;
+      try { state.ws.close(); } catch {}
+      state.ws = null;
+    }
+    this._directConnections.delete(accountId);
+  }
+
+  _forceDirectReconnect(state) {
+    const ws = state.ws;
+    if (ws) {
+      ws.onclose = null;
+      try { ws.close(); } catch {}
+    }
+    state.ws = null;
+    state.awaitingPong = false;
+    state._pongSupported = false;
+    state._lastBuffered = null;
+    this._emit('disconnected', { accountId: state.account.id });
+    state.reconnectDelay = 2000;
+    this._scheduleDirectReconnect(state);
+  }
+
+  // ===== Shared: Platform message handlers =====
+  // Used by both relay and direct modes.
 
   _handleMastodon(account, client, msg) {
     if (!msg.event) return;
@@ -204,7 +500,6 @@ export class StreamManager {
           const post = client.normalizePost(body);
           this._emit('post', { account, post });
         } else {
-          // Log unhandled main-channel events for debugging
           console.debug(`[Stream] ${account.label} main:${eventType}`, body.type || body.id || '');
         }
       } else {
@@ -215,70 +510,22 @@ export class StreamManager {
     }
   }
 
-  _scheduleReconnect(state) {
-    if (state.intentionalClose || state.reconnectTimer) return;
+  // ===== Lifecycle handlers =====
+  // In relay mode: manage the single relay WebSocket.
+  // In direct mode: manage per-account WebSockets with heartbeat.
 
-    const delay = state.reconnectDelay;
-    state.reconnectTimer = setTimeout(() => {
-      state.reconnectTimer = null;
-      if (!state.intentionalClose) {
-        state.reconnectDelay = Math.min(state.reconnectDelay * 1.5, 60000);
-        this._open(state);
-      }
-    }, delay);
-  }
-
-  disconnect(accountId) {
-    const state = this.connections.get(accountId);
-    if (!state) return;
-
-    state.intentionalClose = true;
-    if (state.reconnectTimer) {
-      clearTimeout(state.reconnectTimer);
-      state.reconnectTimer = null;
-    }
-    if (state.ws) {
-      state.ws.onclose = null;
-      try { state.ws.close(); } catch { /* zombie */ }
-      state.ws = null;
-    }
-    this.connections.delete(accountId);
-  }
-
-  disconnectAll() {
-    for (const id of [...this.connections.keys()]) {
-      this.disconnect(id);
-    }
-    this._stopHeartbeat();
-  }
-
-  /**
-   * Start heartbeat interval and lifecycle listeners if not already running.
-   * Handles:
-   * - 30s heartbeat for connection health
-   * - visibilitychange: probe connections on tab resume
-   * - pageshow: reconnect after bfcache restore
-   * - pagehide: clean close for bfcache eligibility
-   * - online: reconnect after network transitions (WiFi→cellular)
-   */
-  _ensureHeartbeat() {
-    if (this._heartbeatInterval) return;
-
-    this._heartbeatInterval = setInterval(() => this._heartbeatTick(), 30_000);
-
-    // Tab visibility: probe and reconnect on resume
+  _ensureLifecycle() {
+    // Tab visibility: probe connections on resume
     if (!this._visibilityHandler) {
       this._visibilityHandler = () => {
         if (document.visibilityState === 'visible') {
-          // On iOS Safari, connections are guaranteed dead after background.
-          // On desktop, they may be stale. Probe all connections.
           this._probeAllConnections();
         }
       };
       document.addEventListener('visibilitychange', this._visibilityHandler);
     }
 
-    // bfcache: page restored from back-forward cache → sockets are dead
+    // bfcache: page restored → all sockets are dead
     if (!this._pageshowHandler) {
       this._pageshowHandler = (e) => {
         if (e.persisted) {
@@ -292,10 +539,16 @@ export class StreamManager {
     // bfcache: close sockets cleanly so the page is bfcache-eligible
     if (!this._pagehideHandler) {
       this._pagehideHandler = () => {
-        for (const state of this.connections.values()) {
+        if (this._mode === 'relay' && this._relayWs) {
+          this._relayWs.onclose = null;
+          try { this._relayWs.close(1000, 'pagehide'); } catch {}
+          this._relayWs = null;
+          this._clearRelayPing();
+        }
+        for (const state of this._directConnections.values()) {
           if (state.ws) {
             state.ws.onclose = null;
-            try { state.ws.close(1000, 'pagehide'); } catch { /* zombie */ }
+            try { state.ws.close(1000, 'pagehide'); } catch {}
             state.ws = null;
           }
         }
@@ -303,17 +556,16 @@ export class StreamManager {
       window.addEventListener('pagehide', this._pagehideHandler);
     }
 
-    // Network: WiFi→cellular kills sockets silently (no close event)
+    // Network transition: WiFi→cellular kills sockets silently
     if (!this._onlineHandler) {
       this._onlineHandler = () => {
-        // Small delay for the network to stabilize
         setTimeout(() => this._probeAllConnections(), 1500);
       };
       window.addEventListener('online', this._onlineHandler);
     }
   }
 
-  _stopHeartbeat() {
+  _stopLifecycle() {
     if (this._heartbeatInterval) {
       clearInterval(this._heartbeatInterval);
       this._heartbeatInterval = null;
@@ -336,158 +588,125 @@ export class StreamManager {
     }
   }
 
-  _heartbeatTick() {
-    const now = Date.now();
-    const staleThreshold = 90_000; // 90 seconds without activity
-
-    for (const state of this.connections.values()) {
-      if (state.intentionalClose) continue;
-
-      const ws = state.ws;
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        // Not connected — schedule reconnect if not already pending
-        if (!state.reconnectTimer) this._scheduleReconnect(state);
-        continue;
-      }
-
-      // Misskey-family: check pong response from last tick
-      if (state.account.platform !== 'mastodon' && state.awaitingPong) {
-        if (state._pongSupported) {
-          // This server previously responded to pings — no pong means dead
-          console.warn(`[Stream] No pong from: ${state.account.label}, reconnecting`);
-          this._forceReconnect(state);
-          continue;
-        }
-        // Server never sent a pong (e.g. Iceshrimp.NET) — don't force-
-        // reconnect; fall through to the stale threshold check below.
-        state.awaitingPong = false;
-      }
-
-      // Send application-level ping per platform
-      if (state.account.platform !== 'mastodon') {
-        // Misskey/Iceshrimp/CherryPick: JSON ping
-        if (this._safeSend(state, '{"type":"ping"}')) {
-          state.awaitingPong = true;
-          // For forks that don't respond with pong, treat a successful
-          // send as a liveness signal (same approach as Mastodon).
-          if (!state._pongSupported) {
-            state.lastActivity = now;
-          }
-        }
-      } else {
-        // Mastodon: no app-level ping/pong, but the server sends WebSocket-
-        // level pings (invisible to JS onmessage). Probe the transport with
-        // a small send to detect zombie sockets and update lastActivity so
-        // the stale check below doesn't false-positive on quiet timelines.
-        if (this._safeSend(state, '{"type":"ping"}')) {
-          state.lastActivity = now;
-        }
-      }
-
-      // Check for stuck socket (bufferedAmount growing = data not being sent)
-      if (state._lastBuffered != null && ws.bufferedAmount >= state._lastBuffered && state._lastBuffered > 0) {
-        console.warn(`[Stream] Socket stuck: ${state.account.label}, reconnecting`);
-        this._forceReconnect(state);
-        continue;
-      }
-      state._lastBuffered = ws.bufferedAmount;
-
-      // Force reconnect if no activity for too long (covers both platforms)
-      if (state.lastActivity && now - state.lastActivity > staleThreshold) {
-        console.warn(`[Stream] Stale connection: ${state.account.label}, reconnecting`);
-        this._forceReconnect(state);
-      }
-    }
+  _ensureDirectHeartbeat() {
+    if (this._heartbeatInterval) return;
+    this._heartbeatInterval = setInterval(() => this._directHeartbeatTick(), 30_000);
   }
 
-  /**
-   * Probe all connections to detect zombie sockets (iOS Safari resume,
-   * network transitions). Sends a probe ping per platform and checks
-   * staleness. Connections that are clearly dead are reconnected immediately.
-   */
   _probeAllConnections() {
-    const now = Date.now();
+    if (this._mode === 'relay') {
+      // Probe relay WebSocket
+      const ws = this._relayWs;
+      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        this._relayWs = null;
+        this._clearRelayPing();
+        if (!this._relayReconnectTimer && !this._intentionalClose) {
+          this._relayReconnectDelay = 2000;
+          this._scheduleRelayReconnect();
+        }
+        return;
+      }
+      // Send probe ping
+      try { ws.send('{"type":"ping"}'); } catch {
+        this._closeRelay();
+        this._scheduleRelayReconnect();
+      }
+      return;
+    }
 
-    for (const state of this.connections.values()) {
+    // Direct mode: probe each connection
+    const now = Date.now();
+    for (const state of this._directConnections.values()) {
       if (state.intentionalClose) continue;
 
       const ws = state.ws;
-
-      // Already disconnected — reconnect
       if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
         state.ws = null;
         if (!state.reconnectTimer) {
           state.reconnectDelay = 2000;
-          this._scheduleReconnect(state);
+          this._scheduleDirectReconnect(state);
         }
         continue;
       }
 
-      // readyState says OPEN — but it may be a zombie (especially on iOS).
-      // Send a probe to detect zombie sockets first. If send fails,
-      // _safeSend triggers _forceReconnect automatically.
       const probeOk = this._safeSend(state, '{"type":"ping"}');
-      if (!probeOk) continue; // already reconnecting
+      if (!probeOk) continue;
 
-      // Successful send — update lastActivity for platforms without pong
-      // (Mastodon, or Misskey forks that don't respond to pings)
       if (state.account.platform === 'mastodon' || !state._pongSupported) {
         state.lastActivity = now;
       }
 
-      // Check how long since last activity.
       const sinceActivity = state.lastActivity ? now - state.lastActivity : Infinity;
-
       if (sinceActivity > 60_000) {
-        // Over 60s with no activity — highly likely dead, force reconnect
         console.warn(`[Stream] Probe: stale ${state.account.label} (${Math.round(sinceActivity / 1000)}s), reconnecting`);
-        this._forceReconnect(state);
+        this._forceDirectReconnect(state);
         continue;
       }
 
-      // For Misskey-family with pong support, expect a response
       if (state.account.platform !== 'mastodon' && state._pongSupported) {
         state.awaitingPong = true;
       }
     }
   }
 
-  /**
-   * Force reconnect all connections (e.g. after bfcache restore).
-   */
   _reconnectAll() {
-    for (const state of this.connections.values()) {
+    if (this._mode === 'relay') {
+      this._closeRelay();
+      this._relayReconnectDelay = 2000;
+      this._ensureRelay();
+      return;
+    }
+
+    for (const state of this._directConnections.values()) {
       if (state.intentionalClose) continue;
-      this._forceReconnect(state);
+      this._forceDirectReconnect(state);
     }
   }
 
-  /** Close and immediately schedule reconnect for a connection */
-  _forceReconnect(state) {
-    const ws = state.ws;
-    if (ws) {
-      ws.onclose = null;
-      try { ws.close(); } catch { /* zombie socket — ignore */ }
-    }
-    state.ws = null;
-    state.awaitingPong = false;
-    state._pongSupported = false;  // re-detect on next connection
-    state._lastBuffered = null;
-    this._emit('disconnected', { accountId: state.account.id });
-    state.reconnectDelay = 2000;
-    this._scheduleReconnect(state);
-  }
+  _directHeartbeatTick() {
+    const now = Date.now();
+    const staleThreshold = 90_000;
 
-  isConnected(accountId) {
-    const state = this.connections.get(accountId);
-    return state?.ws?.readyState === WebSocket.OPEN;
-  }
+    for (const state of this._directConnections.values()) {
+      if (state.intentionalClose) continue;
 
-  get connectedCount() {
-    let count = 0;
-    for (const state of this.connections.values()) {
-      if (state.ws?.readyState === WebSocket.OPEN) count++;
+      const ws = state.ws;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        if (!state.reconnectTimer) this._scheduleDirectReconnect(state);
+        continue;
+      }
+
+      if (state.account.platform !== 'mastodon' && state.awaitingPong) {
+        if (state._pongSupported) {
+          console.warn(`[Stream] No pong from: ${state.account.label}, reconnecting`);
+          this._forceDirectReconnect(state);
+          continue;
+        }
+        state.awaitingPong = false;
+      }
+
+      if (state.account.platform !== 'mastodon') {
+        if (this._safeSend(state, '{"type":"ping"}')) {
+          state.awaitingPong = true;
+          if (!state._pongSupported) state.lastActivity = now;
+        }
+      } else {
+        if (this._safeSend(state, '{"type":"ping"}')) {
+          state.lastActivity = now;
+        }
+      }
+
+      if (state._lastBuffered != null && ws.bufferedAmount >= state._lastBuffered && state._lastBuffered > 0) {
+        console.warn(`[Stream] Socket stuck: ${state.account.label}, reconnecting`);
+        this._forceDirectReconnect(state);
+        continue;
+      }
+      state._lastBuffered = ws.bufferedAmount;
+
+      if (state.lastActivity && now - state.lastActivity > staleThreshold) {
+        console.warn(`[Stream] Stale connection: ${state.account.label}, reconnecting`);
+        this._forceDirectReconnect(state);
+      }
     }
-    return count;
   }
 }

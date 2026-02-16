@@ -6,7 +6,11 @@
  * 2. /proxy 경로로 들어오는 요청을 Fediverse 인스턴스에 프록시
  * 3. /api/auth/* 회원가입/로그인/세션 관리
  * 4. /api/sync/* 계정·설정 클라우드 저장/불러오기
+ * 5. /api/stream WebSocket 스트림 릴레이 (Durable Object)
  */
+
+// Re-export Durable Object class for wrangler binding
+export { StreamRelay } from './stream-relay.js';
 
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -43,6 +47,11 @@ export default {
     // Instance theme-color fetch (no DB needed)
     if (url.pathname === '/api/instance-theme' && request.method === 'GET') {
       return handleInstanceTheme(url, env);
+    }
+
+    // WebSocket stream relay (Durable Object)
+    if (url.pathname === '/api/stream') {
+      return handleStreamUpgrade(request, env);
     }
 
     // Auth & sync API
@@ -371,6 +380,31 @@ async function handleSyncLoad(request, db) {
     try { data[row.key] = JSON.parse(row.value); } catch { data[row.key] = row.value; }
   }
   return jsonResponse(data);
+}
+
+// ===== WebSocket Stream Relay =====
+
+async function handleStreamUpgrade(request, env) {
+  if (request.headers.get('Upgrade') !== 'websocket') {
+    return new Response('Expected WebSocket upgrade', { status: 426 });
+  }
+
+  // Authenticate via session cookie
+  const db = env.FEDI_ACCOUNTS;
+  if (!_tablesInitialized) {
+    await ensureTables(db);
+    _tablesInitialized = true;
+  }
+
+  const user = await getSessionUser(request, db);
+  if (!user) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  // Route to per-user Durable Object
+  const doId = env.STREAM_RELAY.idFromName(`user:${user.id}`);
+  const stub = env.STREAM_RELAY.get(doId);
+  return stub.fetch(request);
 }
 
 // ===== Admin Endpoints =====

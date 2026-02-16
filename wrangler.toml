@@ -26,6 +26,16 @@ database_id = "01f5e825-6777-4b3e-8716-2c02fe91555a"
 [vars]
 TURNSTILE_SITE_KEY = "0x4AAAAAACZUfwlrZqv0UjBX"
 
+# Durable Objects (WebSocket 스트림 릴레이)
+[durable_objects]
+bindings = [
+  { name = "STREAM_RELAY", class_name = "StreamRelay" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["StreamRelay"]
+
 # R2 이미지 캐시 (아바타, 미디어, 이모지)
 [[r2_buckets]]
 binding = "STARSHIP_CACHE"
