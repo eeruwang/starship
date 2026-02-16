@@ -39,6 +39,11 @@ export const ProfileModalMixin = {
       scrollEl.removeEventListener('scroll', this._profileStickyScrollHandler);
       this._profileStickyScrollHandler = null;
     }
+    // Cleanup previous stats click listener
+    if (this._profileStatsClickHandler && statsEl) {
+      statsEl.removeEventListener('click', this._profileStatsClickHandler);
+      this._profileStatsClickHandler = null;
+    }
     this._profileState = null;
 
     // Clean up previous follow badges
@@ -131,33 +136,43 @@ export const ProfileModalMixin = {
       actionsEl.innerHTML = actionsHtml;
 
       // Show notes tabs for own account
+      // Make follower/following stats clickable
+      statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.add('profile-stat-clickable'));
+      const statsClickHandler = async (e) => {
+        const stat = e.target.closest('[data-stat-tab]');
+        if (!stat) return;
+        const tabName = stat.dataset.statTab;
+
+        // Deactivate all tabs visually
+        const currentTabsEl = document.getElementById('profile-tabs');
+        if (currentTabsEl) currentTabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+
+        // Stop infinite scroll from interfering
+        if (this._profileState) this._profileState.activeTab = tabName;
+
+        // Show list in posts area
+        postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+        if (tabName === 'followers') {
+          if (myAccount) {
+            await this._loadProfileFollowersWithActions(postsEl, client, account, user.id);
+          } else {
+            await this._loadProfileFollowers(postsEl, client, account, user.id);
+          }
+        } else {
+          if (myAccount) {
+            await this._loadProfileFollowingWithActions(postsEl, client, account, user.id);
+          } else {
+            await this._loadProfileFollowing(postsEl, client, account, user.id);
+          }
+        }
+      };
+      statsEl.addEventListener('click', statsClickHandler);
+      this._profileStatsClickHandler = statsClickHandler;
+
       if (myAccount) {
         tabsEl.style.display = 'flex';
         postsEl.style.display = 'block';
         this._loadProfileNotes(user.id, platform, effectiveAccountId, client, isMisskey, account);
-
-        // Make follower/following stats clickable to show list directly
-        statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.add('profile-stat-clickable'));
-        statsEl.addEventListener('click', async (e) => {
-          const stat = e.target.closest('[data-stat-tab]');
-          if (!stat) return;
-          const tabName = stat.dataset.statTab;
-
-          // Deactivate all tabs visually
-          const currentTabsEl = document.getElementById('profile-tabs');
-          if (currentTabsEl) currentTabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-
-          // Stop infinite scroll from interfering
-          if (this._profileState) this._profileState.activeTab = tabName;
-
-          // Show list in posts area
-          postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
-          if (tabName === 'followers') {
-            await this._loadProfileFollowersWithActions(postsEl, client, account, user.id);
-          } else {
-            await this._loadProfileFollowingWithActions(postsEl, client, account, user.id);
-          }
-        });
       }
 
       // Follow relationship for other users
@@ -168,26 +183,6 @@ export const ProfileModalMixin = {
         tabsEl.style.display = 'flex';
         postsEl.style.display = 'block';
         this._loadOtherProfileTabs(user.id, platform, effectiveAccountId, client, isMisskey, account, tabsEl, postsEl);
-
-        // Make follower/following stats clickable for other users too
-        statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.add('profile-stat-clickable'));
-        statsEl.addEventListener('click', async (e) => {
-          const stat = e.target.closest('[data-stat-tab]');
-          if (!stat) return;
-          const tabName = stat.dataset.statTab;
-
-          // Deactivate all tabs visually
-          const currentTabsEl = document.getElementById('profile-tabs');
-          if (currentTabsEl) currentTabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-
-          // Show list in posts area
-          postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
-          if (tabName === 'followers') {
-            await this._loadProfileFollowers(postsEl, client, account, user.id);
-          } else {
-            await this._loadProfileFollowing(postsEl, client, account, user.id);
-          }
-        });
       }
 
       // Edit handlers
