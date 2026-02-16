@@ -1092,27 +1092,40 @@ export const ProfileModalMixin = {
         return;
       }
 
-      // Batch-fetch follow relationships
-      let followingSet = new Set();
+      // Show cards immediately (without follow status)
+      const cardMap = new Map();
+      for (const user of users) {
+        const card = this._createUserListItemWithAction(user, account, client, false);
+        cardMap.set(user.id, card);
+        container.appendChild(card);
+      }
+
+      // Then update follow status in background
       try {
         if (isMisskey) {
           for (const user of users) {
-            const rel = await client.getRelation(user.id);
-            if (rel?.isFollowing) followingSet.add(user.id);
+            client.getRelation(user.id).then(rel => {
+              if (rel?.isFollowing) {
+                const card = cardMap.get(user.id);
+                if (!card) return;
+                const btn = card.querySelector('.user-list-follow-btn');
+                if (btn) { btn.classList.add('following'); btn.textContent = '팔로잉'; }
+              }
+            }).catch(() => {});
           }
         } else {
           const ids = users.map(u => u.id);
           const rels = await client.getRelationships(ids);
           for (const r of rels) {
-            if (r.following) followingSet.add(r.id);
+            if (r.following) {
+              const card = cardMap.get(r.id);
+              if (!card) continue;
+              const btn = card.querySelector('.user-list-follow-btn');
+              if (btn) { btn.classList.add('following'); btn.textContent = '팔로잉'; }
+            }
           }
         }
       } catch (_) { /* proceed without relation info */ }
-
-      for (const user of users) {
-        const card = this._createUserListItemWithAction(user, account, client, followingSet.has(user.id));
-        container.appendChild(card);
-      }
     } catch (err) {
       container.innerHTML = `<div class="profile-posts-empty">팔로워 로딩 오류: ${err.message}</div>`;
     }
