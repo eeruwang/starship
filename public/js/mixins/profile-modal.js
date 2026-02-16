@@ -44,6 +44,11 @@ export const ProfileModalMixin = {
       statsEl.removeEventListener('click', this._profileStatsClickHandler);
       this._profileStatsClickHandler = null;
     }
+    // Cleanup previous tabs click listener
+    if (this._profileTabsClickHandler && tabsEl) {
+      tabsEl.removeEventListener('click', this._profileTabsClickHandler);
+      this._profileTabsClickHandler = null;
+    }
     this._profileState = null;
 
     // Clean up previous follow badges
@@ -473,23 +478,23 @@ export const ProfileModalMixin = {
       await this._fetchMoreProfileNotes();
 
       // Setup tabs
-      const newTabs = tabsEl.cloneNode(true);
-      tabsEl.replaceWith(newTabs);
-      this._profileState.tabsEl = newTabs;
+      this._profileState.tabsEl = tabsEl;
       this._updateProfileTabCounts();
       this._renderProfileTab('notes', postsEl);
 
       // Tab click
-      newTabs.addEventListener('click', (e) => {
+      const tabClickHandler = (e) => {
         const tab = e.target.closest('.profile-tab');
         if (!tab) return;
         const tabName = tab.dataset.profileTab;
         if (!tabName) return;
-        newTabs.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+        tabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         this._profileState.activeTab = tabName;
         this._renderProfileTab(tabName, postsEl);
-      });
+      };
+      tabsEl.addEventListener('click', tabClickHandler);
+      this._profileTabsClickHandler = tabClickHandler;
 
       // Infinite scroll on the profile-scroll container
       if (this._profileScrollHandler) {
@@ -842,7 +847,7 @@ export const ProfileModalMixin = {
     `;
 
     // Tab switching
-    tabsEl.addEventListener('click', async (e) => {
+    const tabClickHandler = async (e) => {
       const tab = e.target.closest('.profile-tab');
       if (!tab) return;
       const tabName = tab.dataset.profileTab;
@@ -860,7 +865,9 @@ export const ProfileModalMixin = {
       } catch (err) {
         postsEl.innerHTML = `<div class="profile-posts-empty">로딩 오류: ${err.message}</div>`;
       }
-    });
+    };
+    tabsEl.addEventListener('click', tabClickHandler);
+    this._profileTabsClickHandler = tabClickHandler;
 
     // Load default tab (posts)
     await this._loadProfilePosts(postsEl, client, account, userId);
