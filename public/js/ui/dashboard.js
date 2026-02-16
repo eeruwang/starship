@@ -95,7 +95,7 @@ function extractYouTubeId(url) {
   try {
     const u = new URL(url);
     if (u.hostname === 'youtu.be') return u.pathname.slice(1).split('/')[0];
-    if (u.hostname.includes('youtube.com')) {
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtube-nocookie.com')) {
       if (u.pathname === '/watch') return u.searchParams.get('v');
       const m = u.pathname.match(/^\/(?:shorts|embed)\/([^/?]+)/);
       if (m) return m[1];
@@ -131,6 +131,50 @@ function stripFediLinkFromContent(content, linkCard) {
     new RegExp(`\\s*<br\\s*/?>\\s*<a[^>]*href="${urlPattern}"[^>]*>[^<]*</a>`, 'g'),
     ''
   );
+  return result;
+}
+
+/**
+ * Convert standalone YouTube links and raw iframes in content HTML to embedded players.
+ * Handles cases where YouTube URLs appear directly in content without a linkCard.
+ */
+function embedYouTubeInContent(content) {
+  if (!content || !content.includes('youtu')) return content;
+
+  const ytEmbed = (id) =>
+    `<div class="video-embed"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(id)}" frameborder="0" allowfullscreen loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe></div>`;
+
+  const tryEmbed = (match, rawUrl) => {
+    const id = extractYouTubeId(rawUrl.replace(/&amp;/g, '&'));
+    return id ? ytEmbed(id) : match;
+  };
+
+  let result = content;
+
+  // 1. YouTube <a> as sole content of a <p> paragraph
+  result = result.replace(
+    /<p>\s*<a[^>]*href="([^"]*youtu[^"]*)"[^>]*>[\s\S]*?<\/a>\s*<\/p>/g,
+    tryEmbed
+  );
+
+  // 2. YouTube <a> preceded by <br> (standalone on its own line)
+  result = result.replace(
+    /\s*<br\s*\/?>\s*<a[^>]*href="([^"]*youtu[^"]*)"[^>]*>[\s\S]*?<\/a>(?=\s*(?:<br[\s/>]|<\/p>|$))/g,
+    tryEmbed
+  );
+
+  // 3. YouTube <a> at the very start of content (Misskey: no <p> wrapper)
+  result = result.replace(
+    /^<a[^>]*href="([^"]*youtu[^"]*)"[^>]*>[\s\S]*?<\/a>(?=\s*(?:<br[\s/>]|$))/,
+    tryEmbed
+  );
+
+  // 4. Raw YouTube <iframe> already in content → normalize and wrap in .video-embed
+  result = result.replace(
+    /<iframe[^>]*\bsrc="([^"]*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)[^"]*)"[^>]*>(?:\s*<\/iframe>)?/g,
+    tryEmbed
+  );
+
   return result;
 }
 
@@ -363,8 +407,9 @@ export function renderPost(post) {
     html += `<div class="cw-content" id="${cwId}">`;
   }
 
-  // Content — strip fedi link URL from text when it will be shown as a card
-  const postContentHtml = stripFediLinkFromContent(displayPost.content, displayPost.linkCard);
+  // Content — strip fedi link URL from text when it will be shown as a card,
+  // then convert standalone YouTube links/iframes to inline embed players
+  const postContentHtml = embedYouTubeInContent(stripFediLinkFromContent(displayPost.content, displayPost.linkCard));
   html += `<div class="post-content">${postContentHtml}</div>`;
 
   // Quote post (embedded) — supports nested quotes
@@ -523,8 +568,8 @@ export function renderNotification(notif) {
       html += `<div class="cw-content" id="${cwId}">`;
     }
 
-    // Content — strip fedi link URL from text when it will be shown as a card
-    const notifMentionContentHtml = stripFediLinkFromContent(displayPost.content, displayPost.linkCard);
+    // Content — strip fedi link URL, then convert standalone YouTube links to embeds
+    const notifMentionContentHtml = embedYouTubeInContent(stripFediLinkFromContent(displayPost.content, displayPost.linkCard));
     html += `<div class="post-content">${notifMentionContentHtml}</div>`;
 
     // Quote post
@@ -656,8 +701,8 @@ export function renderNotification(notif) {
       html += `<div class="cw-content" id="${notifCwId}">`;
     }
 
-    // Post text content — strip fedi link URL from text when it will be shown as a card
-    const notifStdContentHtml = stripFediLinkFromContent(displayPost.content, displayPost.linkCard);
+    // Post text content — strip fedi link URL, then convert standalone YouTube links to embeds
+    const notifStdContentHtml = embedYouTubeInContent(stripFediLinkFromContent(displayPost.content, displayPost.linkCard));
     const notifText = stripHtml(notifStdContentHtml);
     const isLongNotif = notifText.length > 200;
     const notifCtxId = `notif-ctx-${notif.id}`;
