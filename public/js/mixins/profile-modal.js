@@ -147,6 +147,9 @@ export const ProfileModalMixin = {
           const currentTabsEl = document.getElementById('profile-tabs');
           if (currentTabsEl) currentTabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
 
+          // Stop infinite scroll from interfering
+          if (this._profileState) this._profileState.activeTab = tabName;
+
           // Show list in posts area
           postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
           if (tabName === 'followers') {
@@ -165,6 +168,26 @@ export const ProfileModalMixin = {
         tabsEl.style.display = 'flex';
         postsEl.style.display = 'block';
         this._loadOtherProfileTabs(user.id, platform, effectiveAccountId, client, isMisskey, account, tabsEl, postsEl);
+
+        // Make follower/following stats clickable for other users too
+        statsEl.querySelectorAll('[data-stat-tab]').forEach(el => el.classList.add('profile-stat-clickable'));
+        statsEl.addEventListener('click', async (e) => {
+          const stat = e.target.closest('[data-stat-tab]');
+          if (!stat) return;
+          const tabName = stat.dataset.statTab;
+
+          // Deactivate all tabs visually
+          const currentTabsEl = document.getElementById('profile-tabs');
+          if (currentTabsEl) currentTabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+
+          // Show list in posts area
+          postsEl.innerHTML = '<div class="profile-posts-empty"><div class="spinner"></div></div>';
+          if (tabName === 'followers') {
+            await this._loadProfileFollowers(postsEl, client, account, user.id);
+          } else {
+            await this._loadProfileFollowing(postsEl, client, account, user.id);
+          }
+        });
       }
 
       // Edit handlers
@@ -535,6 +558,7 @@ export const ProfileModalMixin = {
   async _loadMoreProfileNotes() {
     const s = this._profileState;
     if (!s) return;
+    if (s.activeTab === 'followers' || s.activeTab === 'following') return;
     const postsEl = document.getElementById('profile-posts');
     const prevCounts = {
       notes: s.tabData.notes.length,
@@ -816,12 +840,10 @@ export const ProfileModalMixin = {
   },
 
   async _loadOtherProfileTabs(userId, platform, accountId, client, isMisskey, account, tabsEl, postsEl) {
-    // Replace default tab buttons with Posts/Pinned/Followers/Following
+    // Replace default tab buttons with Posts/Pinned
     tabsEl.innerHTML = `
       <button class="profile-tab active" data-profile-tab="posts">게시물</button>
       <button class="profile-tab" data-profile-tab="pinned">고정됨</button>
-      <button class="profile-tab" data-profile-tab="followers">팔로워</button>
-      <button class="profile-tab" data-profile-tab="following">팔로잉</button>
     `;
 
     // Tab switching
@@ -839,10 +861,6 @@ export const ProfileModalMixin = {
           await this._loadProfilePosts(postsEl, client, account, userId);
         } else if (tabName === 'pinned') {
           await this._loadProfilePinned(postsEl, client, account, userId);
-        } else if (tabName === 'followers') {
-          await this._loadProfileFollowers(postsEl, client, account, userId);
-        } else if (tabName === 'following') {
-          await this._loadProfileFollowing(postsEl, client, account, userId);
         }
       } catch (err) {
         postsEl.innerHTML = `<div class="profile-posts-empty">로딩 오류: ${err.message}</div>`;
