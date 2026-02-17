@@ -422,7 +422,7 @@ export const DataLoadingMixin = {
       }
 
       // Track newest notification IDs per account for since_id pagination
-      if (!this._notifNewestIds) this._notifNewestIds = new Map();
+      if (!this._notifNewestIds) this._notifNewestIds = new WeakMap();
       const newestIds = this._notifNewestIds.get(container) || new Map();
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
@@ -530,7 +530,7 @@ export const DataLoadingMixin = {
       await this.fetchMissingReplyParents(notifPosts, accounts);
 
       // Track oldest notification IDs per account for backward pagination
-      if (!this._notifOldestIds) this._notifOldestIds = new Map();
+      if (!this._notifOldestIds) this._notifOldestIds = new WeakMap();
       const oldestIds = this._notifOldestIds.get(container) || new Map();
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
@@ -549,7 +549,7 @@ export const DataLoadingMixin = {
       this._notifOldestIds.set(container, oldestIds);
 
       // Store pagination metadata for infinite scroll
-      if (!this._notifPagination) this._notifPagination = new Map();
+      if (!this._notifPagination) this._notifPagination = new WeakMap();
       this._notifPagination.set(container, {
         accounts,
         loading: false,
@@ -782,6 +782,19 @@ export const DataLoadingMixin = {
     if (cached && Date.now() - cached.time < 5 * 60 * 1000) return cached.result;
     const result = await client.resolveUrl(uri);
     this._resolveCache.set(uri, { result, time: Date.now() });
+    // Evict oldest entries when cache exceeds limit
+    if (this._resolveCache.size > 150) {
+      const now = Date.now();
+      for (const [k, v] of this._resolveCache) {
+        if (now - v.time > 5 * 60 * 1000) this._resolveCache.delete(k);
+      }
+      // If still over limit after TTL eviction, remove oldest
+      if (this._resolveCache.size > 150) {
+        const toDelete = this._resolveCache.size - 150;
+        const keys = this._resolveCache.keys();
+        for (let i = 0; i < toDelete; i++) this._resolveCache.delete(keys.next().value);
+      }
+    }
     return result;
   },
 
@@ -1118,11 +1131,16 @@ export const DataLoadingMixin = {
       const result = await this._unauthMisskeyRequest(instanceUrl, 'meta', {});
       const isMisskey = !!(result && (result.version || result.softwareName));
       this._misskeyInstanceCache.set(instanceUrl, isMisskey);
-      return isMisskey;
     } catch {
       this._misskeyInstanceCache.set(instanceUrl, false);
-      return false;
     }
+    // Evict oldest entries when cache exceeds limit
+    if (this._misskeyInstanceCache.size > 100) {
+      const toDelete = this._misskeyInstanceCache.size - 100;
+      const keys = this._misskeyInstanceCache.keys();
+      for (let i = 0; i < toDelete; i++) this._misskeyInstanceCache.delete(keys.next().value);
+    }
+    return this._misskeyInstanceCache.get(instanceUrl);
   },
 
   // Make an unauthenticated POST request to a Misskey instance API (via proxy)
