@@ -186,10 +186,12 @@ export class StreamRelay {
     const host = new URL(account.instanceUrl).host;
     let wsUrl;
 
+    // CF Workers fetch() requires https:// (not wss://) for WebSocket upgrade.
+    // The Upgrade: websocket header triggers the WebSocket handshake.
     if (account.platform === 'mastodon') {
-      wsUrl = `wss://${host}/api/v1/streaming?access_token=${encodeURIComponent(account.accessToken)}&stream=user`;
+      wsUrl = `https://${host}/api/v1/streaming?access_token=${encodeURIComponent(account.accessToken)}&stream=user`;
     } else {
-      wsUrl = `wss://${host}/streaming?i=${encodeURIComponent(account.accessToken)}`;
+      wsUrl = `https://${host}/streaming?i=${encodeURIComponent(account.accessToken)}`;
     }
 
     try {
