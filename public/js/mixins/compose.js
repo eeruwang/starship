@@ -7,7 +7,7 @@ import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
 export const ComposeMixin = {
 
   openComposeModal(replyToId = null, preferredAccountId = null) {
-    const accounts = this.store.getAll();
+    const accounts = this.getVisibleAccounts();
     if (accounts.length === 0) return;
 
     // Build account toggle buttons

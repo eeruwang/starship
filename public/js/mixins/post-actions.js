@@ -8,7 +8,7 @@ import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
 export const PostActionsMixin = {
 
   async handlePostAction(action, postId, platform, accountId, btnElement) {
-    const allAccounts = this.store.getAll();
+    const allAccounts = this.getVisibleAccounts();
 
     if (allAccounts.length === 0) return;
 

@@ -1040,11 +1040,11 @@ class StarShipApp {
 
   loadColumnData(col, type, accountId) {
     const content = col.querySelector('.column-content');
-    const accounts = this.store.getAll();
+    const visibleAccounts = this.getVisibleAccounts();
     if (type === 'all') {
-      this.loadTimelineForColumn(content, accounts);
+      this.loadTimelineForColumn(content, visibleAccounts);
     } else if (type === 'notifications') {
-      this.loadNotificationsForColumn(content, accounts);
+      this.loadNotificationsForColumn(content, visibleAccounts);
     } else if (type === 'account' && accountId) {
       const account = this.store.getById(accountId);
       if (account) {
@@ -1088,11 +1088,16 @@ class StarShipApp {
     return null; // append to end
   }
 
+  getVisibleAccounts() {
+    return this.store.getAll().filter(a => this.columnState.accounts[a.id] === true);
+  }
+
   renderColumns() {
     this.columnsContainer.innerHTML = '';
     const allAccounts = this.store.getAll();
     if (allAccounts.length === 0) return;
 
+    const visibleAccounts = this.getVisibleAccounts();
     const order = this.columnState.order || [];
 
     // Render columns in saved toggle order
@@ -1100,11 +1105,11 @@ class StarShipApp {
       if (key === 'all' && this.columnState.all) {
         const col = this.createColumn('전체', 'all', null);
         this.columnsContainer.appendChild(col);
-        this.loadTimelineForColumn(col.querySelector('.column-content'), allAccounts);
+        this.loadTimelineForColumn(col.querySelector('.column-content'), visibleAccounts);
       } else if (key === 'notifications' && this.columnState.notifications) {
         const col = this.createColumn('알림', 'notifications', null);
         this.columnsContainer.appendChild(col);
-        this.loadNotificationsForColumn(col.querySelector('.column-content'), allAccounts);
+        this.loadNotificationsForColumn(col.querySelector('.column-content'), visibleAccounts);
       } else if (key.startsWith('account:')) {
         const accountId = key.slice('account:'.length);
         if (this.columnState.accounts[accountId]) {

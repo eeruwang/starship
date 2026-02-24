@@ -4,13 +4,13 @@
  * Verifies that when a server account's column is toggled off (hidden),
  * all related features are properly affected.
  *
- * Key findings tested here:
+ * Verified behaviors:
  * - Individual account column is correctly hidden
  * - columnState is properly updated and persisted
- * - "전체" (All) and "알림" (Notifications) columns still include hidden accounts (BUG)
- * - Compose modal still shows hidden accounts (BUG)
- * - Post action account picker still shows hidden accounts (BUG)
- * - Auto-refresh still fetches data for hidden accounts via aggregate columns (BUG)
+ * - "전체" (All) and "알림" (Notifications) columns exclude hidden accounts
+ * - Compose modal only shows visible accounts
+ * - Post action account picker only shows visible accounts
+ * - Auto-refresh only fetches data for visible accounts
  */
 
 const { describe, it, beforeEach } = require('node:test');
@@ -115,14 +115,15 @@ class ColumnStateManager {
     const allAccounts = this.store.getAll();
     if (allAccounts.length === 0) return [];
 
+    const visibleAccounts = this.getVisibleAccounts();
     const result = [];
     const order = this.columnState.order || [];
 
     for (const key of order) {
       if (key === 'all' && this.columnState.all) {
-        result.push({ type: 'all', accounts: allAccounts });
+        result.push({ type: 'all', accounts: visibleAccounts });
       } else if (key === 'notifications' && this.columnState.notifications) {
-        result.push({ type: 'notifications', accounts: allAccounts });
+        result.push({ type: 'notifications', accounts: visibleAccounts });
       } else if (key.startsWith('account:')) {
         const accountId = key.slice('account:'.length);
         if (this.columnState.accounts[accountId]) {
@@ -148,12 +149,16 @@ class ColumnStateManager {
 
   /** Mirrors compose modal logic (compose.js lines 9-11): returns accounts shown in compose */
   getComposeAccounts() {
-    return this.store.getAll();
+    return this.getVisibleAccounts();
   }
 
   /** Mirrors post-actions (post-actions.js line 11): returns accounts for account picker */
   getPostActionAccounts() {
-    return this.store.getAll();
+    return this.getVisibleAccounts();
+  }
+
+  getVisibleAccounts() {
+    return this.store.getAll().filter(a => this.columnState.accounts[a.id] === true);
   }
 
   isAccountColumnVisible(accountId) {
@@ -263,7 +268,7 @@ describe('Account Disable – Column Rendering', () => {
 });
 
 
-describe('Account Disable – "전체" (All) column still includes hidden accounts', () => {
+describe('Account Disable – "전체" (All) column excludes hidden accounts', () => {
   let store, manager;
   const account1 = createMockAccount('mastodon_111_1000', 'mastodon', 'Alice');
   const account2 = createMockAccount('misskey_222_2000', 'misskey', 'Bob');
@@ -274,32 +279,39 @@ describe('Account Disable – "전체" (All) column still includes hidden accoun
     manager.ensureAccountEntries();
   });
 
-  it('"전체" column fetches ALL accounts regardless of column visibility', () => {
+  it('"전체" column only fetches visible accounts', () => {
     // Both accounts are hidden (default)
     const columns = manager.getVisibleColumns();
     const allColumn = columns.find(c => c.type === 'all');
 
     assert.ok(allColumn, '"전체" column should exist');
-    assert.equal(allColumn.accounts.length, 2, '"전체" passes ALL accounts to loadTimelineForColumn');
-
-    const accountIds = allColumn.accounts.map(a => a.id);
-    assert.ok(accountIds.includes(account1.id), 'hidden account1 is still in 전체');
-    assert.ok(accountIds.includes(account2.id), 'hidden account2 is still in 전체');
+    assert.equal(allColumn.accounts.length, 0, '"전체" should have no accounts when all are hidden');
   });
 
-  it('"전체" column still includes account after its column is toggled off', () => {
+  it('"전체" column includes only visible accounts', () => {
+    manager.toggleAccount(account1.id);  // show account1
+
+    const columns = manager.getVisibleColumns();
+    const allColumn = columns.find(c => c.type === 'all');
+    const accountIds = allColumn.accounts.map(a => a.id);
+    assert.equal(allColumn.accounts.length, 1, '"전체" should have 1 visible account');
+    assert.ok(accountIds.includes(account1.id), 'visible account1 is in 전체');
+    assert.ok(!accountIds.includes(account2.id), 'hidden account2 is not in 전체');
+  });
+
+  it('"전체" column excludes account after its column is toggled off', () => {
     manager.toggleAccount(account1.id);  // show
     manager.toggleAccount(account1.id);  // hide again
 
     const columns = manager.getVisibleColumns();
     const allColumn = columns.find(c => c.type === 'all');
     const accountIds = allColumn.accounts.map(a => a.id);
-    assert.ok(accountIds.includes(account1.id), 'toggled-off account still in 전체');
+    assert.ok(!accountIds.includes(account1.id), 'toggled-off account excluded from 전체');
   });
 });
 
 
-describe('Account Disable – "알림" (Notifications) column still includes hidden accounts', () => {
+describe('Account Disable – "알림" (Notifications) column excludes hidden accounts', () => {
   let store, manager;
   const account1 = createMockAccount('mastodon_111_1000', 'mastodon', 'Alice');
   const account2 = createMockAccount('misskey_222_2000', 'misskey', 'Bob');
@@ -310,21 +322,28 @@ describe('Account Disable – "알림" (Notifications) column still includes hid
     manager.ensureAccountEntries();
   });
 
-  it('"알림" column fetches ALL accounts regardless of column visibility', () => {
+  it('"알림" column only fetches visible accounts', () => {
     const columns = manager.getVisibleColumns();
     const notifColumn = columns.find(c => c.type === 'notifications');
 
     assert.ok(notifColumn, '"알림" column should exist');
-    assert.equal(notifColumn.accounts.length, 2, '"알림" passes ALL accounts to loadNotificationsForColumn');
+    assert.equal(notifColumn.accounts.length, 0, '"알림" should have no accounts when all are hidden');
+  });
 
+  it('"알림" column includes only visible accounts', () => {
+    manager.toggleAccount(account1.id);  // show account1
+
+    const columns = manager.getVisibleColumns();
+    const notifColumn = columns.find(c => c.type === 'notifications');
     const accountIds = notifColumn.accounts.map(a => a.id);
-    assert.ok(accountIds.includes(account1.id), 'hidden account1 is still in 알림');
-    assert.ok(accountIds.includes(account2.id), 'hidden account2 is still in 알림');
+    assert.equal(notifColumn.accounts.length, 1, '"알림" should have 1 visible account');
+    assert.ok(accountIds.includes(account1.id), 'visible account1 is in 알림');
+    assert.ok(!accountIds.includes(account2.id), 'hidden account2 is not in 알림');
   });
 });
 
 
-describe('Account Disable – Compose modal still shows hidden accounts', () => {
+describe('Account Disable – Compose modal only shows visible accounts', () => {
   let store, manager;
   const account1 = createMockAccount('mastodon_111_1000', 'mastodon', 'Alice');
   const account2 = createMockAccount('misskey_222_2000', 'misskey', 'Bob');
@@ -335,26 +354,33 @@ describe('Account Disable – Compose modal still shows hidden accounts', () => 
     manager.ensureAccountEntries();
   });
 
-  it('compose modal shows all accounts including hidden ones', () => {
+  it('compose modal shows no accounts when all are hidden', () => {
     const composeAccounts = manager.getComposeAccounts();
-    assert.equal(composeAccounts.length, 2, 'compose shows ALL accounts');
-
-    const ids = composeAccounts.map(a => a.id);
-    assert.ok(ids.includes(account1.id), 'hidden account1 shown in compose');
-    assert.ok(ids.includes(account2.id), 'hidden account2 shown in compose');
+    assert.equal(composeAccounts.length, 0, 'compose shows no accounts when all hidden');
   });
 
-  it('compose modal still shows account even after column is toggled off', () => {
+  it('compose modal only shows visible accounts', () => {
+    manager.toggleAccount(account1.id);  // show account1
+
+    const composeAccounts = manager.getComposeAccounts();
+    assert.equal(composeAccounts.length, 1, 'compose shows 1 visible account');
+
+    const ids = composeAccounts.map(a => a.id);
+    assert.ok(ids.includes(account1.id), 'visible account1 shown in compose');
+    assert.ok(!ids.includes(account2.id), 'hidden account2 not in compose');
+  });
+
+  it('compose modal excludes account after column is toggled off', () => {
     manager.toggleAccount(account1.id);  // show
     manager.toggleAccount(account1.id);  // hide
 
     const composeAccounts = manager.getComposeAccounts();
-    assert.ok(composeAccounts.find(a => a.id === account1.id), 'toggled-off account still in compose');
+    assert.ok(!composeAccounts.find(a => a.id === account1.id), 'toggled-off account excluded from compose');
   });
 });
 
 
-describe('Account Disable – Post action picker still shows hidden accounts', () => {
+describe('Account Disable – Post action picker only shows visible accounts', () => {
   let store, manager;
   const account1 = createMockAccount('mastodon_111_1000', 'mastodon', 'Alice');
   const account2 = createMockAccount('misskey_222_2000', 'misskey', 'Bob');
@@ -365,13 +391,20 @@ describe('Account Disable – Post action picker still shows hidden accounts', (
     manager.ensureAccountEntries();
   });
 
-  it('post action account picker shows all accounts including hidden ones', () => {
+  it('post action account picker shows no accounts when all are hidden', () => {
     const actionAccounts = manager.getPostActionAccounts();
-    assert.equal(actionAccounts.length, 2);
+    assert.equal(actionAccounts.length, 0, 'no accounts in action picker when all hidden');
+  });
+
+  it('post action account picker only shows visible accounts', () => {
+    manager.toggleAccount(account1.id);  // show account1
+
+    const actionAccounts = manager.getPostActionAccounts();
+    assert.equal(actionAccounts.length, 1);
 
     const ids = actionAccounts.map(a => a.id);
-    assert.ok(ids.includes(account1.id), 'hidden account1 in action picker');
-    assert.ok(ids.includes(account2.id), 'hidden account2 in action picker');
+    assert.ok(ids.includes(account1.id), 'visible account1 in action picker');
+    assert.ok(!ids.includes(account2.id), 'hidden account2 not in action picker');
   });
 });
 
@@ -387,29 +420,19 @@ describe('Account Disable – Auto-refresh behavior', () => {
     manager.ensureAccountEntries();
   });
 
-  it('refresh targets hidden accounts through aggregate columns', () => {
-    // account1 is hidden, but 전체 and 알림 are visible
+  it('refresh does not target hidden accounts through aggregate columns', () => {
+    // Both accounts are hidden (default), 전체 and 알림 are visible
     const targets = manager.getRefreshTargets();
 
-    // "전체" column should fetch both accounts
+    // "전체" column should not fetch hidden accounts
     const allTarget = targets.find(t => t.type === 'all');
     assert.ok(allTarget);
-    assert.ok(
-      allTarget.fetchedAccountIds.includes(account1.id),
-      'hidden account1 still refreshed via 전체'
-    );
-    assert.ok(
-      allTarget.fetchedAccountIds.includes(account2.id),
-      'hidden account2 still refreshed via 전체'
-    );
+    assert.equal(allTarget.fetchedAccountIds.length, 0, 'no hidden accounts fetched via 전체');
 
-    // "알림" column should also fetch both accounts
+    // "알림" column should not fetch hidden accounts
     const notifTarget = targets.find(t => t.type === 'notifications');
     assert.ok(notifTarget);
-    assert.ok(
-      notifTarget.fetchedAccountIds.includes(account1.id),
-      'hidden account1 still refreshed via 알림'
-    );
+    assert.equal(notifTarget.fetchedAccountIds.length, 0, 'no hidden accounts fetched via 알림');
   });
 
   it('no individual account column is refreshed when account is hidden', () => {
@@ -418,12 +441,19 @@ describe('Account Disable – Auto-refresh behavior', () => {
     assert.equal(accountTargets.length, 0, 'no individual account columns are refreshed');
   });
 
-  it('visible account gets its own refresh target', () => {
+  it('visible account gets its own refresh target and appears in aggregate columns', () => {
     manager.toggleAccount(account1.id); // show account1
     const targets = manager.getRefreshTargets();
+
+    // Individual column
     const accountTargets = targets.filter(t => t.type === 'account');
     assert.equal(accountTargets.length, 1);
     assert.equal(accountTargets[0].accountId, account1.id);
+
+    // Aggregate columns should only include visible account
+    const allTarget = targets.find(t => t.type === 'all');
+    assert.ok(allTarget.fetchedAccountIds.includes(account1.id), 'visible account1 in 전체');
+    assert.ok(!allTarget.fetchedAccountIds.includes(account2.id), 'hidden account2 not in 전체');
   });
 });
 
@@ -458,18 +488,17 @@ describe('Account Disable – Toggling all/notifications columns', () => {
     const targets = manager.getRefreshTargets();
     assert.equal(targets.length, 0, 'no columns = no fetches');
 
-    // This is the ONLY way to fully stop fetching for a hidden account
     const allFetchedIds = targets.flatMap(t => t.fetchedAccountIds);
     assert.ok(!allFetchedIds.includes(account1.id), 'account data not fetched');
   });
 
-  it('when only 전체 is on, hidden account IS still fetched', () => {
+  it('when only 전체 is on, hidden account is NOT fetched', () => {
     manager.toggleNotifications(); // off
     // 전체 is still on, account1 is hidden (default)
 
     const targets = manager.getRefreshTargets();
     const allFetchedIds = targets.flatMap(t => t.fetchedAccountIds);
-    assert.ok(allFetchedIds.includes(account1.id), 'hidden account still fetched via 전체');
+    assert.ok(!allFetchedIds.includes(account1.id), 'hidden account not fetched via 전체');
   });
 });
 
