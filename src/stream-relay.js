@@ -383,7 +383,7 @@ export class StreamRelay {
     for (const [accountId, buf] of this.eventBuffer) {
       if (!clientState.subscriptions.has(accountId)) continue;
       for (const event of buf) {
-        if (event.timestamp > sinceTimestamp) {
+        if (event.timestamp >= sinceTimestamp) {
           this._sendTo(ws, event);
         }
       }

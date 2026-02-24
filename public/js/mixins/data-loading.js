@@ -77,8 +77,7 @@ export const DataLoadingMixin = {
       return;
     }
 
-    const existingCards = container.querySelectorAll('.post-card');
-    const isFirstLoad = existingCards.length === 0;
+    const isFirstLoad = container.querySelectorAll('.post-card').length === 0;
 
     if (isFirstLoad) {
       container.innerHTML = '';
@@ -161,6 +160,8 @@ export const DataLoadingMixin = {
         this.enrichLinkCards(container);
       } else {
         // Smooth incremental update: prepend new posts with animation
+        // Re-query DOM for fresh snapshot (stream events may have added posts during the fetch)
+        const existingCards = container.querySelectorAll('.post-card');
         // Build sets of platform:id keys, canonical URIs, and dedup keys for robust matching
         const existingKeys = new Set();
         // Map canonicalUri → DOM card element for account merging

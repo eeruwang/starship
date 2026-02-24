@@ -631,6 +631,8 @@
   .columns-container {
     gap: 0.5rem;
     padding: 0.5rem;
+    scroll-padding-left: 0.5rem;
+    scroll-padding-right: 0.5rem;
   }
   .column {
     min-width: min(var(--column-width), 70vw);
@@ -651,6 +653,8 @@
   .columns-container {
     gap: 0.5rem;
     padding: 0.5rem;
+    scroll-padding-left: 0.5rem;
+    scroll-padding-right: 0.5rem;
   }
   .column {
     min-width: 85vw;
