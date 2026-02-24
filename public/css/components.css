@@ -664,8 +664,8 @@
     scroll-padding-right: 0.5rem;
   }
   .column {
-    min-width: 85vw;
-    max-width: 85vw;
+    min-width: min(var(--column-width), 85vw);
+    max-width: min(var(--column-width), 85vw);
   }
   .app-header {
     flex-direction: row;
@@ -712,8 +712,8 @@
 
 @media (max-width: 480px) {
   .column {
-    min-width: 92vw;
-    max-width: 92vw;
+    min-width: min(var(--column-width), 92vw);
+    max-width: min(var(--column-width), 92vw);
   }
 }
 
