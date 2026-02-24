@@ -670,9 +670,10 @@ export class MastodonClient {
         const name = er.name || er.emoji;
         if (!name) continue;
         // Custom emoji: wrap in colons
-        const key = er.url || er.static_url ? `:${name}:` : name;
+        const isCustom = !!(er.url || er.static_url);
+        const key = isCustom ? `:${name}:` : name;
         reactions[key] = (reactions[key] || 0) + (er.count || 1);
-        if (er.url || er.static_url) {
+        if (isCustom) {
           reactionEmojis[name] = er.url || er.static_url;
         }
         if (er.me) myReaction = key;
