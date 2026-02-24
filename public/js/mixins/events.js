@@ -422,7 +422,11 @@ export const EventsMixin = {
       const allImages = mediaContainer
         ? [...mediaContainer.querySelectorAll('img[data-lightbox="true"]')]
         : [img];
-      const mediaList = allImages.map(i => ({ url: i.dataset.fullUrl || i.src, thumb: i }));
+      const mediaList = allImages.map(i => ({
+        url: i.dataset.fullUrl || i.src,
+        previewUrl: i.src,
+        thumb: i,
+      }));
       const index = allImages.indexOf(img);
       this.openLightbox(mediaList, Math.max(index, 0));
     });
@@ -824,13 +828,21 @@ export const EventsMixin = {
   // ===== Lightbox =====
 
   openLightbox(mediaList, index) {
-    // mediaList: [{ url, thumb }, ...]  index: which to show first
+    // mediaList: [{ url, previewUrl?, thumb }, ...]  index: which to show first
     this._lightboxMedia = mediaList;
     this._lightboxIndex = index || 0;
     const item = mediaList[this._lightboxIndex];
     this._lightboxSourceImg = item.thumb || null;
 
-    this.lightboxImg.src = item.url;
+    // Progressive loading: show preview instantly, then swap to full image
+    const preview = item.previewUrl || item.thumb?.src;
+    if (preview && preview !== item.url) {
+      this.lightboxImg.src = preview;
+      this.lightboxImg.classList.add('lb-loading');
+      this._loadFullImage(item.url);
+    } else {
+      this.lightboxImg.src = item.url;
+    }
     this.lightbox.style.display = 'flex';
 
     // Animate from source thumbnail position
@@ -846,6 +858,31 @@ export const EventsMixin = {
 
     this._updateLightboxNav();
     requestAnimationFrame(() => this.lightbox.classList.add('visible'));
+  },
+
+  // Load full-resolution image and swap when ready
+  _loadFullImage(fullUrl) {
+    if (this._fullImageLoader) {
+      this._fullImageLoader.onload = null;
+      this._fullImageLoader.onerror = null;
+    }
+    const loader = new Image();
+    this._fullImageLoader = loader;
+    loader.onload = () => {
+      // Only swap if lightbox is still showing and index hasn't changed
+      if (this.lightbox.style.display === 'flex' && loader === this._fullImageLoader) {
+        this.lightboxImg.src = fullUrl;
+        this.lightboxImg.classList.remove('lb-loading');
+      }
+    };
+    loader.onerror = () => {
+      this.lightboxImg.classList.remove('lb-loading');
+    };
+    loader.src = fullUrl;
+    if (loader.complete) {
+      this.lightboxImg.src = fullUrl;
+      this.lightboxImg.classList.remove('lb-loading');
+    }
   },
 
   navigateLightbox(direction) {
@@ -870,18 +907,25 @@ export const EventsMixin = {
     void oldClone.offsetWidth;
     oldClone.classList.add(outClass);
 
-    // Preload the new image, then animate in
-    const preloader = new Image();
+    // Progressive: show preview immediately, then load full in background
+    const preview = item.previewUrl || item.thumb?.src;
+    const showSrc = (preview && preview !== item.url) ? preview : item.url;
     const doTransition = () => {
-      this.lightboxImg.src = item.url;
-      this.lightboxImg.classList.remove('lb-enter', 'lb-exit', 'lb-slide-left', 'lb-slide-right');
+      this.lightboxImg.src = showSrc;
+      this.lightboxImg.classList.remove('lb-enter', 'lb-exit', 'lb-slide-left', 'lb-slide-right', 'lb-loading');
       void this.lightboxImg.offsetWidth;
       this.lightboxImg.classList.add(direction > 0 ? 'lb-slide-left' : 'lb-slide-right');
+      // Load full image in background after transition starts
+      if (showSrc !== item.url) {
+        this.lightboxImg.classList.add('lb-loading');
+        this._loadFullImage(item.url);
+      }
     };
+    // Preload the preview/full image for smooth transition
+    const preloader = new Image();
     preloader.onload = doTransition;
     preloader.onerror = doTransition;
-    preloader.src = item.url;
-    // If already cached, onload might not fire in some browsers
+    preloader.src = showSrc;
     if (preloader.complete) doTransition();
 
     // Clean up after transition
@@ -951,8 +995,14 @@ export const EventsMixin = {
 
   closeLightbox() {
     this.lightbox.classList.remove('visible');
-    this.lightboxImg.classList.remove('lb-enter', 'lb-slide-left', 'lb-slide-right');
+    this.lightboxImg.classList.remove('lb-enter', 'lb-slide-left', 'lb-slide-right', 'lb-loading');
     this.lightboxImg.classList.add('lb-exit');
+    // Cancel any in-flight full image load
+    if (this._fullImageLoader) {
+      this._fullImageLoader.onload = null;
+      this._fullImageLoader.onerror = null;
+      this._fullImageLoader = null;
+    }
     // Remove any lingering old-image clones
     this.lightbox.querySelectorAll('.lb-old-image').forEach(el => el.remove());
     this._lightboxTransitioning = false;

@@ -510,6 +510,13 @@
   to   { opacity: 0; transform: translateX(60px) scale(0.97); }
 }
 
+/* Progressive loading: preview shown, full loading in background */
+.lightbox-overlay #lightbox-img.lb-loading {
+  image-rendering: auto;
+  filter: blur(2px);
+  transition: filter 0.3s ease;
+}
+
 @media (max-width: 600px) {
   .lightbox-nav {
     width: 36px;
