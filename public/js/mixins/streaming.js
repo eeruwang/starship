@@ -99,6 +99,7 @@ export const StreamingMixin = {
 
         setTimeout(() => el.classList.remove('new-post'), 400);
         this.enrichLinkCards(content);
+        this._pruneExcessPosts(content);
         continue;
       }
 
@@ -132,7 +133,7 @@ export const StreamingMixin = {
     if (col._recentThreadInserts.has(dedupeKey)) return;
     col._recentThreadInserts.set(dedupeKey, now);
     // Prune stale entries (older than 10s) to avoid memory leak
-    if (col._recentThreadInserts.size > 50) {
+    if (col._recentThreadInserts.size > 20) {
       for (const [k, t] of col._recentThreadInserts) {
         if (now - t > 10_000) col._recentThreadInserts.delete(k);
       }

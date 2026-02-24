@@ -264,6 +264,9 @@ export const DataLoadingMixin = {
 
           this.enrichLinkCards(container);
         }
+
+        // Cap DOM size to prevent memory exhaustion on long-running sessions
+        this._pruneExcessPosts(container);
       }
 
       // Cache posts AFTER incremental merge so Phase 1 can compare against old cache
@@ -282,6 +285,13 @@ export const DataLoadingMixin = {
   async loadOlderPosts(container) {
     const pagination = this._columnPagination.get(container);
     if (!pagination || pagination.loading || !pagination.hasMore) return;
+
+    // Stop loading more if DOM is already at the limit
+    const max = this.MAX_DOM_POSTS || 500;
+    if (container.querySelectorAll('.post-card').length >= max) {
+      pagination.hasMore = false;
+      return;
+    }
 
     pagination.loading = true;
 
@@ -1676,6 +1686,21 @@ export const DataLoadingMixin = {
     if ((cd.content || '') !== (fd.content || '')) return true;
 
     return false;
+  },
+
+  /**
+   * Remove excess post-card elements from the bottom of a column to cap DOM size.
+   * Only prunes posts that are well below the current scroll viewport.
+   */
+  _pruneExcessPosts(container) {
+    const cards = container.querySelectorAll('.post-card');
+    const max = this.MAX_DOM_POSTS || 500;
+    if (cards.length <= max) return;
+
+    const removeCount = cards.length - max;
+    for (let i = cards.length - 1; i >= cards.length - removeCount; i--) {
+      cards[i].remove();
+    }
   },
 
 };

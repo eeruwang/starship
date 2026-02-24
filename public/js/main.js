@@ -29,6 +29,7 @@ class StarShipApp {
     this.focusedColumnIndex = 0;
     this.postCache = new Map(); // key: `${platform}:${id}`, value: post
     this.POST_CACHE_MAX = 500;
+    this.MAX_DOM_POSTS = 500; // max post-card elements per column before pruning
     this._ogCache = new Map(); // URL → { title, description, image, siteName }
     this._OG_CACHE_MAX = 200;
     this._columnPagination = new WeakMap();
