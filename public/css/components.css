@@ -698,7 +698,7 @@
     width: 15px;
     height: 15px;
   }
-  #btn-refresh-all {
+  #btn-refresh-all .btn-label {
     display: none;
   }
   .column-toggle-bar {

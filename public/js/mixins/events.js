@@ -28,6 +28,28 @@ export const EventsMixin = {
     });
     this.btnRefreshAll.addEventListener('click', () => this.refreshAll(true));
     this.btnSettings.addEventListener('click', () => this.openSettingsModal());
+
+    // Double-tap / double-click app header: scroll ALL columns to top
+    const appHeader = document.querySelector('.app-header');
+    if (appHeader) {
+      let lastTap = 0;
+      appHeader.addEventListener('touchend', (e) => {
+        // Ignore taps on buttons/links
+        if (e.target.closest('button, a, input')) return;
+        const now = Date.now();
+        if (now - lastTap < 350) {
+          e.preventDefault();
+          this._scrollAllColumnsToTop();
+          lastTap = 0;
+        } else {
+          lastTap = now;
+        }
+      });
+      appHeader.addEventListener('dblclick', (e) => {
+        if (e.target.closest('button, a, input')) return;
+        this._scrollAllColumnsToTop();
+      });
+    }
   },
 
   _bindAuthEvents() {
@@ -751,13 +773,31 @@ export const EventsMixin = {
       this.focusColumn(col);
     });
 
-    // Double-click/tap header: scroll column to top
+    // Double-click/tap column header: scroll that column to top
     this.columnsContainer.addEventListener('dblclick', (e) => {
       const header = e.target.closest('.column-header');
       if (!header || e.target.closest('button')) return;
       const col = header.closest('.column');
       const content = col?.querySelector('.column-content');
       if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    // Touch double-tap support for column headers (dblclick doesn't fire on mobile)
+    let lastColTap = 0, lastColTarget = null;
+    this.columnsContainer.addEventListener('touchend', (e) => {
+      const header = e.target.closest('.column-header');
+      if (!header || e.target.closest('button')) return;
+      const now = Date.now();
+      if (now - lastColTap < 350 && lastColTarget === header) {
+        e.preventDefault();
+        const col = header.closest('.column');
+        const content = col?.querySelector('.column-content');
+        if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+        lastColTap = 0;
+        lastColTarget = null;
+      } else {
+        lastColTap = now;
+        lastColTarget = header;
+      }
     });
   },
 
@@ -827,6 +867,14 @@ export const EventsMixin = {
     if (!focused) return null;
     if (focused.dataset.columnType === 'account') return focused.dataset.accountId || null;
     return null;
+  },
+
+  _scrollAllColumnsToTop() {
+    const columns = this.columnsContainer.querySelectorAll('.column');
+    for (const col of columns) {
+      const content = col.querySelector('.column-content');
+      if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   },
 
   // ===== Lightbox =====
