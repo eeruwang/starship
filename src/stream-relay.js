@@ -394,11 +394,13 @@ export class StreamRelay {
 
   _broadcastToSubscribers(accountId, message) {
     const raw = JSON.stringify(message);
+    const failed = [];
     for (const [ws, clientState] of this.clients) {
       if (clientState.subscriptions.has(accountId)) {
-        try { ws.send(raw); } catch { this.clients.delete(ws); }
+        try { ws.send(raw); } catch { failed.push(ws); }
       }
     }
+    for (const ws of failed) this.clients.delete(ws);
   }
 
   _sendTo(ws, message) {

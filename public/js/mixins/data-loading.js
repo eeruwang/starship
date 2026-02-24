@@ -1536,13 +1536,21 @@ export const DataLoadingMixin = {
           (!post.mergedAccounts || post.mergedAccounts.length <= 1)) {
         post.mergedAccounts = existing.mergedAccounts;
       }
-      // Preserve enriched data (quotePost, replyTo) from existing cache when
-      // the new entry doesn't include them (e.g. notification payloads may omit quotes)
+      // Preserve enriched data from existing cache when the new entry doesn't
+      // include them (e.g. notification payloads may omit quotes, streaming
+      // events lack cross-instance metadata set by _mergePostData)
       if (existing) {
         const edp = existing.reblog || existing;
         const ndp = post.reblog || post;
         if (edp.quotePost && !ndp.quotePost) ndp.quotePost = edp.quotePost;
         if (edp.replyTo && !ndp.replyTo) ndp.replyTo = edp.replyTo;
+        // Preserve cross-instance metadata (set by _mergePostData / _refreshMergedPost)
+        if (edp._misskeyNoteId && !ndp._misskeyNoteId) {
+          ndp._misskeyNoteId = edp._misskeyNoteId;
+          ndp._misskeyAccountId = edp._misskeyAccountId;
+        }
+        if (edp._reactionInstanceUrl && !ndp._reactionInstanceUrl) ndp._reactionInstanceUrl = edp._reactionInstanceUrl;
+        if (edp._noteIdsByInstance && !ndp._noteIdsByInstance) ndp._noteIdsByInstance = edp._noteIdsByInstance;
       }
       this.postCache.set(key, post);
     }

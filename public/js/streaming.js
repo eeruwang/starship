@@ -80,6 +80,7 @@ export class StreamManager {
   connect(account, client) {
     if (this._accounts.has(account.id)) return;
     this._accounts.set(account.id, { account, client });
+    this._intentionalClose = false;
 
     if (this._mode === 'direct') {
       this._connectDirect(account, client);

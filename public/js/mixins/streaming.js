@@ -30,6 +30,10 @@ export const StreamingMixin = {
   },
 
   stopStreaming() {
+    if (this._reconnectRefreshTimer) {
+      clearTimeout(this._reconnectRefreshTimer);
+      this._reconnectRefreshTimer = null;
+    }
     if (this.streamManager) {
       this.streamManager.disconnectAll();
     }
@@ -383,6 +387,9 @@ export const StreamingMixin = {
             cdp.content = dp.content;
             cdp.contentWarning = dp.contentWarning;
             cdp.media = dp.media;
+            cdp.sensitive = dp.sensitive;
+            if (dp.poll) cdp.poll = dp.poll;
+            if (dp.linkCard) cdp.linkCard = dp.linkCard;
             const newEl = renderPost(cardPost);
             if (isThread) {
               for (const cls of card.classList) {
