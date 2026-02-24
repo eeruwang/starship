@@ -18,6 +18,7 @@ export const StreamingMixin = {
       this.streamManager.on('postUpdate', (data) => this._onStreamPostUpdate(data));
       this.streamManager.on('postDelete', (data) => this._onStreamPostDelete(data));
       this.streamManager.on('connected', (data) => this._onStreamReconnected(data));
+      this.streamManager.on('resumeFromBackground', (data) => this._onResumeFromBackground(data));
     }
 
     const accounts = this.store.getAll();
@@ -434,5 +435,21 @@ export const StreamingMixin = {
         this.loadThreadForColumn(col);
       }
     }, 2000);
+  },
+
+  /**
+   * Tab returned to foreground after being hidden for a while.
+   * Silently refresh timelines to catch any events that were missed
+   * (e.g. due to background throttling, silent socket drops, etc.).
+   */
+  _onResumeFromBackground({ hiddenMs }) {
+    console.log(`[Stream] Resuming from background (hidden ${Math.round(hiddenMs / 1000)}s), refreshing`);
+    // Small delay to let connection probes settle first
+    setTimeout(() => {
+      this.refreshAll(false, { skipColumnTypes: ['thread'] });
+      for (const col of this.columnsContainer.querySelectorAll('.column[data-column-type="thread"]')) {
+        this.loadThreadForColumn(col);
+      }
+    }, 1500);
   },
 };

@@ -54,6 +54,7 @@ export class StreamManager {
     this._pageshowHandler = null;
     this._pagehideHandler = null;
     this._onlineHandler = null;
+    this._lastHiddenAt = 0;
   }
 
   // ===== Event system =====
@@ -516,11 +517,20 @@ export class StreamManager {
   // In direct mode: manage per-account WebSockets with heartbeat.
 
   _ensureLifecycle() {
-    // Tab visibility: probe connections on resume
+    // Tab visibility: probe connections on resume, refresh if hidden long
     if (!this._visibilityHandler) {
       this._visibilityHandler = () => {
-        if (document.visibilityState === 'visible') {
+        if (document.visibilityState === 'hidden') {
+          this._lastHiddenAt = Date.now();
+        } else if (document.visibilityState === 'visible') {
           this._probeAllConnections();
+          // If hidden for >30s, emit event so mixin can refresh timelines
+          // to catch any events silently lost during background
+          const hiddenDuration = this._lastHiddenAt ? Date.now() - this._lastHiddenAt : 0;
+          if (hiddenDuration > 30_000) {
+            this._emit('resumeFromBackground', { hiddenMs: hiddenDuration });
+          }
+          this._lastHiddenAt = 0;
         }
       };
       document.addEventListener('visibilitychange', this._visibilityHandler);
