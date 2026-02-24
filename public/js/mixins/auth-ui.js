@@ -619,6 +619,13 @@ export const AuthUIMixin = {
           this.saveColumnState();
           this.toggleColumnSmooth('account', false, accountId);
         }
+        // Toggle streaming connection for this account
+        if (isHidden) {
+          this.streamManager?.disconnect(accountId);
+        } else {
+          const client = this.store.getClient(accountId);
+          if (client) this.streamManager?.connect(account, client);
+        }
         this.debouncedSaveToCloud();
         // Full refresh (like adding a new account)
         this.render();

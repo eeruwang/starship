@@ -23,6 +23,7 @@ export const StreamingMixin = {
 
     const accounts = this.store.getAll();
     for (const account of accounts) {
+      if (account.hidden) continue;
       const client = this.store.getClient(account.id);
       if (client) {
         this.streamManager.connect(account, client);
