@@ -797,7 +797,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  width: min(340px, calc(100vw - 2rem));
+  width: min(400px, calc(100vw - 2rem));
   max-height: 80vh;
   display: flex;
   flex-direction: column;
