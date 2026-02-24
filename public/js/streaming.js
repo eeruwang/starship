@@ -296,9 +296,11 @@ export class StreamManager {
       this._emit('disconnected', { accountId: msg.accountId });
     } else if (msg.type === 'status' && msg.accounts) {
       // Sync upstream connection statuses from relay server
+      // Format: { accountId: { connected: bool, error: string|null } }
       const entries = Object.entries(msg.accounts);
       let anyConnected = false;
-      for (const [accountId, connected] of entries) {
+      for (const [accountId, info] of entries) {
+        const connected = typeof info === 'object' ? info.connected : info;
         if (connected) anyConnected = true;
         const wasConnected = this._relayConnectedAccounts.has(accountId);
         if (connected && !wasConnected) {
@@ -307,6 +309,11 @@ export class StreamManager {
         } else if (!connected && wasConnected) {
           this._relayConnectedAccounts.delete(accountId);
           this._emit('disconnected', { accountId });
+        }
+        // Log upstream errors for debugging
+        const error = typeof info === 'object' ? info.error : null;
+        if (error) {
+          console.warn(`[Stream] Relay upstream ${accountId}: ${error}`);
         }
       }
       // If relay has subscribed accounts but none connected upstream,

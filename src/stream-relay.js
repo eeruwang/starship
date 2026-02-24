@@ -115,7 +115,10 @@ export class StreamRelay {
       const statuses = {};
       for (const accountId of clientState.subscriptions) {
         const upstream = this.upstreams.get(accountId);
-        statuses[accountId] = upstream?.connected || false;
+        statuses[accountId] = {
+          connected: upstream?.connected || false,
+          error: upstream?.lastError || null,
+        };
       }
       this._sendTo(ws, { type: 'status', accounts: statuses });
     } else if (msg.type === 'ping') {
@@ -161,6 +164,7 @@ export class StreamRelay {
       account,
       ws: null,
       connected: false,
+      lastError: null,
       reconnectTimer: null,
       reconnectDelay: 2000,
       heartbeatTimer: null,
@@ -193,8 +197,17 @@ export class StreamRelay {
         headers: { 'Upgrade': 'websocket' },
       });
 
+      if (resp.status !== 101) {
+        state.lastError = `HTTP ${resp.status}`;
+        console.error(`[Relay] Upstream ${account.id} (${host}): HTTP ${resp.status} (expected 101)`);
+        this._scheduleUpstreamReconnect(state);
+        return;
+      }
+
       const ws = resp.webSocket;
       if (!ws) {
+        state.lastError = 'no webSocket on response';
+        console.error(`[Relay] Upstream ${account.id} (${host}): 101 but no webSocket property`);
         this._scheduleUpstreamReconnect(state);
         return;
       }
@@ -202,6 +215,7 @@ export class StreamRelay {
       ws.accept();
       state.ws = ws;
       state.connected = true;
+      state.lastError = null;
       state.lastActivity = Date.now();
       state.reconnectDelay = 2000;
       state.awaitingPong = false;
@@ -264,6 +278,8 @@ export class StreamRelay {
         // close event follows — reconnection handled there
       });
     } catch (e) {
+      state.lastError = e?.message || 'fetch failed';
+      console.error(`[Relay] Upstream ${account.id} (${host}): ${state.lastError}`);
       this._scheduleUpstreamReconnect(state);
     }
   }
