@@ -2,12 +2,13 @@
  * Compose Mixin
  * Handles the compose modal: opening, emoji picker, file attachments, and submission
  */
-import { COMMON_EMOJIS, loadInstanceEmojis } from '../ui/emoji-picker.js';
+import { escapeHtml, compressImage } from '../ui/utils.js';
+import { COMMON_EMOJIS, UNICODE_EMOJI_MAP, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
 
 export const ComposeMixin = {
 
-  openComposeModal(replyToId = null, preferredAccountId = null) {
-    const accounts = this.getVisibleAccounts();
+  openComposeModal(replyToId = null, preferredAccountId = null, restrictedAccounts = null) {
+    const accounts = restrictedAccounts || this.store.getAll();
     if (accounts.length === 0) return;
 
     // Build account toggle buttons
@@ -19,16 +20,21 @@ export const ComposeMixin = {
       const btn = document.createElement('button');
       btn.className = 'compose-account-toggle';
       btn.dataset.accountId = account.id;
-      const dotStyle = account.themeColor ? `style="background:${account.themeColor}"` : '';
+      const dotColor = this._accountColor(account);
+      const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       btn.innerHTML = `
         <img class="compose-account-avatar" src="${p.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-        <span class="compose-account-name">${this.escapeHtml(p.displayName)}</span>
-        <span class="platform-dot ${account.platform}" ${dotStyle}></span>
+        <span class="compose-account-name">${escapeHtml(p.displayName)}</span>
+        <span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>
       `;
 
-      // Pre-select preferred account, or first account by default
+      // In restricted mode (multi-account column), no pre-selection unless explicitly preferred
+      // In normal mode, pre-select preferred account or first by default
       const isFirst = accounts.indexOf(account) === 0;
-      if (preferredAccountId === account.id || (!preferredAccountId && isFirst)) {
+      const shouldPreSelect = restrictedAccounts
+        ? (preferredAccountId && preferredAccountId === account.id)
+        : (preferredAccountId === account.id || (!preferredAccountId && isFirst));
+      if (shouldPreSelect) {
         btn.classList.add('active');
         this.composeSelectedAccounts.add(account.id);
       }
@@ -65,12 +71,23 @@ export const ComposeMixin = {
     delete this.composeText.dataset.quoteId;
     delete this.composeText.dataset.quotePlatform;
     delete this.composeText.dataset.quoteUrl;
+    delete this.composeText.dataset.quoteAccountId;
+    delete this.composeText.dataset.replyCanonicalUri;
+    delete this.composeText.dataset.replyAccountId;
     this._composeEmojiMap = {};
     this._composeEmojiMapAccountIds = new Set();
 
     const replyCtx = document.getElementById('compose-reply-context');
     if (replyToId) {
       this.composeText.dataset.replyTo = replyToId;
+      // Store canonical URI for cross-instance reply resolution
+      const replySourcePost = this.findCachedPost(replyToId);
+      if (replySourcePost) {
+        const dpReply = replySourcePost.reblog || replySourcePost;
+        const canonicalUri = dpReply.canonicalUri || dpReply.url;
+        if (canonicalUri) this.composeText.dataset.replyCanonicalUri = canonicalUri;
+        if (replySourcePost.accountId) this.composeText.dataset.replyAccountId = replySourcePost.accountId;
+      }
       this.composeText.placeholder = '답글을 작성하세요...';
       this.composeTitle.textContent = '답글 작성';
 
@@ -84,9 +101,9 @@ export const ComposeMixin = {
       const origPost = this.findCachedPost(replyToId);
       if (origPost) {
         const dp = origPost.reblog || origPost;
-        const authorName = dp.author?.displayNameHtml || this.escapeHtml(dp.author?.displayName || '');
+        const authorName = dp.author?.displayNameHtml || escapeHtml(dp.author?.displayName || '');
         const avatarHtml = dp.author?.avatarUrl
-          ? `<img class="compose-reply-context-avatar" src="${this.escapeHtml(dp.author.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+          ? `<img class="compose-reply-context-avatar" src="${escapeHtml(dp.author.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
           : '';
         replyCtx.innerHTML = `
           <div class="compose-reply-context-header">
@@ -97,6 +114,16 @@ export const ComposeMixin = {
           <div class="compose-reply-context-body">${dp.content || ''}</div>
         `;
         replyCtx.style.display = '';
+
+        // Default reply visibility to the original post's visibility
+        if (dp.visibility) {
+          this.composeVisibilityValue = dp.visibility;
+          const opt = this._composeVisibilityOptions.find(o => o.value === dp.visibility);
+          if (opt) {
+            this.btnComposeVisibility.innerHTML = this._getVisibilitySvg(opt.icon);
+            this.btnComposeVisibility.title = `공개 범위: ${opt.label}`;
+          }
+        }
       } else {
         replyCtx.style.display = 'none';
       }
@@ -122,7 +149,7 @@ export const ComposeMixin = {
         const ov = document.getElementById('compose-text-overlay');
         if (ov) ov.scrollTop = this.composeText.scrollTop;
       };
-      this.composeText.addEventListener('scroll', this._composeScrollSyncHandler);
+      this.composeText.addEventListener('scroll', this._composeScrollSyncHandler, { passive: true });
     }
 
     this.openModal(this.modalCompose);
@@ -257,13 +284,13 @@ export const ComposeMixin = {
     }
 
     // Resolve emojis in text
-    let html = this.escapeHtml(text);
+    let html = escapeHtml(text);
     let hasCustomEmoji = false;
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
       const url = emojiMap[name];
       if (url) {
         hasCustomEmoji = true;
-        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
+        return `<img class="inline-emoji" src="${escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
       }
       return match;
     });
@@ -292,20 +319,23 @@ export const ComposeMixin = {
     }
 
     if (needsFetch) {
+      const fetchPromises = [];
       for (const id of this.composeSelectedAccounts) {
         if (this._composeEmojiMapAccountIds.has(id)) continue;
         this._composeEmojiMapAccountIds.add(id);
         const client = this.store.getClient(id);
         if (!client?.getInstanceEmojis) continue;
-        try {
-          const emojis = await client.getInstanceEmojis();
-          for (const e of emojis) {
-            if (e.name && e.url) {
-              this._composeEmojiMap[e.name] = e.url;
+        fetchPromises.push(
+          client.getInstanceEmojis().then(emojis => {
+            for (const e of emojis) {
+              if (e.name && e.url) {
+                this._composeEmojiMap[e.name] = e.url;
+              }
             }
-          }
-        } catch (err) { console.warn('Instance emoji fetch failed:', err); }
+          }).catch(err => console.warn('Instance emoji fetch failed:', err))
+        );
       }
+      if (fetchPromises.length > 0) await Promise.all(fetchPromises);
     }
 
     return this._composeEmojiMap;
@@ -332,6 +362,7 @@ export const ComposeMixin = {
     }
 
     picker.innerHTML = `
+      ${emojiAccountId ? '<div class="reaction-picker-search"><input type="text" class="reaction-picker-search-input" placeholder="이모지 검색..." /></div>' : ''}
       <div class="reaction-picker-section-label">이모지</div>
       <div class="reaction-picker-grid reaction-picker-unicode">
         ${COMMON_EMOJIS.map(r => `<button class="reaction-picker-item" data-emoji="${r}">${r}</button>`).join('')}
@@ -339,13 +370,23 @@ export const ComposeMixin = {
       ${emojiAccountId ? '<div class="reaction-picker-loading">커스텀 이모지 로딩중...</div>' : ''}
     `;
 
-    // Position above the emoji button
+    if (emojiAccountId) setupPickerSearch(picker, 'emoji');
+
+    // Position near the emoji button: prefer above, fall back to below
     const btnRect = this.btnComposeEmoji.getBoundingClientRect();
     picker.style.position = 'fixed';
-    picker.style.bottom = `${window.innerHeight - btnRect.top + 4}px`;
     picker.style.left = `${Math.max(8, Math.min(btnRect.left, window.innerWidth - 330))}px`;
 
     document.body.appendChild(picker);
+
+    const pickerHeight = picker.offsetHeight || 420;
+    const spaceAbove = btnRect.top;
+    const spaceBelow = window.innerHeight - btnRect.bottom;
+    if (spaceAbove >= pickerHeight + 4 || spaceAbove >= spaceBelow) {
+      picker.style.bottom = `${window.innerHeight - btnRect.top + 4}px`;
+    } else {
+      picker.style.top = `${btnRect.bottom + 4}px`;
+    }
 
     // Insert emoji into textarea
     const insertEmoji = (text) => {
@@ -386,7 +427,6 @@ export const ComposeMixin = {
           client,
           picker,
           pickerId: 'compose-emoji-picker-popup',
-          escapeHtml: this.escapeHtml.bind(this),
           itemClass: 'compose-emoji-item',
           dataAttr: 'emoji',
         });
@@ -403,17 +443,22 @@ export const ComposeMixin = {
     }
   },
 
-  handleComposeFileSelect() {
+  async handleComposeFileSelect() {
     const files = Array.from(this.composeFilesInput.files);
     for (const file of files) {
       if (this.composeFiles.length >= 4) break;
-      this.composeFiles.push(file);
+      const compressed = await compressImage(file);
+      this.composeFiles.push(compressed);
     }
     this.composeFilesInput.value = '';
     this.renderComposeImagePreview();
   },
 
   renderComposeImagePreview() {
+    // Revoke old ObjectURLs before clearing
+    this.composeImagePreview.querySelectorAll('img').forEach(img => {
+      if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+    });
     this.composeImagePreview.innerHTML = '';
     this.composeFiles.forEach((file, idx) => {
       const item = document.createElement('div');
@@ -436,6 +481,211 @@ export const ComposeMixin = {
     });
   },
 
+  _showUploadProgress() {
+    const items = this.composeImagePreview.querySelectorAll('.preview-item');
+    items.forEach((item) => {
+      if (item.querySelector('.upload-progress')) return;
+      const overlay = document.createElement('div');
+      overlay.className = 'upload-progress';
+      overlay.innerHTML = '<div class="upload-progress-bar"></div>';
+      item.appendChild(overlay);
+    });
+  },
+
+  _updateUploadProgress(fileIndex, ratio) {
+    const items = this.composeImagePreview.querySelectorAll('.preview-item');
+    const item = items[fileIndex];
+    if (!item) return;
+    const bar = item.querySelector('.upload-progress-bar');
+    if (bar) bar.style.width = `${Math.round(ratio * 100)}%`;
+    if (ratio >= 1) {
+      const overlay = item.querySelector('.upload-progress');
+      if (overlay) overlay.classList.add('done');
+    }
+  },
+
+  // ===== Inline Emoji Autocomplete =====
+
+  /**
+   * Extract the emoji autocomplete query from the textarea at cursor position.
+   * Returns { query, colonPos, endPos } or null if no autocomplete context.
+   */
+  _getEmojiAutocompleteQuery() {
+    const ta = this.composeText;
+    const text = ta.value;
+    const pos = ta.selectionStart;
+
+    // Search backwards from cursor for ':'
+    let colonPos = -1;
+    for (let i = pos - 1; i >= 0; i--) {
+      const ch = text[i];
+      if (ch === ':') {
+        colonPos = i;
+        break;
+      }
+      // Stop at whitespace or newline (except when part of the query)
+      if (/\s/.test(ch)) break;
+    }
+
+    if (colonPos === -1) return null;
+
+    // Colon must be at start of text or after whitespace
+    if (colonPos > 0 && !/\s/.test(text[colonPos - 1])) return null;
+
+    const query = text.substring(colonPos + 1, pos);
+
+    // Don't trigger if query contains whitespace or another colon (already closed)
+    if (/[\s:]/.test(query)) return null;
+
+    // Require at least 1 character after colon for filtering
+    if (query.length < 1) return null;
+
+    return { query, colonPos, endPos: pos };
+  },
+
+  /**
+   * Handle emoji autocomplete on each input event.
+   */
+  async _handleEmojiAutocomplete() {
+    const result = this._getEmojiAutocompleteQuery();
+    if (!result) {
+      this._closeEmojiAutocomplete();
+      return;
+    }
+
+    const { query } = result;
+    const lowerQuery = query.toLowerCase();
+
+    // Gather matches from both unicode and custom emojis
+    const matches = [];
+
+    // Search unicode emojis by name
+    for (const [name, char] of Object.entries(UNICODE_EMOJI_MAP)) {
+      if (name.includes(lowerQuery)) {
+        matches.push({ name, display: char, text: char, isCustom: false });
+      }
+      if (matches.length >= 30) break;
+    }
+
+    // Search custom instance emojis
+    const emojiMap = await this._getComposeEmojiMap();
+    for (const [name, url] of Object.entries(emojiMap)) {
+      if (name.toLowerCase().includes(lowerQuery)) {
+        matches.push({ name, url, text: `:${name}:`, isCustom: true });
+      }
+      if (matches.length >= 30) break;
+    }
+
+    if (matches.length === 0) {
+      this._closeEmojiAutocomplete();
+      return;
+    }
+
+    this._renderEmojiAutocomplete(matches);
+  },
+
+  /**
+   * Render the autocomplete dropdown with matched emojis.
+   */
+  _renderEmojiAutocomplete(matches) {
+    let dropdown = document.getElementById('emoji-autocomplete-dropdown');
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = 'emoji-autocomplete-dropdown';
+      dropdown.className = 'emoji-autocomplete-dropdown';
+      const textWrap = document.querySelector('.compose-text-wrap');
+      textWrap.style.position = 'relative';
+      textWrap.appendChild(dropdown);
+
+      dropdown.addEventListener('mousedown', (e) => {
+        // Prevent blur on textarea when clicking dropdown items
+        e.preventDefault();
+      });
+      dropdown.addEventListener('click', (e) => {
+        const item = e.target.closest('.emoji-ac-item');
+        if (!item) return;
+        const idx = parseInt(item.dataset.index);
+        this._selectEmojiAutocomplete(idx);
+      });
+    }
+
+    this._emojiAutocompleteIndex = 0;
+    this._emojiAutocompleteItems = matches;
+
+    dropdown.innerHTML = matches.map((m, i) => `
+      <button class="emoji-ac-item${i === 0 ? ' active' : ''}" data-index="${i}">
+        ${m.isCustom
+          ? `<img src="${escapeHtml(m.url)}" alt=":${escapeHtml(m.name)}:" class="emoji-ac-img" referrerpolicy="no-referrer">`
+          : `<span class="emoji-ac-unicode">${m.display}</span>`
+        }
+        <span class="emoji-ac-name">:${escapeHtml(m.name)}:</span>
+      </button>
+    `).join('');
+  },
+
+  /**
+   * Select an emoji from the autocomplete dropdown by index.
+   */
+  _selectEmojiAutocomplete(index) {
+    const items = this._emojiAutocompleteItems;
+    if (!items || index < 0 || index >= items.length) return;
+
+    const selected = items[index];
+    const result = this._getEmojiAutocompleteQuery();
+    if (!result) return;
+
+    const ta = this.composeText;
+    const before = ta.value.substring(0, result.colonPos);
+    const after = ta.value.substring(result.endPos);
+    ta.value = before + selected.text + ' ' + after;
+    const newPos = result.colonPos + selected.text.length + 1;
+    ta.selectionStart = ta.selectionEnd = newPos;
+    ta.focus();
+
+    this._closeEmojiAutocomplete();
+    this._updateComposeEmojiPreview();
+    this._updateComposeWordCount();
+  },
+
+  /**
+   * Close the emoji autocomplete dropdown.
+   */
+  _closeEmojiAutocomplete() {
+    const dropdown = document.getElementById('emoji-autocomplete-dropdown');
+    if (dropdown) dropdown.remove();
+    this._emojiAutocompleteItems = null;
+    this._emojiAutocompleteIndex = -1;
+  },
+
+  /**
+   * Navigate the autocomplete dropdown with arrow keys.
+   * Returns true if navigation was handled (autocomplete is open).
+   */
+  _navigateEmojiAutocomplete(direction) {
+    const dropdown = document.getElementById('emoji-autocomplete-dropdown');
+    if (!dropdown || !this._emojiAutocompleteItems) return false;
+
+    const items = this._emojiAutocompleteItems;
+    let newIndex = (this._emojiAutocompleteIndex || 0) + direction;
+    if (newIndex < 0) newIndex = items.length - 1;
+    if (newIndex >= items.length) newIndex = 0;
+
+    this._emojiAutocompleteIndex = newIndex;
+
+    const buttons = dropdown.querySelectorAll('.emoji-ac-item');
+    buttons.forEach((btn, i) => btn.classList.toggle('active', i === newIndex));
+    buttons[newIndex]?.scrollIntoView({ block: 'nearest' });
+
+    return true;
+  },
+
+  /**
+   * Check if the emoji autocomplete dropdown is currently open.
+   */
+  _isEmojiAutocompleteOpen() {
+    return !!document.getElementById('emoji-autocomplete-dropdown');
+  },
+
   async handleComposeSubmit() {
     // Edit mode
     if (this.composeText.dataset.editPostId) {
@@ -447,8 +697,11 @@ export const ComposeMixin = {
     const cw = this.composeCw.value.trim();
     const visibility = this.composeVisibilityValue;
     const replyToId = this.composeText.dataset.replyTo;
+    const replyCanonicalUri = this.composeText.dataset.replyCanonicalUri;
+    const replyAccountId = this.composeText.dataset.replyAccountId;
     const quoteId = this.composeText.dataset.quoteId;
     const quoteUrl = this.composeText.dataset.quoteUrl;
+    const quoteAccountId = this.composeText.dataset.quoteAccountId;
 
     if (selectedIds.length === 0) {
       this.composeError.textContent = '게시할 계정을 하나 이상 선택하세요.';
@@ -466,6 +719,12 @@ export const ComposeMixin = {
     this.btnComposeSubmit.textContent = '게시 중...';
     this.composeError.style.display = 'none';
 
+    // Show upload progress overlays on preview images
+    const totalFiles = this.composeFiles.length;
+    if (totalFiles > 0) {
+      this._showUploadProgress();
+    }
+
     const errors = [];
 
     for (const accountId of selectedIds) {
@@ -474,35 +733,74 @@ export const ComposeMixin = {
       if (!account || !client) continue;
 
       try {
-        // Upload files per account
+        // Upload files per account with progress
         let fileIds = [];
-        if (this.composeFiles.length > 0) {
-          for (const file of this.composeFiles) {
+        if (totalFiles > 0) {
+          for (let i = 0; i < this.composeFiles.length; i++) {
+            const file = this.composeFiles[i];
+            this.btnComposeSubmit.textContent = `업로드 ${i + 1}/${totalFiles}`;
+            const onProgress = (ratio) => this._updateUploadProgress(i, ratio);
             if (account.platform === 'mastodon') {
-              const result = await client.uploadMedia(file);
+              const result = await client.uploadMedia(file, { onProgress });
               fileIds.push(result.id);
             } else {
-              const result = await client.uploadFile(file);
+              const result = await client.uploadFile(file, { onProgress });
               fileIds.push(result.id);
+            }
+            this._updateUploadProgress(i, 1);
+          }
+          this.btnComposeSubmit.textContent = '게시 중...';
+        }
+
+        // Cross-instance reply resolution: resolve the post on this account's instance
+        let resolvedReplyId = replyToId;
+        if (replyToId && replyCanonicalUri) {
+          const replyAccount = replyAccountId ? this.store.getById(replyAccountId) : null;
+          if (replyAccount && replyAccount.instanceUrl !== account.instanceUrl) {
+            try {
+              const resolved = await client.resolveUrl(replyCanonicalUri);
+              if (resolved) {
+                resolvedReplyId = resolved.id;
+              } else {
+                errors.push(`${account.profile.displayName}: 답글 대상을 찾을 수 없습니다.`);
+                continue;
+              }
+            } catch (err) {
+              errors.push(`${account.profile.displayName}: 답글 대상 조회 실패: ${err.message}`);
+              continue;
             }
           }
         }
 
-        // Create post
+        // Cross-instance quote resolution
+        let resolvedQuoteId = quoteId;
+        if (quoteId && quoteUrl) {
+          const qAccount = quoteAccountId ? this.store.getById(quoteAccountId) : null;
+          if (qAccount && qAccount.instanceUrl !== account.instanceUrl) {
+            try {
+              const resolved = await client.resolveUrl(quoteUrl);
+              if (resolved) resolvedQuoteId = resolved.id;
+            } catch { /* fall through, URL will be appended as text */ }
+          }
+        }
+
+        // Create post and optimistically inject into timeline
+        let rawPost;
         if (account.platform === 'mastodon') {
-          // For Mastodon: append quote URL to text + try quote_id (supported by some servers)
+          // For Mastodon 4.3+: use native quote_id parameter
+          // Only append quote URL as text fallback if quote_id couldn't be resolved
           let statusText = text;
-          if (quoteId && quoteUrl && !text.includes(quoteUrl)) {
+          if (quoteUrl && !resolvedQuoteId && !text.includes(quoteUrl)) {
             statusText = text + '\n\n' + quoteUrl;
           }
           const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || 'public';
-          await client.createStatus(statusText, {
+          rawPost = await client.createStatus(statusText, {
             spoilerText: cw || undefined,
             sensitive: this.composeSensitive || undefined,
             visibility: mastodonVisibility,
             mediaIds: fileIds.length > 0 ? fileIds : undefined,
-            inReplyToId: replyToId || undefined,
-            quoteId: quoteId || undefined,
+            inReplyToId: resolvedReplyId || undefined,
+            quoteId: resolvedQuoteId || undefined,
           });
         } else {
           // Misskey: mark uploaded files as sensitive
@@ -512,13 +810,26 @@ export const ComposeMixin = {
             }
           }
           const misskeyVisibility = ({ public: 'public', home: 'home', followers: 'followers', direct: 'specified' })[visibility] || 'public';
-          await client.createNote(text, {
+          const result = await client.createNote(text, {
             cw: cw || undefined,
             visibility: misskeyVisibility,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
-            replyId: replyToId || undefined,
-            renoteId: quoteId || undefined,
+            replyId: resolvedReplyId || undefined,
+            renoteId: resolvedQuoteId || undefined,
           });
+          // Misskey returns { createdNote: { ... } }
+          rawPost = result?.createdNote || result;
+        }
+
+        // Optimistic insert: inject the post into timeline immediately
+        // so it appears without waiting for WebSocket stream delivery.
+        // When the stream later delivers the same post, existing dedup
+        // checks (platform:id / canonicalUri) will skip it.
+        if (rawPost) {
+          try {
+            const post = client.normalizePost(rawPost);
+            this._onStreamPost({ account, post });
+          } catch { /* non-critical — stream will deliver it */ }
         }
       } catch (err) {
         errors.push(`${account.profile.displayName}: ${err.message}`);
@@ -536,7 +847,6 @@ export const ComposeMixin = {
         this._saveAccountVisibility(accountId, visibility);
       }
       this.closeModal(this.modalCompose);
-      this.refreshAll();
     }
 
     this.btnComposeSubmit.disabled = false;

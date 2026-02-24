@@ -2,7 +2,7 @@
  * Account Setup Mixin
  * Handles add account modal, platform detection, OAuth login, manual token, and settings
  */
-import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth } from '../auth.js';
+import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth, openAuthPopup } from '../auth.js';
 
 export const AccountSetupMixin = {
 
@@ -15,6 +15,7 @@ export const AccountSetupMixin = {
     this.btnConfirmAdd.disabled = false;
     this.btnConfirmAdd.textContent = '수동 토큰으로 추가';
     this.btnOAuthLogin.textContent = '로그인으로 연결';
+    this._detectedSoftware = '';
     this.detectedPlatformEl = document.getElementById('detected-platform');
     this.detectedPlatformEl.style.display = 'none';
     document.getElementById('manual-token-section').removeAttribute('open');
@@ -45,6 +46,80 @@ export const AccountSetupMixin = {
     this.btnOAuthLogin.textContent = labels[platform] || '로그인으로 연결';
   },
 
+  async _fetchNodeInfo(buildUrl, instanceUrl) {
+    try {
+      const niRes = await fetch(buildUrl(`${instanceUrl}/.well-known/nodeinfo`), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!niRes.ok) return null;
+      const niData = await niRes.json();
+      const link = niData.links?.find(l => l.rel?.includes('nodeinfo'));
+      if (!link?.href) return null;
+      const detailRes = await fetch(buildUrl(link.href), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!detailRes.ok) return null;
+      const detail = await detailRes.json();
+      return (detail.software?.name || '').toLowerCase();
+    } catch {
+      return null;
+    }
+  },
+
+  _classifyPlatform(softwareName, metaFields) {
+    const sw = softwareName || '';
+    const name = metaFields?.name || '';
+    const version = metaFields?.version || '';
+    const metaSw = metaFields?.softwareName || '';
+
+    // Combine all signals for matching
+    const signals = [sw, name, version, metaSw].join(' ').toLowerCase();
+
+    // Iceshrimp family
+    if (sw === 'iceshrimp' || sw === 'iceshrimp.net' || signals.includes('iceshrimp')) {
+      return { platform: 'iceshrimp', software: 'iceshrimp', displayName: 'Iceshrimp' };
+    }
+    // CherryPick
+    if (sw === 'cherrypick' || signals.includes('cherrypick')) {
+      return { platform: 'cherrypick', software: 'cherrypick', displayName: 'CherryPick' };
+    }
+    // Sharkey (Misskey-compatible)
+    if (sw === 'sharkey' || signals.includes('sharkey')) {
+      return { platform: 'misskey', software: 'sharkey', displayName: 'Sharkey' };
+    }
+    // Firefish / Catodon (Misskey-compatible, iceshrimp-like)
+    if (sw === 'firefish' || signals.includes('firefish')) {
+      return { platform: 'iceshrimp', software: 'firefish', displayName: 'Firefish' };
+    }
+    if (sw === 'catodon' || signals.includes('catodon')) {
+      return { platform: 'iceshrimp', software: 'catodon', displayName: 'Catodon' };
+    }
+    // FoundKey / Hajkey (Misskey-compatible)
+    if (sw === 'foundkey' || signals.includes('foundkey')) {
+      return { platform: 'misskey', software: 'foundkey', displayName: 'FoundKey' };
+    }
+    if (sw === 'hajkey' || signals.includes('hajkey')) {
+      return { platform: 'misskey', software: 'hajkey', displayName: 'Hajkey' };
+    }
+    // Vanilla Misskey
+    if (sw === 'misskey' || signals.includes('misskey')) {
+      return { platform: 'misskey', software: 'misskey', displayName: 'Misskey' };
+    }
+    // Hollo (Mastodon-compatible, single-user)
+    if (sw === 'hollo') return { platform: 'mastodon', software: 'hollo', displayName: 'Hollo' };
+    // Mastodon-compatible platforms
+    if (sw === 'akkoma') return { platform: 'mastodon', software: 'akkoma', displayName: 'Akkoma' };
+    if (sw === 'pleroma') return { platform: 'mastodon', software: 'pleroma', displayName: 'Pleroma' };
+    if (sw === 'gotosocial') return { platform: 'mastodon', software: 'gotosocial', displayName: 'GoToSocial' };
+    if (sw === 'hometown') return { platform: 'mastodon', software: 'hometown', displayName: 'Hometown' };
+    if (sw === 'glitchcafe') return { platform: 'mastodon', software: 'glitchcafe', displayName: 'Glitch' };
+    if (sw === 'mastodon') return { platform: 'mastodon', software: 'mastodon', displayName: 'Mastodon' };
+
+    return null;
+  },
+
   async autoDetectPlatform() {
     const instanceUrl = this.normalizeInstanceUrl(this.instanceUrl.value);
     if (!instanceUrl) return;
@@ -64,44 +139,51 @@ export const AccountSetupMixin = {
       const useProxy = window.location.hostname !== 'localhost';
       const buildUrl = (target) => useProxy ? `/proxy?url=${encodeURIComponent(target)}` : target;
 
-      // Try Misskey API first (POST /api/meta)
-      const misskeyRes = await fetch(buildUrl(`${instanceUrl}/api/meta`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      }).catch(() => null);
+      // Fetch NodeInfo and Misskey /api/meta in parallel for speed
+      const [nodeInfoSw, misskeyRes] = await Promise.all([
+        this._fetchNodeInfo(buildUrl, instanceUrl),
+        fetch(buildUrl(`${instanceUrl}/api/meta`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        }).catch(() => null),
+      ]);
 
+      // If Misskey API responds, it's a Misskey-family server
       if (misskeyRes && misskeyRes.ok) {
         const meta = await misskeyRes.json();
-        let platform = 'misskey';
-        let platformName = 'Misskey';
+        const metaFields = {
+          name: (meta.name || ''),
+          version: (meta.version || ''),
+          softwareName: (meta.softwareName || ''),
+        };
 
-        const name = (meta.name || '').toLowerCase();
-        const version = (meta.version || '').toLowerCase();
-        const softwareName = (meta.softwareName || '').toLowerCase();
+        // Classify using NodeInfo software name + /api/meta fields
+        const result = this._classifyPlatform(nodeInfoSw, metaFields)
+          || { platform: 'misskey', software: 'misskey', displayName: 'Misskey' };
 
-        if (softwareName.includes('iceshrimp') || name.includes('iceshrimp') || version.includes('iceshrimp')) {
-          platform = 'iceshrimp';
-          platformName = 'Iceshrimp';
-        } else if (softwareName.includes('cherrypick') || name.includes('cherrypick') || version.includes('cherrypick')) {
-          platform = 'cherrypick';
-          platformName = 'CherryPick';
-        } else if (softwareName.includes('sharkey') || version.includes('sharkey')) {
-          platform = 'misskey';
-          platformName = 'Sharkey (Misskey 호환)';
-        } else if (softwareName.includes('firefish') || version.includes('firefish')) {
-          platform = 'iceshrimp';
-          platformName = 'Firefish (Misskey 호환)';
-        }
-
-        this.platformSelect.value = platform;
-        detectedEl.textContent = `${platformName} 감지됨`;
-        detectedEl.className = `detected-platform detected platform-${platform}`;
+        this.platformSelect.value = result.platform;
+        this._detectedSoftware = result.software;
+        detectedEl.textContent = `${result.displayName} 감지됨`;
+        detectedEl.className = `detected-platform detected platform-${result.software}`;
         this.updateOAuthButton();
         return;
       }
 
-      // Try Mastodon API (GET /api/v1/instance)
+      // If NodeInfo detected a Mastodon-compatible platform
+      if (nodeInfoSw) {
+        const result = this._classifyPlatform(nodeInfoSw, null);
+        if (result) {
+          this.platformSelect.value = result.platform;
+          this._detectedSoftware = result.software;
+          detectedEl.textContent = `${result.displayName} 감지됨`;
+          detectedEl.className = `detected-platform detected platform-${result.software}`;
+          this.updateOAuthButton();
+          return;
+        }
+      }
+
+      // Fallback: Try Mastodon API (GET /api/v1/instance)
       const mastodonRes = await fetch(buildUrl(`${instanceUrl}/api/v1/instance`), {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
@@ -109,6 +191,7 @@ export const AccountSetupMixin = {
 
       if (mastodonRes && mastodonRes.ok) {
         this.platformSelect.value = 'mastodon';
+        this._detectedSoftware = 'mastodon';
         detectedEl.textContent = 'Mastodon 감지됨';
         detectedEl.className = 'detected-platform detected platform-mastodon';
         this.updateOAuthButton();
@@ -142,6 +225,9 @@ export const AccountSetupMixin = {
       return;
     }
 
+    // Open popup SYNCHRONOUSLY before any async work (iOS blocks window.open after await)
+    const popup = openAuthPopup('about:blank');
+
     this.btnOAuthLogin.disabled = true;
     this.btnOAuthLogin.textContent = '플랫폼 감지 중...';
     this.addAccountError.style.display = 'none';
@@ -154,6 +240,7 @@ export const AccountSetupMixin = {
     }
 
     if (!platform) {
+      if (popup) popup.close();
       this.showAddError('플랫폼을 감지할 수 없습니다. 인스턴스 주소를 확인하세요.');
       this.btnOAuthLogin.disabled = false;
       this.btnOAuthLogin.textContent = '로그인으로 연결';
@@ -163,26 +250,28 @@ export const AccountSetupMixin = {
     this.btnOAuthLogin.textContent = '인증 페이지 여는 중...';
 
     try {
-      let popup;
       if (platform === 'mastodon') {
-        popup = await startMastodonOAuth(instanceUrl);
+        await startMastodonOAuth(instanceUrl, popup);
       } else {
-        popup = await startMiAuth(instanceUrl, platform);
+        await startMiAuth(instanceUrl, platform, popup);
       }
 
       if (popup) {
         this.btnOAuthLogin.textContent = '인증 대기 중... (팝업에서 로그인하세요)';
       } else {
+        // Popup was blocked → redirect flow (handled by main.js on next page load)
         return;
       }
 
       const result = await waitForAuthCallback();
 
-      await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken);
+      await this.store.addAccount(result.platform, result.instanceUrl, result.accessToken, '', this._detectedSoftware);
       this.closeModal(this.modalAddAccount);
-      this.debouncedSaveToCloud();
       this.render();
+      this.restartStreaming();
+      await this.saveToCloud();
     } catch (err) {
+      if (popup) popup.close();
       clearPendingAuth();
       this.showAddError(`인증 실패: ${err.message}`);
     } finally {
@@ -235,10 +324,11 @@ export const AccountSetupMixin = {
     this.btnConfirmAdd.textContent = '연결 확인 중...';
 
     try {
-      await this.store.addAccount(platform, instanceUrl, accessToken, label);
+      await this.store.addAccount(platform, instanceUrl, accessToken, label, this._detectedSoftware);
       this.closeModal(this.modalAddAccount);
-      this.debouncedSaveToCloud();
       this.render();
+      this.restartStreaming();
+      await this.saveToCloud();
     } catch (err) {
       this.showAddError(`연결 실패: ${err.message}`);
     } finally {

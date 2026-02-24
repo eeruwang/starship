@@ -17,7 +17,24 @@ export class AccountStore {
   load() {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
+      const accounts = data ? JSON.parse(data) : [];
+      // Mastodon의 theme-color 메타태그는 배경색(#181820/#ffffff)을 반환하므로
+      // 기존 저장된 무의미한 색상을 정리
+      let dirty = false;
+      for (const a of accounts) {
+        if (a.themeColor && /^#?([0-9a-f]{6})$/i.test(a.themeColor)) {
+          const h = a.themeColor.replace(/^#/, '');
+          const brightness = (parseInt(h.substring(0, 2), 16) * 299
+            + parseInt(h.substring(2, 4), 16) * 587
+            + parseInt(h.substring(4, 6), 16) * 114) / 1000;
+          if (brightness < 30 || brightness > 225) {
+            a.themeColor = null;
+            dirty = true;
+          }
+        }
+      }
+      if (dirty) localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+      return accounts;
     } catch {
       return [];
     }
@@ -36,7 +53,7 @@ export class AccountStore {
 
   createClient(account) {
     if (account.platform === 'mastodon') {
-      return new MastodonClient(account.instanceUrl, account.accessToken);
+      return new MastodonClient(account.instanceUrl, account.accessToken, account.software || 'mastodon');
     }
     return new MisskeyClient(account.instanceUrl, account.accessToken, account.platform);
   }
@@ -45,9 +62,9 @@ export class AccountStore {
     return this.clients.get(accountId);
   }
 
-  async addAccount(platform, instanceUrl, accessToken, label = '') {
+  async addAccount(platform, instanceUrl, accessToken, label = '', software = '') {
     const client = platform === 'mastodon'
-      ? new MastodonClient(instanceUrl, accessToken)
+      ? new MastodonClient(instanceUrl, accessToken, software || 'mastodon')
       : new MisskeyClient(instanceUrl, accessToken, platform);
 
     const [profile, themeColor] = await Promise.all([
@@ -70,6 +87,7 @@ export class AccountStore {
       account = {
         id: `mastodon_${profile.id}_${Date.now()}`,
         platform,
+        software: software || platform,
         instanceUrl: instanceUrl.replace(/\/+$/, ''),
         accessToken,
         themeColor,
@@ -89,6 +107,7 @@ export class AccountStore {
       account = {
         id: `${platform}_${profile.id}_${Date.now()}`,
         platform,
+        software: software || platform,
         instanceUrl: instanceUrl.replace(/\/+$/, ''),
         accessToken,
         themeColor,
@@ -119,9 +138,11 @@ export class AccountStore {
       if (!client) continue;
       // Fetch theme color if not yet stored
       if (!account.themeColor) {
-        client.fetchThemeColor().then(color => {
-          if (color) account.themeColor = color;
-        }).catch(() => {});
+        updates.push(
+          client.fetchThemeColor().then(color => {
+            if (color) account.themeColor = color;
+          }).catch(() => {})
+        );
       }
       updates.push(
         client.verifyCredentials().then(profile => {
@@ -175,6 +196,28 @@ export class AccountStore {
 
   getAll() {
     return [...this.accounts];
+  }
+
+  getVisible() {
+    return this.accounts.filter(a => !a.hidden);
+  }
+
+  reorder(fromIndex, toIndex) {
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= this.accounts.length || toIndex >= this.accounts.length) return;
+    const [moved] = this.accounts.splice(fromIndex, 1);
+    this.accounts.splice(toIndex, 0, moved);
+    this.save();
+  }
+
+  toggleHidden(accountId) {
+    const account = this.accounts.find(a => a.id === accountId);
+    if (account) {
+      account.hidden = !account.hidden;
+      this.save();
+    }
+    return account;
   }
 
   getById(accountId) {

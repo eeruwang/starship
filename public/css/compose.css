@@ -1,0 +1,808 @@
+/* ===== Compose Modal Redesign ===== */
+.compose-modal {
+  max-width: 520px;
+}
+
+.compose-modal .modal-header {
+  padding: 0.75rem 1.25rem;
+  border-bottom-color: rgba(124, 125, 255, 0.15);
+}
+
+.compose-body {
+  padding: 1rem 1.25rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.compose-accounts-section label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.compose-accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.compose-account-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0.55;
+}
+
+.compose-account-toggle:hover {
+  opacity: 0.8;
+  background: var(--bg-hover);
+}
+
+.compose-account-toggle.active {
+  opacity: 1;
+  border-color: var(--accent-primary);
+  background: rgba(124, 125, 255, 0.12);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 1px rgba(124, 125, 255, 0.2);
+}
+
+.compose-account-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.compose-account-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compose reply context */
+.compose-reply-context {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 0.5rem;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+.compose-reply-context-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+.compose-reply-context-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.compose-reply-context-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.compose-reply-context-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.compose-reply-context-body {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+.compose-reply-context-body > *:first-child { margin-top: 0; }
+.compose-reply-context-body > *:last-child { margin-bottom: 0; }
+.compose-reply-context-body .inline-emoji {
+  height: 1.2em;
+  width: auto;
+  vertical-align: -2px;
+}
+
+/* Compose editor area */
+.compose-editor {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.compose-editor:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(124, 125, 255, 0.1);
+}
+
+.compose-editor.drag-over {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(124, 125, 255, 0.2);
+  background: rgba(124, 125, 255, 0.06);
+}
+
+.compose-cw-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(245, 166, 35, 0.04);
+}
+
+.compose-cw-icon {
+  color: #f5a623;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.compose-cw-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  padding: 0;
+}
+
+.compose-cw-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.compose-text-input {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+}
+
+.compose-text-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* Compose text overlay for inline emoji preview */
+.compose-text-wrap {
+  position: relative;
+}
+.compose-text-overlay {
+  position: absolute;
+  inset: 0;
+  padding: 0.75rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+  pointer-events: none;
+  display: none;
+  border: 1px solid transparent;
+}
+.compose-text-wrap.emoji-active .compose-text-input {
+  color: transparent;
+  caret-color: var(--text-primary);
+}
+.compose-text-wrap.emoji-active .compose-text-overlay {
+  display: block;
+}
+.compose-text-overlay .inline-emoji {
+  height: 1.4em;
+  vertical-align: -0.3em;
+}
+
+.compose-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--border-color);
+  background: rgba(124, 125, 255, 0.02);
+}
+
+.compose-tool-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.compose-tool-btn:hover {
+  color: var(--accent-primary);
+  background: rgba(124, 125, 255, 0.1);
+}
+.compose-tool-btn.active {
+  color: var(--accent-danger);
+  background: rgba(255, 85, 85, 0.12);
+}
+.compose-tool-btn.active:hover {
+  background: rgba(255, 85, 85, 0.2);
+}
+
+/* Compose Emoji Picker */
+.compose-emoji-picker {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  z-index: 695;
+  width: 320px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: picker-in 0.15s ease-out;
+}
+
+.compose-emoji-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+  line-height: 1;
+  text-align: center;
+}
+
+.compose-emoji-item:hover {
+  background: var(--bg-hover);
+  transform: scale(1.2);
+}
+
+.compose-emoji-item img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.compose-visibility-picker {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1100;
+  min-width: 220px;
+  padding: 0.4rem;
+  animation: fadeInScale 0.15s ease;
+}
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.compose-visibility-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s;
+  text-align: left;
+}
+.compose-visibility-option:hover {
+  background: rgba(124, 125, 255, 0.1);
+}
+.compose-visibility-option.active {
+  background: var(--accent-primary);
+  color: #fff;
+}
+.compose-visibility-option.active .compose-visibility-desc {
+  color: rgba(255, 255, 255, 0.8);
+}
+.compose-visibility-option.active svg {
+  color: #fff;
+}
+.compose-visibility-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+.compose-visibility-option.active .compose-visibility-icon {
+  color: #fff;
+}
+.compose-visibility-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.compose-visibility-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.compose-visibility-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.compose-char-hint {
+  flex: 1;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.compose-submit-btn {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 0.4rem 1.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.compose-submit-btn:hover {
+  background: #6b6cee;
+}
+
+.compose-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ===== Compose Area ===== */
+.compose-area {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.compose-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.compose-input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: inherit;
+  padding: 0.5rem 0.6rem;
+  resize: none;
+  min-height: 36px;
+  max-height: 120px;
+  line-height: 1.4;
+}
+
+.compose-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.compose-input::placeholder {
+  color: var(--text-muted);
+}
+
+.compose-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+
+.compose-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+.compose-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.compose-submit {
+  margin-left: auto;
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.compose-submit:hover {
+  background: #6b6cee;
+}
+.compose-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.compose-account-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: inherit;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+}
+
+.compose-image-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 0.5rem 0.35rem;
+}
+
+.compose-image-preview:empty {
+  display: none;
+}
+
+.compose-image-preview .preview-item {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.compose-image-preview .preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.compose-image-preview .preview-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  background: rgba(0,0,0,0.7);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== Upload Progress ===== */
+.upload-progress {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  transition: opacity 0.3s;
+}
+.upload-progress.done {
+  opacity: 0;
+}
+.upload-progress-bar {
+  width: 0;
+  height: 4px;
+  background: var(--accent-color, #6364ff);
+  border-radius: 2px;
+  transition: width 0.15s ease;
+}
+
+/* ===== Account Picker Popup ===== */
+.account-picker {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 695;
+  min-width: 200px;
+  max-width: 280px;
+  overflow: hidden;
+  animation: picker-in 0.15s ease-out;
+}
+
+.account-picker-title {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0.75rem 0.3rem;
+  font-weight: 600;
+}
+
+.account-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.account-picker-item:hover {
+  background: var(--bg-hover);
+}
+
+.account-picker-item img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.account-picker-item .picker-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-picker-item .picker-platform {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.account-picker-item.preferred {
+  background: rgba(124, 125, 255, 0.1);
+  border-left: 2px solid var(--accent-primary);
+}
+
+/* ===== Reaction Picker ===== */
+.reaction-picker {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  z-index: 695;
+  width: 320px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: picker-in 0.15s ease-out;
+}
+
+@keyframes picker-in {
+  from { opacity: 0; transform: scale(0.95) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.reaction-picker-section-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 0.4rem 0.5rem 0;
+  font-weight: 600;
+}
+
+.reaction-picker-unicode {
+  flex-shrink: 0;
+}
+
+.reaction-picker-search {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.reaction-picker-search-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
+  padding: 0.3rem 0.5rem;
+  outline: none;
+}
+
+.reaction-picker-search-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.reaction-picker-emojis {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: 260px;
+  scrollbar-width: thin;
+}
+
+.reaction-picker-category-name {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  padding: 0.3rem 0.5rem 0.1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 1;
+}
+
+.reaction-picker-item.instance-emoji {
+  padding: 0.2rem;
+}
+
+.reaction-picker-item.instance-emoji img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.reaction-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 0.3rem 0.5rem;
+}
+
+.reaction-picker-category .reaction-picker-grid {
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.reaction-picker-item {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+  line-height: 1;
+  text-align: center;
+}
+
+.reaction-picker-item:hover {
+  background: var(--bg-hover);
+  transform: scale(1.2);
+}
+
+.reaction-picker-loading {
+  padding: 0.6rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.reaction-picker-instance-section {
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===== Inline Emoji Autocomplete ===== */
+.emoji-autocomplete-dropdown {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  border-radius: 0 0 var(--radius) var(--radius);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  animation: picker-in 0.12s ease-out;
+  scrollbar-width: thin;
+}
+
+.emoji-ac-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.emoji-ac-item:hover,
+.emoji-ac-item.active {
+  background: rgba(124, 125, 255, 0.15);
+}
+
+.emoji-ac-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.emoji-ac-unicode {
+  font-size: 1.2rem;
+  line-height: 1;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.emoji-ac-name {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Quote action */
+.post-action[data-action="quote"]:hover {
+  color: #9b59b6;
+  background: rgba(155, 89, 182, 0.12);
+}
+
+/* Reaction action */
+.post-action[data-action="reaction"]:hover,
+.post-action[data-action="reaction"].active {
+  color: #e67e22;
+  background: rgba(230, 126, 34, 0.12);
+}
+

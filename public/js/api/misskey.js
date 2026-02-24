@@ -4,6 +4,8 @@
  * All use the same base API (Misskey API) with minor variations.
  * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
+import { escapeHtml, cachedImageUrl } from '../ui/utils.js';
+
 export class MisskeyClient {
   constructor(instanceUrl, accessToken, platformType = 'misskey') {
     this.instanceUrl = instanceUrl.replace(/\/+$/, '');
@@ -133,12 +135,16 @@ export class MisskeyClient {
 
   async editNote(noteId, text, options = {}) {
     const body = { noteId, text };
-    if (options.cw !== undefined) body.cw = options.cw || null;
+    body.cw = options.cw || null;
     return this.request('notes/update', body);
   }
 
   async renote(noteId) {
     return this.request('notes/create', { renoteId: noteId });
+  }
+
+  async unrenote(noteId) {
+    return this.request('notes/unrenote', { noteId });
   }
 
   async updateFile(fileId, params = {}) {
@@ -234,7 +240,7 @@ export class MisskeyClient {
     } catch { return null; }
   }
 
-  async uploadFile(file) {
+  async uploadFile(file, { onProgress } = {}) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('i', this.accessToken);
@@ -243,6 +249,10 @@ export class MisskeyClient {
     const fetchUrl = this.useProxy
       ? `/proxy?url=${encodeURIComponent(targetUrl)}`
       : targetUrl;
+
+    if (onProgress) {
+      return this._xhrUpload(fetchUrl, formData, { onProgress });
+    }
 
     const res = await fetch(fetchUrl, {
       method: 'POST',
@@ -254,6 +264,122 @@ export class MisskeyClient {
       throw new Error(`File upload error ${res.status}: ${errText}`);
     }
     return res.json();
+  }
+
+  _xhrUpload(url, formData, { onProgress }) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { reject(new Error('Invalid JSON response')); }
+        } else {
+          reject(new Error(`File upload error ${xhr.status}: ${xhr.responseText}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Upload network error'));
+      xhr.send(formData);
+    });
+  }
+
+  // === New API methods ===
+
+  async votePoll(noteId, choice) {
+    return this.request('notes/polls/vote', { noteId, choice });
+  }
+
+  async getBookmarks(limit = 20, untilId = null) {
+    const body = { limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('i/favorites', body);
+  }
+
+  async addBookmark(noteId) {
+    return this.request('notes/favorites/create', { noteId });
+  }
+
+  async removeBookmark(noteId) {
+    return this.request('notes/favorites/delete', { noteId });
+  }
+
+  async pinNote(noteId) {
+    return this.request('i/pin', { noteId });
+  }
+
+  async unpinNote(noteId) {
+    return this.request('i/unpin', { noteId });
+  }
+
+  async muteUser(userId, expiresAt = null) {
+    const body = { userId };
+    if (expiresAt) body.expiresAt = expiresAt;
+    return this.request('mute/create', body);
+  }
+
+  async unmuteUser(userId) {
+    return this.request('mute/delete', { userId });
+  }
+
+  async blockUser(userId) {
+    return this.request('blocking/create', { userId });
+  }
+
+  async unblockUser(userId) {
+    return this.request('blocking/delete', { userId });
+  }
+
+  async searchUsers(query, limit = 10) {
+    return this.request('users/search', { query, limit });
+  }
+
+  async getFollowRequests(limit = 30) {
+    return this.request('following/requests/list', { limit });
+  }
+
+  async acceptFollowRequest(userId) {
+    return this.request('following/requests/accept', { userId });
+  }
+
+  async rejectFollowRequest(userId) {
+    return this.request('following/requests/reject', { userId });
+  }
+
+  async getFollowers(userId, limit = 30, untilId = null) {
+    const body = { userId, limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('users/followers', body);
+  }
+
+  async getFollowing(userId, limit = 30, untilId = null) {
+    const body = { userId, limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('users/following', body);
+  }
+
+  async getGlobalTimeline(limit = 30, untilId = null) {
+    const body = { limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('notes/global-timeline', body);
+  }
+
+  async getLocalTimeline(limit = 30, untilId = null) {
+    const body = { limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('notes/local-timeline', body);
+  }
+
+  async searchByTag(tag, limit = 30, untilId = null) {
+    const body = { tag, limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('notes/search-by-tag', body);
+  }
+
+  async getPinnedNotes(userId) {
+    return this.request('users/show', { userId }).then(u => u?.pinnedNotes || []);
   }
 
   normalizeUser(user) {
@@ -276,21 +402,21 @@ export class MisskeyClient {
       displayNameHtml,
       username: user.username,
       acct: user.host ? `${user.username}@${user.host}` : user.username,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: cachedImageUrl(user.avatarUrl),
     };
   }
 
   resolveNameEmojis(name, emojis = {}) {
     if (!name) return '';
-    let html = this.escapeHtml(name);
+    let html = escapeHtml(name);
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, emojiName) => {
       const url = emojis[emojiName] || emojis[emojiName + '@.'] || null;
       if (url) {
-        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(url))}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer">`;
       }
       // Fallback: try instance emoji URL for local emojis
       if (!emojiName.includes('@')) {
-        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(`${this.instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp`))}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">`;
       }
       return match;
     });
@@ -330,6 +456,8 @@ export class MisskeyClient {
             url: f.url,
             previewUrl: f.thumbnailUrl || f.url,
             description: f.comment || f.name,
+            width: f.properties?.width || 0,
+            height: f.properties?.height || 0,
           })),
           url: nqn.uri || `${this.instanceUrl}/notes/${nqn.id}`,
           quotePost: null, // cap at 2 levels
@@ -346,6 +474,8 @@ export class MisskeyClient {
           url: f.url,
           previewUrl: f.thumbnailUrl || f.url,
           description: f.comment || f.name,
+          width: f.properties?.width || 0,
+          height: f.properties?.height || 0,
         })),
         url: qn.uri || `${this.instanceUrl}/notes/${qn.id}`,
         quotePost: nestedQuote,
@@ -377,6 +507,17 @@ export class MisskeyClient {
       }
     }
 
+    // Suppress link card if it points to the reply parent's URL
+    if (linkCard && actualNote.reply) {
+      const replyUrls = [
+        actualNote.reply.uri,
+        `${this.instanceUrl}/notes/${actualNote.reply.id}`,
+      ].filter(Boolean);
+      if (replyUrls.some(u => linkCard.url.includes(u) || u.includes(linkCard.url))) {
+        linkCard = null;
+      }
+    }
+
     return {
       id: note.id,
       platform: this.platformType,
@@ -391,11 +532,13 @@ export class MisskeyClient {
         previewUrl: f.thumbnailUrl || f.url,
         description: f.comment || f.name,
         sensitive: !!f.isSensitive,
+        width: f.properties?.width || 0,
+        height: f.properties?.height || 0,
       })),
       stats: {
         replies: actualNote.repliesCount || 0,
-        renotes: actualNote.renoteCount || 0,
-        reactions: Object.values(actualNote.reactions || {}).reduce((a, b) => a + b, 0),
+        boosts: actualNote.renoteCount || 0,
+        favourites: 0,
       },
       reblog: isRenote ? this.normalizePost(note.renote) : null,
       rebloggedBy: isRenote ? author : null,
@@ -417,6 +560,22 @@ export class MisskeyClient {
       replyToId: actualNote.replyId || null,
       instanceUrl: this.instanceUrl,
       visibility: actualNote.visibility || 'public',
+      bookmarked: !!note.isFavorited,
+      pinned: false,
+      poll: actualNote.poll ? {
+        id: actualNote.id,
+        expiresAt: actualNote.poll.expiresAt ? new Date(actualNote.poll.expiresAt) : null,
+        expired: !!(actualNote.poll.expiresAt && new Date(actualNote.poll.expiresAt) < new Date()),
+        multiple: !!actualNote.poll.multiple,
+        votesCount: (actualNote.poll.choices || []).reduce((s, c) => s + (c.votes || 0), 0),
+        votersCount: 0,
+        voted: (actualNote.poll.choices || []).some(c => c.isVoted),
+        ownVotes: (actualNote.poll.choices || []).map((c, i) => c.isVoted ? i : -1).filter(i => i >= 0),
+        options: (actualNote.poll.choices || []).map(c => ({
+          title: c.text,
+          votesCount: c.votes || 0,
+        })),
+      } : null,
       url: `${this.instanceUrl}/notes/${note.id}`,
       raw: note,
     };
@@ -493,7 +652,7 @@ export class MisskeyClient {
       type: notif.type,
       icon: notif.type === 'reaction' ? (notif.reaction || info.icon) : info.icon,
       reactionEmoji: notif.type === 'reaction' ? (notif.reaction || null) : null,
-      reactionEmojiUrl,
+      reactionEmojiUrl: cachedImageUrl(reactionEmojiUrl),
       label: info.label,
       createdAt: new Date(notif.createdAt),
       actor: notif.user ? this.normalizeUser(notif.user) : null,
@@ -503,7 +662,7 @@ export class MisskeyClient {
 
   mfmToHtml(text, emojis = {}) {
     if (!text) return '';
-    let html = this.escapeHtml(text);
+    let html = escapeHtml(text);
 
     // 1. Extract code blocks ```lang\ncode``` as placeholders
     const codeBlocks = [];
@@ -522,8 +681,9 @@ export class MisskeyClient {
     });
 
     // 3. MFM $[function.params content] (innermost first, repeat for nesting)
-    let prevHtml;
+    let prevHtml, mfmIter = 0;
     do {
+      if (++mfmIter > 10) break; // prevent infinite loop on deeply nested MFM
       prevHtml = html;
       html = html.replace(/\$\[(\w+)(?:\.([\w=,.\-]+))?\s+([^\[\]]*)\]/g, (match, func, paramStr, content) => {
         const params = {};
@@ -534,7 +694,7 @@ export class MisskeyClient {
           }
         }
         const speed = params.speed || null;
-        const speedStyle = speed ? `animation-duration:${this.escapeHtml(speed)};` : '';
+        const speedStyle = speed ? `animation-duration:${escapeHtml(speed)};` : '';
 
         switch (func) {
           case 'flip': {
@@ -566,11 +726,11 @@ export class MisskeyClient {
             return face ? `<span style="font-family:${face}">${content}</span>` : content;
           }
           case 'fg': {
-            const c = params.color ? `#${this.escapeHtml(params.color)}` : 'inherit';
+            const c = params.color ? `#${escapeHtml(params.color)}` : 'inherit';
             return `<span style="color:${c}">${content}</span>`;
           }
           case 'bg': {
-            const c = params.color ? `#${this.escapeHtml(params.color)}` : 'inherit';
+            const c = params.color ? `#${escapeHtml(params.color)}` : 'inherit';
             return `<span style="background-color:${c};border-radius:2px;padding:0 2px">${content}</span>`;
           }
           case 'position': {
@@ -634,8 +794,9 @@ export class MisskeyClient {
       return `<h${level} class="mfm-heading">${content}</h${level}>`;
     });
 
-    // Bold
+    // Bold (MFM **text** and <b> tags)
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/&lt;b&gt;([\s\S]*?)&lt;\/b&gt;/g, '<strong>$1</strong>');
     // Italic (MFM <i> tags are escaped by escapeHtml)
     html = html.replace(/&lt;i&gt;(.+?)&lt;\/i&gt;/g, '<em>$1</em>');
     // Strikethrough
@@ -654,10 +815,10 @@ export class MisskeyClient {
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
       const url = emojis[name] || emojis[name + '@.'] || null;
       if (url) {
-        return `<img class="inline-emoji" src="${this.escapeHtml(url)}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(url))}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
       }
       if (!name.includes('@')) {
-        return `<img class="inline-emoji" src="${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(`${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp`))}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
       }
       return match;
     });
@@ -665,6 +826,8 @@ export class MisskeyClient {
     // Blockquotes: lines starting with &gt; (before newline conversion)
     html = html.replace(/^&gt;\s?(.*)/gm, '<blockquote class="mfm-quote">$1</blockquote>');
     html = html.replace(/<\/blockquote>\n<blockquote class="mfm-quote">/g, '<br>');
+    // Remove newline immediately after blockquote (block element already provides spacing)
+    html = html.replace(/<\/blockquote>\n/g, '</blockquote>');
 
     // Restore markdown links
     html = html.replace(/\x00ML(\d+)\x00/g, (match, idx) => {
@@ -680,7 +843,7 @@ export class MisskeyClient {
         try {
           const parsed = new URL(displayUrl.replaceAll('&amp;', '&'));
           displayUrl = parsed.hostname + (parsed.pathname.length > 20 ? parsed.pathname.substring(0, 20) + '…' : parsed.pathname);
-          displayUrl = this.escapeHtml(displayUrl);
+          displayUrl = escapeHtml(displayUrl);
         } catch {
           displayUrl = displayUrl.substring(0, 57) + '…';
         }
@@ -705,9 +868,4 @@ export class MisskeyClient {
     return html;
   }
 
-  escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
 }

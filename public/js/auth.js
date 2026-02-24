@@ -21,7 +21,7 @@ function buildFetchUrl(targetUrl) {
 
 const MASTODON_SCOPES = 'read write follow push';
 
-export async function startMastodonOAuth(instanceUrl) {
+export async function startMastodonOAuth(instanceUrl, popup) {
   instanceUrl = instanceUrl.replace(/\/+$/, '');
 
   // 1. 앱 등록
@@ -50,7 +50,7 @@ export async function startMastodonOAuth(instanceUrl) {
     clientSecret: app.client_secret,
   });
 
-  // 3. 인증 페이지로 리다이렉트 (팝업)
+  // 3. 인증 페이지로 이동
   const authUrl = `${instanceUrl}/oauth/authorize?` + new URLSearchParams({
     client_id: app.client_id,
     redirect_uri: CALLBACK_URL,
@@ -58,22 +58,26 @@ export async function startMastodonOAuth(instanceUrl) {
     scope: MASTODON_SCOPES,
   }).toString();
 
-  return openAuthPopup(authUrl);
+  if (popup) {
+    popup.location.href = authUrl;
+  } else {
+    window.location.href = authUrl;
+  }
+  return popup;
 }
 
 export async function completeMastodonOAuth(code, pending) {
-  // code → access_token 교환
+  // code → access_token 교환 (OAuth 2.0 spec: application/x-www-form-urlencoded)
   const tokenRes = await fetch(buildFetchUrl(`${pending.instanceUrl}/oauth/token`), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
       grant_type: 'authorization_code',
       client_id: pending.clientId,
       client_secret: pending.clientSecret,
       redirect_uri: CALLBACK_URL,
       code,
-      scope: MASTODON_SCOPES,
-    }),
+    }).toString(),
   });
 
   if (!tokenRes.ok) {
@@ -108,7 +112,7 @@ const MISSKEY_PERMISSIONS = [
   'write:votes',
 ].join(',');
 
-export async function startMiAuth(instanceUrl, platform) {
+export async function startMiAuth(instanceUrl, platform, popup) {
   instanceUrl = instanceUrl.replace(/\/+$/, '');
 
   const sessionId = crypto.randomUUID();
@@ -125,7 +129,12 @@ export async function startMiAuth(instanceUrl, platform) {
     permission: MISSKEY_PERMISSIONS,
   }).toString();
 
-  return openAuthPopup(authUrl);
+  if (popup) {
+    popup.location.href = authUrl;
+  } else {
+    window.location.href = authUrl;
+  }
+  return popup;
 }
 
 export async function completeMiAuth(sessionId, pending) {
@@ -154,7 +163,7 @@ export async function completeMiAuth(sessionId, pending) {
 
 // ===== 공통 유틸 =====
 
-function openAuthPopup(url) {
+export function openAuthPopup(url) {
   const width = 600;
   const height = 700;
   const left = window.screenX + (window.outerWidth - width) / 2;
@@ -193,27 +202,63 @@ export function clearPendingAuth() {
 }
 
 /**
- * 메인 페이지에서 호출: 팝업이 완료될 때까지 polling
+ * 메인 페이지에서 호출: postMessage + localStorage 폴링 병행
+ * (COOP 헤더나 팝업 차단으로 window.opener가 끊길 수 있으므로 이중 채널 사용)
  */
 export function waitForAuthCallback() {
   return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = () => {
+      settled = true;
+      window.removeEventListener('message', handleMessage);
+      clearInterval(pollTimer);
+    };
+
+    // Channel 1: postMessage
     const handleMessage = (event) => {
+      if (settled) return;
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'starship_auth_complete') {
-        window.removeEventListener('message', handleMessage);
+        cleanup();
+        localStorage.removeItem('starship_auth_result');
         resolve(event.data.result);
       } else if (event.data?.type === 'starship_auth_error') {
-        window.removeEventListener('message', handleMessage);
+        cleanup();
+        localStorage.removeItem('starship_auth_error');
         reject(new Error(event.data.error));
       }
     };
-
     window.addEventListener('message', handleMessage);
 
-    // 30초 타임아웃
+    // Channel 2: localStorage polling (fallback)
+    const pollTimer = setInterval(() => {
+      if (settled) return;
+      const result = localStorage.getItem('starship_auth_result');
+      if (result) {
+        localStorage.removeItem('starship_auth_result');
+        cleanup();
+        try {
+          resolve(JSON.parse(result));
+        } catch {
+          reject(new Error('인증 결과를 파싱할 수 없습니다.'));
+        }
+        return;
+      }
+      const error = localStorage.getItem('starship_auth_error');
+      if (error) {
+        localStorage.removeItem('starship_auth_error');
+        cleanup();
+        reject(new Error(error));
+      }
+    }, 500);
+
+    // 5분 타임아웃
     setTimeout(() => {
-      window.removeEventListener('message', handleMessage);
-      reject(new Error('인증 시간이 초과되었습니다.'));
-    }, 300000); // 5분
+      if (!settled) {
+        cleanup();
+        reject(new Error('인증 시간이 초과되었습니다.'));
+      }
+    }, 300000);
   });
 }

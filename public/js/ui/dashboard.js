@@ -2,12 +2,16 @@
  * Dashboard UI
  * Renders timeline posts, notifications, and account cards.
  */
+import { escapeHtml } from './utils.js';
 import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
   iconQuote, iconSmile, iconTrash, iconEdit,
   iconHeartSmall, iconStarSmall,
+  iconReplyNotif, iconBoostNotif, iconMegaphone,
   iconVisPublic, iconVisHome, iconVisFollowers, iconVisDirect,
+  iconBookmark, iconBookmarkFill, iconPin,
+  iconCheckCircle, iconXCircle,
   getNotifIcon,
 } from './icons.js';
 
@@ -18,21 +22,163 @@ const VISIBILITY_ICONS = {
   direct: { icon: iconVisDirect, title: '다이렉트' },
 };
 
-const PLATFORM_COLORS = {
+export const PLATFORM_COLORS = {
   misskey: '#96d04a',
-  iceshrimp: '#e36a8a',
+  sharkey: '#3ea8ff',
+  foundkey: '#71a6d2',
+  hajkey: '#6bb87a',
+  iceshrimp: '#7bc4e0',
+  firefish: '#ee6a00',
+  catodon: '#b088f9',
   cherrypick: '#ff6b9d',
   mastodon: '#6364ff',
+  hollo: '#3ec9b0',
+  akkoma: '#f0a030',
+  pleroma: '#f56040',
+  gotosocial: '#ff763b',
+  hometown: '#8b6bff',
+  glitchcafe: '#e04db9',
 };
+
+// Mastodon-fork software that supports emoji reactions
+const REACTION_SOFTWARE = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+
+function supportsReactions(post) {
+  // Non-mastodon platforms (Misskey forks) always support reactions
+  if (post.platform !== 'mastodon') return true;
+  // Mastodon forks with known reaction support
+  if (post.accountSoftware && REACTION_SOFTWARE.has(post.accountSoftware)) return true;
+  // Merged post from multiple accounts including a non-mastodon one
+  if (post.mergedAccounts && post.mergedAccounts.some(a => a.platform !== 'mastodon')) return true;
+  // Post already has reactions (server clearly supports them)
+  if (post.reactions && Object.keys(post.reactions).length > 0) return true;
+  return false;
+}
+
+// Mastodon의 theme-color 메타태그는 배경색(#181820/#ffffff)을 반환하므로
+// 너무 어둡거나 밝은 색은 플랫폼 기본색으로 대체
+export function usableColor(color, platform) {
+  if (color) {
+    const m = color.match(/^#?([0-9a-f]{6})$/i);
+    if (m) {
+      const h = m[1];
+      const brightness = (parseInt(h.substring(0, 2), 16) * 299
+        + parseInt(h.substring(2, 4), 16) * 587
+        + parseInt(h.substring(4, 6), 16) * 114) / 1000;
+      if (brightness >= 30 && brightness <= 225) return color;
+    } else {
+      return color;
+    }
+  }
+  return PLATFORM_COLORS[platform] || '#7c7dff';
+}
 
 function isFediPostUrl(url) {
   try {
     const u = new URL(url);
+    // Misskey/Calckey/Firefish: /notes/xxxx
     if (/^\/notes\/[a-zA-Z0-9]+$/.test(u.pathname)) return true;
+    // Mastodon: /@user/123456 or /@user@host/123456
     if (/^\/@[^/]+\/\d+$/.test(u.pathname)) return true;
+    // GoToSocial: /@user/statuses/01XXXX
+    if (/^\/@[^/]+\/statuses\/[a-zA-Z0-9]+$/.test(u.pathname)) return true;
+    // Pleroma/Akkoma: /notice/xxxx or /objects/xxxx
     if (/^\/(notice|objects)\/[a-zA-Z0-9\-]+$/.test(u.pathname)) return true;
+    // ActivityPub standard: /users/xxx/statuses/xxx
+    if (/^\/users\/[^/]+\/statuses\/[a-zA-Z0-9]+$/.test(u.pathname)) return true;
     return false;
   } catch { return false; }
+}
+
+/**
+ * Extract YouTube video ID from a URL, or return null.
+ */
+function extractYouTubeId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1).split('/')[0];
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtube-nocookie.com')) {
+      if (u.pathname === '/watch') return u.searchParams.get('v');
+      const m = u.pathname.match(/^\/(?:shorts|embed)\/([^/?]+)/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Check whether a URL should be embedded (fedi post or YouTube video).
+ */
+function isEmbeddableUrl(url) {
+  return isFediPostUrl(url) || !!extractYouTubeId(url);
+}
+
+/**
+ * Strip embeddable URL link from content HTML when it will be shown as a card/embed.
+ * Prevents duplicate display of the URL as both inline text and link card / video embed.
+ */
+function stripFediLinkFromContent(content, linkCard) {
+  if (!content || !linkCard?.url || !isEmbeddableUrl(linkCard.url)) return content;
+  const escaped = linkCard.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedAmp = linkCard.url.replace(/&/g, '&amp;').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const urlPattern = escaped === escapedAmp ? escaped : `(?:${escaped}|${escapedAmp})`;
+  let result = content;
+  // Remove <a> link in its own <p> paragraph
+  result = result.replace(
+    new RegExp(`<p>\\s*<a[^>]*href="${urlPattern}"[^>]*>[^<]*</a>\\s*</p>`, 'g'),
+    ''
+  );
+  // Remove <a> link preceded by <br> (e.g. Misskey MFM → HTML conversion)
+  result = result.replace(
+    new RegExp(`\\s*<br\\s*/?>\\s*<a[^>]*href="${urlPattern}"[^>]*>[^<]*</a>`, 'g'),
+    ''
+  );
+  return result;
+}
+
+/**
+ * Convert standalone YouTube links and raw iframes in content HTML to embedded players.
+ * Handles cases where YouTube URLs appear directly in content without a linkCard.
+ */
+function embedYouTubeInContent(content) {
+  if (!content || !content.includes('youtu')) return content;
+
+  const ytEmbed = (id) =>
+    `<div class="video-embed"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(id)}" frameborder="0" allowfullscreen loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe></div>`;
+
+  const tryEmbed = (match, rawUrl) => {
+    const id = extractYouTubeId(rawUrl.replace(/&amp;/g, '&'));
+    return id ? ytEmbed(id) : match;
+  };
+
+  let result = content;
+
+  // 1. YouTube <a> as sole content of a <p> paragraph
+  result = result.replace(
+    /<p>\s*<a[^>]*href="([^"]*youtu[^"]*)"[^>]*>[\s\S]*?<\/a>\s*<\/p>/g,
+    tryEmbed
+  );
+
+  // 2. YouTube <a> preceded by <br> (standalone on its own line)
+  result = result.replace(
+    /\s*<br\s*\/?>\s*<a[^>]*href="([^"]*youtu[^"]*)"[^>]*>[\s\S]*?<\/a>(?=\s*(?:<br[\s/>]|<\/p>|$))/g,
+    tryEmbed
+  );
+
+  // 3. YouTube <a> at the very start of content (Misskey: no <p> wrapper)
+  result = result.replace(
+    /^<a[^>]*href="([^"]*youtu[^"]*)"[^>]*>[\s\S]*?<\/a>(?=\s*(?:<br[\s/>]|$))/,
+    tryEmbed
+  );
+
+  // 4. Raw YouTube <iframe> already in content → normalize and wrap in .video-embed
+  //    Use negative lookbehind to skip iframes already wrapped by cases 1-3 above
+  result = result.replace(
+    /(?<!video-embed">)<iframe[^>]*\bsrc="([^"]*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)[^"]*)"[^>]*>(?:\s*<\/iframe>)?/g,
+    tryEmbed
+  );
+
+  return result;
 }
 
 function renderQuotePost(qp, depth = 0) {
@@ -60,15 +206,187 @@ function renderQuotePost(qp, depth = 0) {
     html += renderQuotePost(qp.quotePost, depth + 1);
   }
   html += `</div>`; // quote-post-text-area
-  if (qpImages.length === 1) {
-    html += `<div class="quote-post-thumb"><img src="${qpImages[0].previewUrl || qpImages[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></div>`;
-  }
   html += `</div>`; // quote-post-body
-  if (qpImages.length > 1) {
+  if (qpImages.length > 0) {
     html += `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>`;
   }
   html += `</div>`; // quote-post
   return html;
+}
+
+function renderReplyMedia(media) {
+  if (!media || media.length === 0) return '';
+  const items = media.filter(m => m.type !== 'audio').slice(0, 4);
+  if (items.length === 0) return '';
+  const layoutClass = getMediaLayoutClass(items);
+  let html = `<div class="reply-context-media post-media media-${items.length}${layoutClass}">`;
+  for (const m of items) {
+    if (m.type === 'video') {
+      html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
+    } else {
+      html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderLinkCardHtml(lc, extraClass = '') {
+  if (!lc || !lc.url) return '';
+
+  // YouTube → inline embed player
+  const ytId = extractYouTubeId(lc.url);
+  if (ytId) {
+    const cls = extraClass ? `video-embed ${extraClass}` : 'video-embed';
+    return `<div class="${cls}"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(ytId)}" frameborder="0" allowfullscreen loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe></div>`;
+  }
+
+  const hasImage = lc.image;
+  const hasTitle = lc.title;
+  const needsOg = !hasTitle && !hasImage;
+  const isFediUrl = isFediPostUrl(lc.url);
+  const baseClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
+  const cardClass = extraClass ? `${baseClass} ${extraClass}` : baseClass;
+  let extraAttrs = '';
+  if (isFediUrl) {
+    extraAttrs = ` data-fedi-url="${escapeHtml(lc.url)}" data-fedi-pending="true"`;
+  } else if (needsOg) {
+    extraAttrs = ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"`;
+  }
+  return `<a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${extraAttrs}>
+    ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
+    <div class="link-card-info">
+      <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>
+      ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
+      ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
+      ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
+    </div>
+  </a>`;
+}
+
+const SENSITIVE_REVEAL_BTN = `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
+const SENSITIVE_HIDE_BTN = `<button class="sensitive-hide" title="민감한 미디어 숨기기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>숨기기</span></button>`;
+
+function getMediaLayoutClass(mediaItems) {
+  const count = Math.min(mediaItems.length, 4);
+  if (count <= 1) return '';
+  const ratios = mediaItems.slice(0, count).map(m => {
+    if (m.width && m.height) return m.width / m.height;
+    return 1; // default to square if unknown
+  });
+  // portrait < 0.8, landscape > 1.2, square in between
+  const orientations = ratios.map(r => r < 0.8 ? 'p' : r > 1.2 ? 'l' : 's');
+  if (count === 2) {
+    const allPortrait = orientations.every(o => o === 'p');
+    const allLandscape = orientations.every(o => o === 'l' || o === 's');
+    if (allPortrait) return ' layout-2p';
+    if (allLandscape) return ' layout-2l';
+    return ' layout-2m'; // mixed
+  }
+  if (count === 3) {
+    // If first image is portrait, use left-big layout; if landscape, use top-big layout
+    if (orientations[0] === 'p') return ' layout-3pl';
+    return ' layout-3lt';
+  }
+  // count === 4: always 2x2
+  return '';
+}
+
+function renderMediaGridHtml(mediaItems, isSensitive, extraClass = '') {
+  if (!mediaItems || mediaItems.length === 0) return '';
+  const count = Math.min(mediaItems.length, 4);
+  const sensitiveClass = isSensitive ? ' media-sensitive' : '';
+  const layoutClass = getMediaLayoutClass(mediaItems);
+  const cls = extraClass
+    ? `${extraClass} post-media media-${count}${layoutClass}${sensitiveClass}`
+    : `post-media media-${count}${layoutClass}${sensitiveClass}`;
+  let html = `<div class="${cls}">`;
+  if (isSensitive) {
+    html += SENSITIVE_REVEAL_BTN + SENSITIVE_HIDE_BTN;
+  }
+  for (const m of mediaItems.slice(0, count)) {
+    if (m.type === 'video') {
+      html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
+    } else {
+      html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderPollHtml(poll, postId, platform) {
+  if (!poll || !poll.options) return '';
+  const totalVotes = poll.votesCount || poll.options.reduce((s, o) => s + (o.votesCount || 0), 0);
+  const hasVoted = poll.voted;
+  const isExpired = poll.expired;
+  const canVote = !hasVoted && !isExpired;
+
+  let html = `<div class="post-poll" data-poll-id="${escapeHtml(poll.id)}" data-post-id="${escapeHtml(postId)}" data-platform="${escapeHtml(platform)}" data-multiple="${poll.multiple ? 'true' : 'false'}">`;
+
+  for (let i = 0; i < poll.options.length; i++) {
+    const opt = poll.options[i];
+    const pct = totalVotes > 0 ? Math.round((opt.votesCount / totalVotes) * 100) : 0;
+    const isOwn = poll.ownVotes && poll.ownVotes.includes(i);
+    const inputType = poll.multiple ? 'checkbox' : 'radio';
+
+    if (canVote) {
+      html += `<label class="poll-option poll-option-votable">
+        <input type="${inputType}" name="poll-${escapeHtml(postId)}" value="${i}" class="poll-input">
+        <span class="poll-option-text">${escapeHtml(opt.title)}</span>
+      </label>`;
+    } else {
+      html += `<div class="poll-option poll-option-result${isOwn ? ' poll-own-vote' : ''}">
+        <div class="poll-bar" style="width:${pct}%"></div>
+        <span class="poll-option-text">${escapeHtml(opt.title)}</span>
+        <span class="poll-pct">${pct}%</span>
+      </div>`;
+    }
+  }
+
+  if (canVote) {
+    html += `<button class="poll-vote-btn btn btn-small" data-action="vote-poll">투표</button>`;
+  }
+
+  html += `<div class="poll-info">${totalVotes}표`;
+  if (poll.expiresAt) {
+    if (isExpired) {
+      html += ' · 종료됨';
+    } else {
+      const remaining = poll.expiresAt - new Date();
+      if (remaining > 86400000) html += ` · ${Math.floor(remaining / 86400000)}일 남음`;
+      else if (remaining > 3600000) html += ` · ${Math.floor(remaining / 3600000)}시간 남음`;
+      else if (remaining > 60000) html += ` · ${Math.floor(remaining / 60000)}분 남음`;
+      else html += ' · 곧 종료';
+    }
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderReplyContextHtml(displayPost, ctxId) {
+  if (displayPost.replyTo) {
+    const replyAuthor = displayPost.replyTo.author;
+    const parentCw = displayPost.replyTo.contentWarning;
+    const parentText = stripHtml(displayPost.replyTo.content);
+    const isLong = !parentCw && parentText.length > 200;
+    return `
+      <div class="reply-context">
+        <div class="reply-context-header">
+          <img class="reply-context-avatar" src="${replyAuthor?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
+        </div>
+        ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${ctxId}">내용 보기</button></div>` : ''}
+        <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${ctxId}">${displayPost.replyTo.content}${renderReplyMedia(displayPost.replyTo.media)}</div>
+        ${isLong ? `<button class="expand-toggle" data-expand-target="${ctxId}">더보기</button>` : ''}
+      </div>
+    `;
+  } else if (displayPost.replyToAcct) {
+    return `<div class="reply-indicator">↩ @${escapeHtml(displayPost.replyToAcct)} 에게 답글</div>`;
+  } else if (displayPost.replyToId) {
+    return `<div class="reply-indicator">↩ 답글</div>`;
+  }
+  return '';
 }
 
 export function renderPost(post) {
@@ -82,13 +400,13 @@ export function renderPost(post) {
   if (post._dedupKey) card.dataset.dedupKey = post._dedupKey;
 
   // Per-account theme color for single-account posts
-  if (post.themeColor && (!post.mergedAccounts || post.mergedAccounts.length <= 1)) {
-    card.style.borderLeftColor = post.themeColor;
+  if (!post.mergedAccounts || post.mergedAccounts.length <= 1) {
+    card.style.borderLeftColor = usableColor(post.themeColor, post.platform);
   }
 
   // Merged account border (uses background trick to follow border-radius)
   if (post.mergedAccounts && post.mergedAccounts.length > 1) {
-    const colors = post.mergedAccounts.map(a => a.themeColor || PLATFORM_COLORS[a.platform] || '#7c7dff');
+    const colors = post.mergedAccounts.map(a => usableColor(a.themeColor, a.platform));
     const segmentSize = 100 / colors.length;
     const stops = colors.map((c, i) =>
       `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
@@ -99,37 +417,24 @@ export function renderPost(post) {
 
   let html = '';
 
+  // Pin indicator
+  if (post.pinned) {
+    html += `<div class="pin-indicator"><span class="icon-inline">${iconPin}</span> 프로필에 고정됨</div>`;
+  }
+
   // Renote / Boost indicator
   if (post.rebloggedBy) {
     const boostLabel = post.platform === 'mastodon' ? '부스트' : '리노트';
-    html += `<div class="renote-indicator"><span class="icon-inline boost-icon">${iconBoost}</span> ${post.rebloggedBy.displayNameHtml || escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
+    const rbAvatar = post.rebloggedBy.avatarUrl
+      ? `<img class="renote-avatar" src="${escapeHtml(post.rebloggedBy.avatarUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+      : '';
+    html += `<div class="renote-indicator"><span class="icon-inline boost-icon">${iconBoost}</span>${rbAvatar} ${post.rebloggedBy.displayNameHtml || escapeHtml(post.rebloggedBy.displayName)}님이 ${boostLabel}함</div>`;
   }
 
   const displayPost = post.reblog || post;
 
   // Reply context
-  if (displayPost.replyTo) {
-    const replyAuthor = displayPost.replyTo.author;
-    const parentCw = displayPost.replyTo.contentWarning;
-    const parentText = stripHtml(displayPost.replyTo.content);
-    const isLong = !parentCw && parentText.length > 200;
-    const replyCtxId = `reply-ctx-${post.id}`;
-    html += `
-      <div class="reply-context">
-        <div class="reply-context-header">
-          <img class="reply-context-avatar" src="${replyAuthor?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
-          <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
-        </div>
-        ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
-        <div class="reply-context-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}</div>
-        ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
-      </div>
-    `;
-  } else if (displayPost.replyToAcct) {
-    html += `<div class="reply-indicator">↩ @${escapeHtml(displayPost.replyToAcct)} 에게 답글</div>`;
-  } else if (displayPost.replyToId) {
-    html += `<div class="reply-indicator">↩ 답글</div>`;
-  }
+  html += renderReplyContextHtml(displayPost, `reply-ctx-${post.id}`);
 
   // Header (always visible, even under CW)
   html += `
@@ -159,8 +464,13 @@ export function renderPost(post) {
     html += `<div class="cw-content" id="${cwId}">`;
   }
 
-  // Content
-  html += `<div class="post-content">${displayPost.content}</div>`;
+  // Content — strip fedi link URL from text when it will be shown as a card,
+  // then convert standalone YouTube links/iframes to inline embed players.
+  // Skip embedYouTubeInContent when a YouTube link card exists to avoid double embeds.
+  const strippedContent = stripFediLinkFromContent(displayPost.content, displayPost.linkCard);
+  const isYtLinkCard = displayPost.linkCard?.url && extractYouTubeId(displayPost.linkCard.url);
+  const postContentHtml = isYtLinkCard ? strippedContent : embedYouTubeInContent(strippedContent);
+  html += `<div class="post-content">${postContentHtml}</div>`;
 
   // Quote post (embedded) — supports nested quotes
   if (displayPost.quotePost) {
@@ -169,75 +479,42 @@ export function renderPost(post) {
 
   // Media
   if (displayPost.media && displayPost.media.length > 0) {
-    const count = Math.min(displayPost.media.length, 4);
-    // Sensitive: post-level (Mastodon) or any file-level (Misskey)
-    const hasSensitive = displayPost.sensitive || displayPost.media.some(m => m.sensitive);
-    const sensitiveClass = hasSensitive ? ' media-sensitive' : '';
-    html += `<div class="post-media media-${count}${sensitiveClass}">`;
-    if (hasSensitive) {
-      html += `<button class="sensitive-reveal" title="민감한 미디어 보기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>민감한 콘텐츠</span></button>`;
-      html += `<button class="sensitive-hide" title="민감한 미디어 숨기기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>숨기기</span></button>`;
-    }
-    for (const m of displayPost.media) {
-      if (m.type === 'video') {
-        html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
-      } else {
-        html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.opacity='0.3'">`;
-      }
-    }
-    html += '</div>';
+    html += renderMediaGridHtml(displayPost.media, displayPost.sensitive || displayPost.media.some(m => m.sensitive));
   }
 
-  // Link card
-  if (displayPost.linkCard && displayPost.linkCard.url) {
-    const lc = displayPost.linkCard;
-    const hasImage = lc.image;
-    const hasTitle = lc.title;
-    const needsOg = !hasTitle && !hasImage;
-    // Detect fediverse post URLs
-    const isFediUrl = isFediPostUrl(lc.url);
-    const cardClass = hasImage ? 'link-card link-card-has-image' : 'link-card';
-    let extraAttrs = '';
-    if (isFediUrl) {
-      extraAttrs = ` data-fedi-url="${escapeHtml(lc.url)}" data-fedi-pending="true"`;
-    } else if (needsOg) {
-      extraAttrs = ` data-og-url="${escapeHtml(lc.url)}" data-og-pending="true"`;
-    }
-    html += `
-      <a class="${cardClass}" href="${escapeHtml(lc.url)}" target="_blank" rel="noopener"${extraAttrs}>
-        ${hasImage ? `<img class="link-card-image" src="${escapeHtml(lc.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.remove('link-card-has-image');this.style.display='none'">` : ''}
-        <div class="link-card-info">
-          <div class="link-card-site">${escapeHtml(lc.siteName || new URL(lc.url).hostname)}</div>
-          ${hasTitle ? `<div class="link-card-title">${escapeHtml(lc.title)}</div>` : ''}
-          ${lc.description ? `<div class="link-card-desc">${escapeHtml(lc.description)}</div>` : ''}
-          ${!hasTitle ? `<div class="link-card-url">${escapeHtml(lc.url)}</div>` : ''}
-        </div>
-      </a>
-    `;
+  // Poll
+  if (displayPost.poll) {
+    html += renderPollHtml(displayPost.poll, post.id, post.platform);
   }
 
-  // Reactions (Misskey)
-  if (displayPost.reactions && Object.keys(displayPost.reactions).length > 0) {
-    html += '<div class="post-reactions">';
-    for (const [reaction, count] of Object.entries(displayPost.reactions)) {
-      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost.instanceUrl);
-      html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
-    }
-    html += '</div>';
+  // Link card — suppress fedi link card when reply/quote context already shows the referenced post
+  const suppressPostLinkCard = displayPost.linkCard?.url
+    && isFediPostUrl(displayPost.linkCard.url)
+    && (displayPost.replyTo || displayPost.quotePost);
+  if (!suppressPostLinkCard) {
+    html += renderLinkCardHtml(displayPost.linkCard);
   }
 
   if (displayPost.contentWarning) {
     html += '</div>'; // close cw-content
   }
 
+  // Reactions (Misskey) / Favourites badge (Mastodon) — outside CW so always visible
+  {
+    const reactionsHtml = buildReactionsHtml(displayPost, post);
+    if (reactionsHtml) html += `<div class="post-reactions">${reactionsHtml}</div>`;
+  }
+
   // Actions
   const replyCount = displayPost.stats?.replies || 0;
-  const boostCount = displayPost.stats?.reblogs || displayPost.stats?.renotes || 0;
-  const favCount = displayPost.stats?.favourites || displayPost.stats?.reactions || 0;
+  const boostCount = displayPost.stats?.boosts || 0;
+  const favCount = displayPost.stats?.favourites || 0;
 
-  const favIcon = post.platform === 'mastodon' ? iconStar : iconHeart;
+  const favIcon = iconHeart;
+  const isFaved = post.favourited || (post.myReaction && (post.myReaction === '❤' || post.myReaction === '❤️'));
+  const hasCustomReaction = post.myReaction && post.myReaction !== '❤' && post.myReaction !== '❤️';
 
-  const isMisskey = post.platform !== 'mastodon';
+  const hasReactionSupport = supportsReactions(post);
 
   html += `
     <div class="post-actions">
@@ -252,18 +529,21 @@ export function renderPost(post) {
       <button class="post-action" data-action="quote" title="인용">
         <span class="action-icon">${iconQuote}</span>
       </button>
-      <button class="post-action${(post.favourited || post.myReaction) ? ' active' : ''}" data-action="fav" title="${isMisskey ? '좋아요' : '즐겨찾기'}">
+      <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요">
         <span class="action-icon">${favIcon}</span>
         ${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}
       </button>
-      ${isMisskey ? `<button class="post-action" data-action="reaction" title="리액션">
+      ${hasReactionSupport ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션">
         <span class="action-icon">${iconSmile}</span>
       </button>` : ''}
-      ${post.isOwn ? `<button class="post-action action-edit" data-action="edit" title="수정">
+      ${post.isOwn && !post.rebloggedBy ? `<button class="post-action action-edit" data-action="edit" title="수정">
         <span class="action-icon">${iconEdit}</span>
-      </button><button class="post-action action-delete" data-action="delete" title="삭제">
+      </button>` : ''}${post.isOwn ? `<button class="post-action action-delete" data-action="delete" title="삭제">
         <span class="action-icon">${iconTrash}</span>
       </button>` : ''}
+      <button class="post-action${post.bookmarked ? ' active' : ''}" data-action="bookmark" title="북마크">
+        <span class="action-icon">${post.bookmarked ? iconBookmarkFill : iconBookmark}</span>
+      </button>
       <button class="post-action action-end" data-action="open" title="원본 열기">
         <span class="action-icon">${iconLink}</span>
       </button>
@@ -277,7 +557,7 @@ export function renderPost(post) {
 export function renderNotification(notif) {
   const card = document.createElement('div');
   const hasPost = !!notif.post?.id;
-  card.className = `notif-card platform-${notif.platform}${hasPost ? ' notif-clickable' : ''}`;
+  card.className = `notif-card notif-type-${notif.type} platform-${notif.platform}${hasPost ? ' notif-clickable' : ''}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
   // Dedup key for incremental updates (prefer normalized key from dedup)
@@ -291,23 +571,130 @@ export function renderNotification(notif) {
   }
   if (notif.accountId) card.dataset.accountId = notif.accountId;
   if (notif.post?.id) card.dataset.postId = notif.post.id;
+  if (notif.post?.url) card.dataset.postUrl = notif.post.url;
   if (notif.actor?.id) card.dataset.actorId = notif.actor.id;
   if (notif.actor?.acct) card.dataset.actorAcct = notif.actor.acct;
   if (notif.actor?.displayName) card.dataset.actorName = notif.actor.displayName;
   if (notif.actor?.username) card.dataset.actorUsername = notif.actor.username;
   // Per-account or merged theme color
   if (notif.mergedAccounts && notif.mergedAccounts.length > 1) {
-    const colors = notif.mergedAccounts.map(a => a.themeColor || PLATFORM_COLORS[a.platform] || '#7c7dff');
+    const colors = notif.mergedAccounts.map(a => usableColor(a.themeColor, a.platform));
     const segmentSize = 100 / colors.length;
     const stops = colors.map((c, i) =>
       `${c} ${i * segmentSize}%, ${c} ${(i + 1) * segmentSize}%`
     ).join(', ');
     card.style.setProperty('--merged-gradient', `linear-gradient(to bottom, ${stops})`);
     card.classList.add('merged-border');
-  } else if (notif.themeColor) {
-    card.style.borderLeftColor = notif.themeColor;
+  } else {
+    card.style.borderLeftColor = usableColor(notif.themeColor, notif.platform);
   }
 
+  const displayPost = notif.post;
+  let html = '';
+
+  // Mention / Quote / Boost notifications: render as full post-card style
+  const isMentionStyle = (notif.type === 'mention' || notif.type === 'quote' || notif.type === 'reblog') && displayPost;
+  if (isMentionStyle) {
+    card.classList.add('notif-mention');
+
+    // Unified indicator: actor avatar with type badge + label
+    const indicatorLabels = { quote: '인용', mention: '멘션', reblog: notif.platform === 'mastodon' ? '부스트' : '리노트' };
+    const indicatorIcons = { quote: iconReplyNotif, mention: iconMegaphone, reblog: iconBoostNotif };
+    const indicatorTypeClass = `notif-type-${notif.type}`;
+    const actorName = notif.actor ? (notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)) : '';
+    const actorAvatar = notif.actor?.avatarUrl || '';
+    html += `<div class="notif-indicator">
+      <div class="notif-actor-wrap notif-indicator-actor">
+        <img class="notif-avatar" src="${escapeHtml(actorAvatar)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+        <span class="notif-type-badge ${indicatorTypeClass}"><span class="notif-svg-icon">${indicatorIcons[notif.type] || iconReplyNotif}</span></span>
+      </div>
+      <span class="notif-indicator-label">${actorName} 님이 ${indicatorLabels[notif.type] || notif.type}</span>
+    </div>`;
+
+    // Reply context
+    html += renderReplyContextHtml(displayPost, `notif-reply-ctx-${notif.id}`);
+
+    // Post header (full avatar + name + handle + time)
+    html += `
+      <div class="post-header">
+        <img class="post-avatar" src="${displayPost.author.avatarUrl || ''}"
+             alt="${escapeHtml(displayPost.author.displayName)}"
+             loading="lazy" referrerpolicy="no-referrer"
+             onerror="this.style.opacity='0.3'">
+        <div class="post-meta">
+          <div class="post-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName)}</div>
+          <div class="post-handle">@${escapeHtml(displayPost.author.acct)}</div>
+        </div>
+        <span class="post-time" title="${displayPost.createdAt?.toLocaleString?.() || ''}">${timeAgo(displayPost.createdAt || notif.createdAt)}${displayPost.visibility && VISIBILITY_ICONS[displayPost.visibility] ? `<span class="visibility-icon" title="${VISIBILITY_ICONS[displayPost.visibility].title}">${VISIBILITY_ICONS[displayPost.visibility].icon}</span>` : ''}</span>
+      </div>
+    `;
+
+    // CW
+    const cwId = `notif-cw-${notif.id}`;
+    if (displayPost.contentWarning) {
+      html += `<div class="cw-warning"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(displayPost.contentWarning)} <button class="cw-toggle" data-cw-target="${cwId}">내용 보기</button></div>`;
+      html += `<div class="cw-content" id="${cwId}">`;
+    }
+
+    // Content — strip fedi link URL, then convert standalone YouTube links to embeds
+    const notifMentionContentHtml = embedYouTubeInContent(stripFediLinkFromContent(displayPost.content, displayPost.linkCard));
+    html += `<div class="post-content">${notifMentionContentHtml}</div>`;
+
+    // Quote post
+    if (displayPost.quotePost) {
+      html += renderQuotePost(displayPost.quotePost, 0);
+    }
+
+    // Poll
+    if (displayPost.poll) {
+      html += renderPollHtml(displayPost.poll, notif.post?.id || notif.id, notif.platform);
+    }
+
+    // Media
+    if (displayPost.media && displayPost.media.length > 0) {
+      html += renderMediaGridHtml(displayPost.media.slice(0, 4), displayPost.sensitive || displayPost.media.some(m => m.sensitive));
+    }
+
+    // Link card (notifications column: always show card)
+    html += renderLinkCardHtml(displayPost.linkCard);
+
+    // Reactions — always show post-level reaction badges so the full reaction
+    // breakdown remains visible even when the notif badge already shows an emoji
+    {
+      const reactionsHtml = buildReactionsHtml(displayPost, notif);
+      if (reactionsHtml) html += `<div class="post-reactions">${reactionsHtml}</div>`;
+    }
+
+    // Close CW
+    if (displayPost.contentWarning) {
+      html += '</div>';
+    }
+
+    // Full action buttons (same as post-card)
+    const replyCount = displayPost.stats?.replies || 0;
+    const boostCount = displayPost.stats?.boosts || 0;
+    const favCount = displayPost.stats?.favourites || 0;
+    const hasReactionSupport = supportsReactions(notif);
+    const isFaved = notif.favourited || displayPost.favourited
+      || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
+    const hasCustomReaction = displayPost.myReaction && displayPost.myReaction !== '❤' && displayPost.myReaction !== '❤️';
+
+    html += `
+      <div class="post-actions">
+        <button class="post-action" data-action="reply" title="답글"><span class="action-icon">${iconReply}</span>${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}</button>
+        <button class="post-action${notif.reblogged || displayPost.reblogged ? ' active' : ''}" data-action="boost" title="${notif.platform === 'mastodon' ? '부스트' : '리노트'}"><span class="action-icon">${iconBoost}</span>${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}</button>
+        <button class="post-action" data-action="quote" title="인용"><span class="action-icon">${iconQuote}</span></button>
+        <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요"><span class="action-icon">${iconHeart}</span>${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}</button>
+        ${hasReactionSupport ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션"><span class="action-icon">${iconSmile}</span></button>` : ''}
+        <button class="post-action action-end" data-action="open" title="원본 열기"><span class="action-icon">${iconLink}</span></button>
+      </div>
+    `;
+
+    card.innerHTML = html;
+    return card;
+  }
+
+  // --- Standard notification layout (non-mention) ---
   let iconHtml;
   const notifTypeClass = `notif-type-${notif.type}`;
   if (notif.reactionEmojiUrl) {
@@ -319,8 +706,6 @@ export function renderNotification(notif) {
       ? `<span class="notif-emoji">${icon}</span>`
       : `<span class="notif-svg-icon">${icon}</span>`;
   }
-
-  let html = '';
 
   // Actor avatar with notification type badge overlay
   if (notif.actor && notif.actor.avatarUrl) {
@@ -334,76 +719,160 @@ export function renderNotification(notif) {
     html += `<div class="notif-icon ${notifTypeClass}">${iconHtml}</div>`;
   }
 
+  // Notification header: actor + label + time + visibility icon
   html += `
     <div class="notif-body">
       <div class="notif-text">
         ${notif.actor ? `<strong>${notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)}</strong>` : ''}
         ${escapeHtml(notif.label)}
       </div>
-      <div class="notif-time">${timeAgo(notif.createdAt)}</div>
+      <div class="notif-time">${timeAgo(notif.createdAt)}${displayPost?.visibility && VISIBILITY_ICONS[displayPost.visibility] ? `<span class="visibility-icon" title="${VISIBILITY_ICONS[displayPost.visibility].title}">${VISIBILITY_ICONS[displayPost.visibility].icon}</span>` : ''}</div>
     </div>
   `;
 
-  // Parent post context for reply notifications
-  if (['reply', 'mention', 'quote'].includes(notif.type) && notif.post) {
-    if (notif.post.replyTo) {
-      const notifReplyAuthor = notif.post.replyTo.author;
-      const parentExcerpt = stripHtml(notif.post.replyTo.content);
-      const truncated = parentExcerpt.length > 120 ? parentExcerpt.substring(0, 120) + '…' : parentExcerpt;
-      html += `<div class="notif-parent-context">
-        <span class="notif-parent-label">↩ ${notifReplyAuthor?.displayNameHtml || escapeHtml(notifReplyAuthor?.displayName || '')}의 글에 답글</span>
-        <div class="notif-parent-excerpt">${escapeHtml(truncated)}</div>
+  // Follow request: accept/reject buttons
+  if (notif.type === 'receiveFollowRequest' || notif.type === 'follow_request') {
+    html += `<div class="follow-request-actions">
+      <button class="btn btn-small btn-primary follow-req-btn" data-action="accept-follow" data-actor-id="${escapeHtml(notif.actor?.id || '')}" data-account-id="${escapeHtml(notif.accountId || '')}" data-platform="${escapeHtml(notif.platform)}">${iconCheckCircle} 수락</button>
+      <button class="btn btn-small btn-danger follow-req-btn" data-action="reject-follow" data-actor-id="${escapeHtml(notif.actor?.id || '')}" data-account-id="${escapeHtml(notif.accountId || '')}" data-platform="${escapeHtml(notif.platform)}">${iconXCircle} 거절</button>
+    </div>`;
+  }
+
+  // Reply context (full content + CW toggle) for reply/mention/quote notifications
+  if (['reply', 'quote'].includes(notif.type) && displayPost) {
+    if (displayPost.replyTo) {
+      const notifReplyAuthor = displayPost.replyTo.author;
+      const parentCw = displayPost.replyTo.contentWarning;
+      const parentText = stripHtml(displayPost.replyTo.content);
+      const isLong = !parentCw && parentText.length > 200;
+      const replyCtxId = `notif-reply-ctx-${notif.id}`;
+      html += `<div class="notif-parent-context notif-parent-context-full">
+        <div class="notif-parent-header">
+          <img class="notif-parent-avatar" src="${notifReplyAuthor?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <span class="notif-parent-author">${notifReplyAuthor?.displayNameHtml || escapeHtml(notifReplyAuthor?.displayName || '')}</span>
+          <span class="notif-parent-label-tag">원본</span>
+        </div>
+        ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${replyCtxId}">내용 보기</button></div>` : ''}
+        <div class="notif-parent-content${isLong ? ' collapsed' : ''}${parentCw ? ' cw-content' : ''}" id="${replyCtxId}">${displayPost.replyTo.content}${renderReplyMedia(displayPost.replyTo.media)}</div>
+        ${isLong ? `<button class="expand-toggle" data-expand-target="${replyCtxId}">더보기</button>` : ''}
       </div>`;
-    } else if (notif.post.replyToAcct) {
+    } else if (displayPost.replyToAcct) {
       html += `<div class="notif-parent-context">
-        <span class="notif-parent-label">↩ @${escapeHtml(notif.post.replyToAcct)}의 글에 답글</span>
+        <span class="notif-parent-label">↩ @${escapeHtml(displayPost.replyToAcct)}의 글에 답글</span>
+      </div>`;
+    } else if (displayPost.replyToId) {
+      html += `<div class="notif-parent-context">
+        <span class="notif-parent-label">↩ 답글</span>
       </div>`;
     }
   }
 
-  if (notif.post && notif.post.content) {
-    const notifText = stripHtml(notif.post.content);
+  // Post content area (with CW toggle, media, quote, reactions, link card)
+  const hasDisplayContent = displayPost && (displayPost.content || (displayPost.media && displayPost.media.length > 0) || displayPost.quotePost || displayPost.linkCard);
+  if (hasDisplayContent) {
+    html += `<div class="notif-content-wrap">`;
+    const notifCwId = `notif-cw-${notif.id}`;
+
+    // CW (Content Warning) toggle
+    if (displayPost.contentWarning) {
+      html += `<div class="notif-cw-warning">
+        <span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(displayPost.contentWarning)}
+        <button class="cw-toggle" data-cw-target="${notifCwId}">내용 보기</button>
+      </div>`;
+      html += `<div class="cw-content" id="${notifCwId}">`;
+    }
+
+    // Post text content — strip fedi link URL, then convert standalone YouTube links to embeds
+    const notifStdContentHtml = embedYouTubeInContent(stripFediLinkFromContent(displayPost.content, displayPost.linkCard));
+    const notifText = stripHtml(notifStdContentHtml);
     const isLongNotif = notifText.length > 200;
     const notifCtxId = `notif-ctx-${notif.id}`;
-    html += `<div class="notif-post-content${isLongNotif ? ' collapsed' : ''}" id="${notifCtxId}">${notif.post.content}</div>`;
+    html += `<div class="notif-post-content${isLongNotif ? ' collapsed' : ''}" id="${notifCtxId}">${notifStdContentHtml}</div>`;
     if (isLongNotif) {
       html += `<button class="expand-toggle" data-expand-target="${notifCtxId}">더보기</button>`;
     }
-    if (notif.post.media && notif.post.media.length > 0) {
-      html += `<div class="notif-media">`;
-      for (const m of notif.post.media.slice(0, 4)) {
-        if (m.type !== 'video') {
-          html += `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" onerror="this.style.display='none'">`;
-        }
-      }
-      html += `</div>`;
+
+    // Quote post (embedded)
+    if (displayPost.quotePost) {
+      html += renderQuotePost(displayPost.quotePost, 0);
     }
-    if (hasPost) {
-      const isMisskey = notif.platform !== 'mastodon';
-      const favIcon = isMisskey ? iconHeart : iconStar;
+
+    // Poll
+    if (displayPost.poll) {
+      html += renderPollHtml(displayPost.poll, displayPost.id, notif.platform);
+    }
+
+    // Media grid with sensitive overlay
+    if (displayPost.media && displayPost.media.length > 0) {
+      html += renderMediaGridHtml(displayPost.media.slice(0, 4), displayPost.sensitive || displayPost.media.some(m => m.sensitive), 'notif-media-grid');
+    }
+
+    // Link card preview (OG metadata)
+    html += renderLinkCardHtml(displayPost.linkCard, 'notif-link-card');
+
+    // Close CW content wrapper
+    if (displayPost.contentWarning) {
+      html += '</div>'; // close cw-content
+    }
+
+    // Reaction badges — outside CW so always visible; always show post-level
+    // reaction badges so the full reaction breakdown remains visible
+    {
+      const reactionsHtml = buildReactionsHtml(displayPost, notif);
+      if (reactionsHtml) html += `<div class="post-reactions notif-reactions">${reactionsHtml}</div>`;
+    }
+
+    // Action buttons with counts and active states (hide for favourite/reaction notifications)
+    if (hasPost && !['favourite', 'reaction'].includes(notif.type)) {
+      const replyCount = displayPost.stats?.replies || 0;
+      const boostCount = displayPost.stats?.boosts || 0;
+      let favCount = displayPost.stats?.favourites || 0;
+      if (!favCount && displayPost.reactions) {
+        favCount = (displayPost.reactions['❤'] || 0) + (displayPost.reactions['❤️'] || 0);
+      }
+      const hasReactionSupport = supportsReactions(notif);
+      const isBoosted = notif.reblogged || displayPost.reblogged;
+      const isFaved = notif.favourited || displayPost.favourited
+        || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
+      const hasCustomReaction = displayPost.myReaction && displayPost.myReaction !== '❤' && displayPost.myReaction !== '❤️';
+
       html += `<div class="notif-actions">
-        <button class="notif-action-btn" data-action="reply" title="답글">${iconReply}</button>
-        <button class="notif-action-btn" data-action="boost" title="부스트/리노트">${iconBoost}</button>
-        <button class="notif-action-btn" data-action="fav" title="좋아요/리액션">${favIcon}</button>
-        ${isMisskey ? `<button class="notif-action-btn" data-action="reaction" title="리액션 선택">${iconSmile}</button>` : ''}
+        <button class="notif-action-btn" data-action="reply" title="답글">${iconReply}${replyCount > 0 ? `<span class="notif-action-count">${replyCount}</span>` : ''}</button>
+        <button class="notif-action-btn${isBoosted ? ' active' : ''}" data-action="boost" title="부스트/리노트">${iconBoost}${boostCount > 0 ? `<span class="notif-action-count">${boostCount}</span>` : ''}</button>
+        <button class="notif-action-btn${isFaved ? ' active' : ''}" data-action="fav" title="좋아요">${iconHeart}${favCount > 0 ? `<span class="notif-action-count">${favCount}</span>` : ''}</button>
+        ${hasReactionSupport ? `<button class="notif-action-btn${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션 선택">${iconSmile}</button>` : ''}
       </div>`;
     }
+
+    html += '</div>'; // close notif-content-wrap
   }
   card.innerHTML = html;
   return card;
 }
 
 export function renderAccountCard(account, onRemove) {
+  const sw = account.software || account.platform;
   const card = document.createElement('div');
-  card.className = `account-card platform-${account.platform}`;
-  if (account.themeColor) card.style.borderLeftColor = account.themeColor;
+  card.className = `account-card platform-${sw}`;
+  card.style.borderLeftColor = usableColor(account.themeColor, sw);
 
   const p = account.profile;
-  const platformLabels = {
+  const softwareLabels = {
     misskey: 'Misskey',
+    sharkey: 'Sharkey',
+    foundkey: 'FoundKey',
+    hajkey: 'Hajkey',
     iceshrimp: 'Iceshrimp',
+    firefish: 'Firefish',
+    catodon: 'Catodon',
     cherrypick: 'CherryPick',
     mastodon: 'Mastodon',
+    hollo: 'Hollo',
+    akkoma: 'Akkoma',
+    pleroma: 'Pleroma',
+    gotosocial: 'GoToSocial',
+    hometown: 'Hometown',
+    glitchcafe: 'Glitch',
   };
 
   const postLabel = account.platform === 'mastodon' ? '게시물' : '노트';
@@ -417,7 +886,7 @@ export function renderAccountCard(account, onRemove) {
         <div class="account-card-name">${escapeHtml(p.displayName)}</div>
         <div class="account-card-handle">@${escapeHtml(p.acct)} · ${new URL(account.instanceUrl).hostname}</div>
       </div>
-      <span class="account-card-platform platform-badge ${account.platform}">${platformLabels[account.platform]}</span>
+      <span class="account-card-platform platform-badge ${sw}">${softwareLabels[sw] || sw}</span>
     </div>
     <div class="account-card-stats">
       <div class="account-stat">
@@ -469,16 +938,46 @@ export function renderLoadingText(message = '불러오는 중...') {
 }
 
 // Export icons for use in main.js column headers
-export { iconRefresh, iconClose, iconImage };
+export { iconRefresh, iconClose, iconImage, renderPollHtml };
+
+/** Build inner HTML for the .post-reactions section */
+export function buildReactionsHtml(displayPost, wrapperPost) {
+  const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
+
+  // Merge ❤ reactions into favourites count (Misskey ❤ reactions = Mastodon favourites)
+  let favCount = displayPost.stats?.favourites || 0;
+  let nonHeartReactions = [];
+  if (hasReactions) {
+    for (const [reaction, count] of Object.entries(displayPost.reactions)) {
+      if (reaction === '❤' || reaction === '❤️') {
+        favCount += count;
+      } else {
+        nonHeartReactions.push([reaction, count]);
+      }
+    }
+  }
+
+  const hasFavs = favCount > 0;
+  const hasNonHeartReactions = nonHeartReactions.length > 0;
+  if (!hasNonHeartReactions && !hasFavs) return '';
+  let html = '';
+  if (hasFavs) {
+    const isFaved = wrapperPost.favourited || displayPost.favourited
+      || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
+    html += `<span class="engagement-likes"><span class="reaction-badge like-badge${isFaved ? ' reacted' : ''}" data-reaction="favourite"><span class="reaction-icon reaction-heart">${iconHeartSmall}</span> <span class="reaction-count">${favCount}</span></span></span>`;
+  }
+  if (hasNonHeartReactions) {
+    html += `<span class="engagement-reactions">`;
+    for (const [reaction, count] of nonHeartReactions) {
+      const emojiHtml = resolveReactionHtml(reaction, displayPost.reactionEmojis, displayPost.emojis, displayPost._reactionInstanceUrl || displayPost.instanceUrl);
+      html += `<span class="reaction-badge" data-reaction="${escapeHtml(reaction)}" title="클릭하여 리액션한 사용자 보기">${emojiHtml} <span class="reaction-count">${count}</span></span>`;
+    }
+    html += `</span>`;
+  }
+  return html;
+}
 
 // Helpers
-
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 function stripHtml(html) {
   if (!html) return '';
@@ -516,8 +1015,9 @@ function resolveReactionHtml(reaction, reactionEmojis, emojis, instanceUrl) {
   const match = reaction.match(/^:(.+):$/);
   if (match) {
     const name = match[1];
-    const url = (reactionEmojis && (reactionEmojis[name] || reactionEmojis[name + '@.']))
-             || (emojis && (emojis[name] || emojis[name + '@.']))
+    const nameBase = name.replace(/@\.$/, '');
+    const url = (reactionEmojis && (reactionEmojis[nameBase] || reactionEmojis[nameBase + '@.']))
+             || (emojis && (emojis[nameBase] || emojis[nameBase + '@.']))
              || null;
     if (url) {
       return `<img class="custom-emoji" src="${escapeHtml(url)}" alt="${escapeHtml(reaction)}" title="${escapeHtml(reaction)}" referrerpolicy="no-referrer">`;
@@ -531,5 +1031,5 @@ function resolveReactionHtml(reaction, reactionEmojis, emojis, instanceUrl) {
   // Replace common unicode reactions with themed SVG icons
   const iconFn = REACTION_ICON_MAP[reaction];
   if (iconFn) return iconFn();
-  return reaction;
+  return `<span class="reaction-unicode">${reaction}</span>`;
 }
