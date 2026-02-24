@@ -26,11 +26,15 @@
  */
 
 export class StreamManager {
+  // Software that doesn't implement Mastodon Streaming API
+  static NO_STREAMING = new Set(['hollo']);
+
   constructor() {
     this.listeners = new Map();   // event → Set<callback>
 
     // Account registry: accountId → { account, client }
     this._accounts = new Map();
+    this._noStreamAccounts = new Set(); // accounts whose software lacks streaming
 
     // Mode: null = undetermined, 'relay', 'direct'
     this._mode = null;
@@ -83,6 +87,12 @@ export class StreamManager {
     this._accounts.set(account.id, { account, client });
     this._intentionalClose = false;
 
+    // Skip streaming for software that doesn't support it
+    if (StreamManager.NO_STREAMING.has(account.software)) {
+      this._noStreamAccounts.add(account.id);
+      return;
+    }
+
     if (this._mode === 'direct') {
       this._connectDirect(account, client);
     } else {
@@ -95,6 +105,7 @@ export class StreamManager {
 
   disconnect(accountId) {
     this._accounts.delete(accountId);
+    this._noStreamAccounts.delete(accountId);
     this._relayConnectedAccounts.delete(accountId);
 
     // Notify relay
@@ -137,6 +148,7 @@ export class StreamManager {
    */
   getAccountStatus(accountId) {
     if (!this._accounts.has(accountId)) return 'disconnected';
+    if (this._noStreamAccounts.has(accountId)) return 'unsupported';
 
     if (this._mode === 'relay') {
       if (this._relayConnectedAccounts.has(accountId)) return 'connected';
@@ -201,13 +213,15 @@ export class StreamManager {
         this._relayReconnectDelay = 2000;
         console.log('[Stream] Relay connected');
 
-        // Subscribe all registered accounts
-        const accounts = Array.from(this._accounts.values()).map(({ account }) => ({
-          id: account.id,
-          instanceUrl: account.instanceUrl,
-          accessToken: account.accessToken,
-          platform: account.platform,
-        }));
+        // Subscribe all registered accounts (excluding those without streaming)
+        const accounts = Array.from(this._accounts.values())
+          .filter(({ account }) => !this._noStreamAccounts.has(account.id))
+          .map(({ account }) => ({
+            id: account.id,
+            instanceUrl: account.instanceUrl,
+            accessToken: account.accessToken,
+            platform: account.platform,
+          }));
 
         if (accounts.length > 0) {
           ws.send(JSON.stringify({
@@ -371,8 +385,10 @@ export class StreamManager {
     console.log('[Stream] Falling back to direct connections');
     this._mode = 'direct';
 
-    for (const [, { account, client }] of this._accounts) {
-      this._connectDirect(account, client);
+    for (const [accountId, { account, client }] of this._accounts) {
+      if (!this._noStreamAccounts.has(accountId)) {
+        this._connectDirect(account, client);
+      }
     }
   }
 

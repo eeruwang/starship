@@ -975,6 +975,10 @@ textarea.input {
   background: var(--text-muted);
   opacity: 0.4;
 }
+.ws-status-dot.ws-unsupported {
+  background: var(--text-muted);
+  opacity: 0.25;
+}
 @keyframes ws-pulse {
   0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(240, 160, 32, 0.4); }
   50% { opacity: 0.4; box-shadow: none; }

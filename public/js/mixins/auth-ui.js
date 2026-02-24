@@ -520,7 +520,7 @@ export const AuthUIMixin = {
             const orderLabel = i === 0 ? ' <span class="reauth-default-badge">기본</span>' : '';
             const wsStatus = this.streamManager?.getAccountStatus(a.id) || 'disconnected';
             const wsStatusClass = `ws-${wsStatus}`;
-            const wsStatusTitle = wsStatus === 'connected' ? '스트리밍 연결됨' : wsStatus === 'connecting' ? '연결 중...' : '스트리밍 끊김';
+            const wsStatusTitle = wsStatus === 'connected' ? '스트리밍 연결됨' : wsStatus === 'connecting' ? '연결 중...' : wsStatus === 'unsupported' ? '스트리밍 미지원' : '스트리밍 끊김';
             return `
             <div class="reauth-picker-row${isHidden ? ' account-hidden' : ''}" data-account-id="${a.id}" data-index="${i}" draggable="true" style="border-left: 3px solid ${borderColor}; border-radius: var(--radius);">
               <span class="reauth-drag-handle" title="드래그하여 순서 변경">
@@ -563,7 +563,7 @@ export const AuthUIMixin = {
       if (!dot) return;
       const status = this.streamManager?.getAccountStatus(accountId) || 'disconnected';
       dot.className = `ws-status-dot ws-${status}`;
-      dot.title = status === 'connected' ? '스트리밍 연결됨' : status === 'connecting' ? '연결 중...' : '스트리밍 끊김';
+      dot.title = status === 'connected' ? '스트리밍 연결됨' : status === 'connecting' ? '연결 중...' : status === 'unsupported' ? '스트리밍 미지원' : '스트리밍 끊김';
     };
     this.streamManager?.on('connected', updateWsDot);
     this.streamManager?.on('disconnected', updateWsDot);
