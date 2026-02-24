@@ -136,6 +136,7 @@ export class MisskeyClient {
   async editNote(noteId, text, options = {}) {
     const body = { noteId, text };
     body.cw = options.cw || null;
+    if (options.visibility) body.visibility = options.visibility;
     return this.request('notes/update', body);
   }
 

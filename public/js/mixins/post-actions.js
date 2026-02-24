@@ -313,7 +313,7 @@ export const PostActionsMixin = {
     }
   },
 
-  async refreshSinglePost(postId, platform, accountId) {
+  async refreshSinglePost(postId, platform, accountId, { fullRerender = false } = {}) {
     try {
       let client = this.store.getClient(accountId);
       let account = this.store.getById(accountId);
@@ -382,6 +382,16 @@ export const PostActionsMixin = {
           // (Misskey may not return reactionEmojis immediately after creating a reaction)
           cdp.reactionEmojis = { ...(cdp.reactionEmojis || {}), ...(udp.reactionEmojis || {}) };
         }
+        // Full content update (after edit): sync content, CW, media, visibility, raw
+        if (fullRerender) {
+          cdp.content = udp.content;
+          cdp.contentWarning = udp.contentWarning;
+          cdp.media = udp.media;
+          cdp.visibility = udp.visibility;
+          cdp.sensitive = udp.sensitive;
+          cdp.emojis = udp.emojis;
+          cdp.raw = udp.raw;
+        }
         // Sync wrapper state for reblogs (wrapper and inner post differ)
         if (cachedPost !== cdp) {
           cachedPost.favourited = updatedPost.favourited;
@@ -397,13 +407,18 @@ export const PostActionsMixin = {
         this.postCache.set(cacheKey, updatedPost);
       }
 
-      // In-place DOM update: only refresh action buttons and counts
-      const postData = cachedPost || updatedPost;
-      const dp = postData.reblog || postData;
-      const selector = `.post-card[data-post-id="${postId}"][data-platform="${platform}"], .notif-card[data-post-id="${postId}"][data-platform="${platform}"]`;
-      const cards = document.querySelectorAll(selector);
-      for (const card of cards) {
-        this._updateCardActions(card, dp, postData);
+      if (fullRerender) {
+        // Full card re-render after edit — updates content, CW, media, etc.
+        this._rerenderCachedPost(postId, platform);
+      } else {
+        // In-place DOM update: only refresh action buttons and counts
+        const postData = cachedPost || updatedPost;
+        const dp = postData.reblog || postData;
+        const selector = `.post-card[data-post-id="${postId}"][data-platform="${platform}"], .notif-card[data-post-id="${postId}"][data-platform="${platform}"]`;
+        const cards = document.querySelectorAll(selector);
+        for (const card of cards) {
+          this._updateCardActions(card, dp, postData);
+        }
       }
     } catch (err) {
       // Silently fail - the action already succeeded
@@ -637,6 +652,7 @@ export const PostActionsMixin = {
 
     let sourceText = '';
     let sourceCw = '';
+    let sourceVisibility = 'public';
 
     try {
       if (account.platform === 'mastodon') {
@@ -644,15 +660,24 @@ export const PostActionsMixin = {
         sourceText = source.text || '';
         sourceCw = source.spoiler_text || '';
       } else {
-        const cachedPost = this.postCache.get(`${platform}:${postId}`);
-        const raw = cachedPost?.raw;
+        // Fetch fresh source from API (cache may be empty or stale)
+        const raw = await client.getNote(postId);
         const actualRaw = (raw?.renote && !raw?.text) ? raw.renote : raw;
         sourceText = actualRaw?.text || '';
         sourceCw = actualRaw?.cw || '';
+        // Get visibility from fresh API data
+        sourceVisibility = actualRaw?.visibility || 'public';
       }
     } catch (err) {
       this.showToast('원문을 가져오는데 실패했습니다: ' + err.message);
       return;
+    }
+
+    // Get current visibility from cache (for Mastodon, visibility was set during normalize)
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    if (cachedPost) {
+      const dp = cachedPost.reblog || cachedPost;
+      if (dp.visibility) sourceVisibility = dp.visibility;
     }
 
     // Open compose modal in edit mode
@@ -665,6 +690,14 @@ export const PostActionsMixin = {
     this.composeTitle.textContent = '글 수정';
     this.composeText.placeholder = '수정할 내용을 입력하세요...';
     this.btnComposeSubmit.textContent = '수정';
+
+    // Set visibility to match the original post
+    this.composeVisibilityValue = sourceVisibility;
+    const visOpt = this._composeVisibilityOptions.find(o => o.value === sourceVisibility);
+    if (visOpt) {
+      this.btnComposeVisibility.innerHTML = this._getVisibilitySvg(visOpt.icon);
+      this.btnComposeVisibility.title = `공개 범위: ${visOpt.label}`;
+    }
 
     // Lock to the editing account
     this.composeSelectedAccounts.clear();
@@ -687,6 +720,7 @@ export const PostActionsMixin = {
     const editAccountId = this.composeText.dataset.editAccountId;
     const text = this.composeText.value.trim();
     const cw = this.composeCw.value.trim();
+    const visibility = this.composeVisibilityValue;
 
     if (!text) {
       this.composeError.textContent = '내용을 입력하세요.';
@@ -706,17 +740,21 @@ export const PostActionsMixin = {
       if (account.platform === 'mastodon') {
         const cachedPost = this.postCache.get(`${editPlatform}:${editPostId}`);
         const mediaIds = cachedPost?.raw?.media_attachments?.map(m => m.id);
+        const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || undefined;
         await client.editStatus(editPostId, text, {
           spoilerText: cw,
           mediaIds: mediaIds?.length ? mediaIds : undefined,
+          visibility: mastodonVisibility,
         });
       } else {
+        const misskeyVisibility = ({ public: 'public', home: 'home', followers: 'followers', direct: 'specified' })[visibility] || undefined;
         await client.editNote(editPostId, text, {
           cw: cw,
+          visibility: misskeyVisibility,
         });
       }
       this.closeModal(this.modalCompose);
-      await this.refreshSinglePost(editPostId, editPlatform, editAccountId);
+      await this.refreshSinglePost(editPostId, editPlatform, editAccountId, { fullRerender: true });
     } catch (err) {
       this.composeError.textContent = '수정 실패: ' + err.message;
       this.composeError.style.display = 'block';

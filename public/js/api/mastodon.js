@@ -216,6 +216,7 @@ export class MastodonClient {
     const body = { status: text };
     if (options.spoilerText !== undefined) body.spoiler_text = options.spoilerText;
     if (options.mediaIds) body.media_ids = options.mediaIds;
+    if (options.visibility) body.visibility = options.visibility;
     return this.request('PUT', `/api/v1/statuses/${encodeURIComponent(id)}`, body);
   }
 
