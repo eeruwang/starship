@@ -131,6 +131,32 @@ export class StreamManager {
     return state?.ws?.readyState === WebSocket.OPEN;
   }
 
+  /**
+   * Detailed per-account connection status.
+   * Returns 'connected' | 'connecting' | 'disconnected'.
+   */
+  getAccountStatus(accountId) {
+    if (!this._accounts.has(accountId)) return 'disconnected';
+
+    if (this._mode === 'relay') {
+      if (this._relayConnectedAccounts.has(accountId)) return 'connected';
+      if (this._relayWs?.readyState === WebSocket.OPEN || this._relayConnecting) return 'connecting';
+      return 'disconnected';
+    }
+
+    if (this._mode === 'direct') {
+      const state = this._directConnections.get(accountId);
+      if (!state?.ws) return state?.reconnectTimer ? 'connecting' : 'disconnected';
+      if (state.ws.readyState === WebSocket.OPEN) return 'connected';
+      if (state.ws.readyState === WebSocket.CONNECTING) return 'connecting';
+      return 'disconnected';
+    }
+
+    // Mode not yet determined (initial relay connection attempt)
+    if (this._relayConnecting) return 'connecting';
+    return 'disconnected';
+  }
+
   get connectedCount() {
     if (this._mode === 'relay') {
       return this._relayConnectedAccounts.size;

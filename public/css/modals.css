@@ -961,15 +961,23 @@ textarea.input {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  transition: background 0.3s, box-shadow 0.3s;
+  transition: background 0.3s, box-shadow 0.3s, opacity 0.3s;
 }
 .ws-status-dot.ws-connected {
   background: #34d058;
   box-shadow: 0 0 6px rgba(52, 208, 88, 0.5);
 }
+.ws-status-dot.ws-connecting {
+  background: #f0a020;
+  animation: ws-pulse 1.5s ease-in-out infinite;
+}
 .ws-status-dot.ws-disconnected {
   background: var(--text-muted);
   opacity: 0.4;
+}
+@keyframes ws-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(240, 160, 32, 0.4); }
+  50% { opacity: 0.4; box-shadow: none; }
 }
 
 .reauth-picker-footer {
