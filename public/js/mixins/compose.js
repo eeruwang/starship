@@ -8,7 +8,7 @@ import { COMMON_EMOJIS, UNICODE_EMOJI_MAP, loadInstanceEmojis, setupPickerSearch
 export const ComposeMixin = {
 
   openComposeModal(replyToId = null, preferredAccountId = null, restrictedAccounts = null) {
-    const accounts = restrictedAccounts || this.store.getAll();
+    const accounts = restrictedAccounts || this.store.getVisible();
     if (accounts.length === 0) return;
 
     // Build account toggle buttons

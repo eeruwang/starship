@@ -9,7 +9,7 @@ import { buildReactionsHtml, renderPost } from '../ui/dashboard.js';
 export const PostActionsMixin = {
 
   async handlePostAction(action, postId, platform, accountId, btnElement) {
-    const allAccounts = this.store.getAll();
+    const allAccounts = this.store.getVisible();
 
     if (allAccounts.length === 0) return;
 
@@ -1068,7 +1068,7 @@ export const PostActionsMixin = {
     if (cachedPost?.mergedAccounts && cachedPost.mergedAccounts.length > 0) {
       const accounts = cachedPost.mergedAccounts
         .map(a => this.store.getById(a.id))
-        .filter(Boolean);
+        .filter(a => a && !a.hidden);
       if (accounts.length > 0) return accounts;
     }
     if (cachedPost?.accountId) {

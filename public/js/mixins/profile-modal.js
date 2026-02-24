@@ -116,7 +116,14 @@ export const ProfileModalMixin = {
     const myAccount = this.store.getAll().find(a =>
       String(a.profile?.id) === String(author.id) && a.platform === platform
     );
-    const effectiveAccountId = myAccount ? myAccount.id : accountId;
+    let effectiveAccountId = myAccount ? myAccount.id : accountId;
+    if (!myAccount) {
+      const viewingAccount = this.store.getById(accountId);
+      if (viewingAccount?.hidden) {
+        const fallback = this.store.getVisible().find(a => a.platform === platform);
+        if (fallback) effectiveAccountId = fallback.id;
+      }
+    }
     const client = this.store.getClient(effectiveAccountId);
     if (!client) return;
 
