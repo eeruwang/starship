@@ -475,13 +475,18 @@ export const EventsMixin = {
       e.preventDefault();
       e.stopPropagation();
       this.composeEditor.classList.remove('drag-over');
-      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-      for (const file of files) {
-        if (this.composeFiles.length >= 4) break;
-        const compressed = await compressImage(file);
-        this.composeFiles.push(compressed);
+      try {
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        for (const file of files) {
+          if (this.composeFiles.length >= 4) break;
+          const compressed = await compressImage(file);
+          this.composeFiles.push(compressed);
+        }
+        if (files.length > 0) this.renderComposeImagePreview();
+      } catch (err) {
+        console.error('Image drop error:', err);
+        this.showToast('이미지 첨부에 실패했습니다');
       }
-      if (files.length > 0) this.renderComposeImagePreview();
     });
 
     // Cmd/Ctrl+Enter to submit + emoji autocomplete keyboard navigation
@@ -519,18 +524,23 @@ export const EventsMixin = {
 
     // Paste image from clipboard
     this.composeText.addEventListener('paste', async (e) => {
-      const items = Array.from(e.clipboardData?.items || []);
-      const imageFiles = items
-        .filter(item => item.type.startsWith('image/'))
-        .map(item => item.getAsFile())
-        .filter(Boolean);
-      if (imageFiles.length > 0) {
-        for (const file of imageFiles) {
-          if (this.composeFiles.length >= 4) break;
-          const compressed = await compressImage(file);
-          this.composeFiles.push(compressed);
+      try {
+        const items = Array.from(e.clipboardData?.items || []);
+        const imageFiles = items
+          .filter(item => item.type.startsWith('image/'))
+          .map(item => item.getAsFile())
+          .filter(Boolean);
+        if (imageFiles.length > 0) {
+          for (const file of imageFiles) {
+            if (this.composeFiles.length >= 4) break;
+            const compressed = await compressImage(file);
+            this.composeFiles.push(compressed);
+          }
+          this.renderComposeImagePreview();
         }
-        this.renderComposeImagePreview();
+      } catch (err) {
+        console.error('Image paste error:', err);
+        this.showToast('이미지 붙여넣기에 실패했습니다');
       }
     });
   },

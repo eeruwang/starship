@@ -1346,7 +1346,7 @@ textarea.input {
 .profile-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-color);
   margin-top: 0.8rem;
   margin-bottom: 0;
 }
@@ -1481,7 +1481,7 @@ textarea.input {
   left: 50%;
   transform: translateX(-50%);
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius);
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   z-index: 100;
@@ -1494,7 +1494,7 @@ textarea.input {
   padding: 6px 14px;
   border: none;
   background: none;
-  color: var(--text);
+  color: var(--text-primary);
   font-size: 0.8rem;
   text-align: left;
   cursor: pointer;

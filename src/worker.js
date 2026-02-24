@@ -146,7 +146,7 @@ function generateToken() {
 
 async function getSessionUser(request, db) {
   const cookie = request.headers.get('Cookie') || '';
-  const match = cookie.match(/starship_session=([a-f0-9]+)/);
+  const match = cookie.match(/starship_session=([a-f0-9]{64})/);
   if (!match) return null;
   const token = match[1];
   const row = await db.prepare(
@@ -246,20 +246,37 @@ async function handleRegister(request, db, env) {
     if (!turnstileToken) {
       return jsonResponse({ error: '인간 확인을 완료해주세요' }, 400);
     }
-    const verifyRes = await fetch(TURNSTILE_VERIFY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ secret: turnstileSecret, response: turnstileToken }),
-    });
-    const verifyData = await verifyRes.json();
-    if (!verifyData.success) {
-      return jsonResponse({ error: '인간 확인에 실패했습니다. 다시 시도해주세요' }, 403);
+    try {
+      const verifyRes = await fetch(TURNSTILE_VERIFY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ secret: turnstileSecret, response: turnstileToken }),
+      });
+      if (!verifyRes.ok) {
+        return jsonResponse({ error: '인간 확인 서버 오류. 다시 시도해주세요' }, 502);
+      }
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) {
+        return jsonResponse({ error: '인간 확인에 실패했습니다. 다시 시도해주세요' }, 403);
+      }
+    } catch {
+      return jsonResponse({ error: '인간 확인 서버에 연결할 수 없습니다. 다시 시도해주세요' }, 502);
     }
   }
 
   const existing = await db.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
   if (existing) {
     return jsonResponse({ error: '이미 사용 중인 아이디입니다' }, 409);
+  }
+
+  // Atomically claim invite slot right before user creation (after all validation passes)
+  if (regMode === 'invite' && inviteCode) {
+    const claimed = await db.prepare(
+      'UPDATE invite_codes SET used_count = used_count + 1 WHERE code = ? AND used_count < max_uses RETURNING id'
+    ).bind(inviteCode.trim()).first();
+    if (!claimed) {
+      return jsonResponse({ error: '초대코드가 이미 모두 사용되었습니다' }, 403);
+    }
   }
 
   const salt = generateToken();
@@ -274,11 +291,6 @@ async function handleRegister(request, db, env) {
   await db.prepare(
     'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)'
   ).bind(token, userId, expiresAt).run();
-
-  // Increment invite code usage
-  if (regMode === 'invite' && inviteCode) {
-    await db.prepare('UPDATE invite_codes SET used_count = used_count + 1 WHERE code = ?').bind(inviteCode.trim()).run();
-  }
 
   // Fetch actual role (first user is auto-promoted to admin by ensureTables)
   const newUser = await db.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first();
@@ -319,7 +331,7 @@ async function handleLogin(request, db) {
 
 async function handleLogout(request, db) {
   const cookie = request.headers.get('Cookie') || '';
-  const match = cookie.match(/starship_session=([a-f0-9]+)/);
+  const match = cookie.match(/starship_session=([a-f0-9]{64})/);
   if (match) {
     await db.prepare('DELETE FROM sessions WHERE token = ?').bind(match[1]).run();
   }
