@@ -6,10 +6,18 @@
  * 2. /proxy 경로로 들어오는 요청을 Fediverse 인스턴스에 프록시
  * 3. /api/auth/* 회원가입/로그인/세션 관리
  * 4. /api/sync/* 계정·설정 클라우드 저장/불러오기
+ * 5. /api/stream WebSocket 스트림 릴레이 (Durable Object)
  */
+
+// Re-export Durable Object class for wrangler binding
+export { StreamRelay } from './stream-relay.js';
 
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+const CACHE_TTL_IMAGE = 7 * 24 * 60 * 60; // 7 days
+const CACHE_TTL_OG = 24 * 60 * 60; // 24 hours
+const CACHE_TTL_THEME = 7 * 24 * 60 * 60; // 7 days
+const CACHE_MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 let _tablesInitialized = false;
 
 export default {
@@ -21,6 +29,11 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
+    // Image cache proxy
+    if (url.pathname === '/cache/image' && request.method === 'GET') {
+      return handleImageCache(url, env);
+    }
+
     // Proxy
     if (url.pathname === '/proxy') {
       return handleProxy(request, url);
@@ -28,12 +41,17 @@ export default {
 
     // OG metadata fetch (no DB needed)
     if (url.pathname === '/api/og' && request.method === 'GET') {
-      return handleOgFetch(url);
+      return handleOgFetch(url, env);
     }
 
     // Instance theme-color fetch (no DB needed)
     if (url.pathname === '/api/instance-theme' && request.method === 'GET') {
-      return handleInstanceTheme(url);
+      return handleInstanceTheme(url, env);
+    }
+
+    // WebSocket stream relay (Durable Object)
+    if (url.pathname === '/api/stream') {
+      return handleStreamUpgrade(request, env);
     }
 
     // Auth & sync API
@@ -215,6 +233,9 @@ async function handleRegister(request, db, env) {
   if (username.length < 2 || username.length > 30) {
     return jsonResponse({ error: '아이디는 2~30자로 입력해주세요' }, 400);
   }
+  if (!/^[a-zA-Z0-9_\-]+$/.test(username)) {
+    return jsonResponse({ error: '아이디는 영문, 숫자, 밑줄(_), 하이픈(-)만 사용할 수 있습니다' }, 400);
+  }
   if (password.length < 6) {
     return jsonResponse({ error: '비밀번호는 6자 이상이어야 합니다' }, 400);
   }
@@ -319,8 +340,21 @@ async function handleSyncSave(request, db) {
   const user = await getSessionUser(request, db);
   if (!user) return jsonResponse({ error: '로그인이 필요합니다' }, 401);
 
+  // Enforce request body size limit (512KB)
+  const contentLength = parseInt(request.headers.get('Content-Length') || '0');
+  if (contentLength > 512 * 1024) {
+    return jsonResponse({ error: '데이터가 너무 큽니다 (최대 512KB)' }, 413);
+  }
+
   const body = await parseJsonBody(request);
   if (!body) return jsonResponse({ error: '잘못된 요청입니다' }, 400);
+
+  // Validate data size after parsing
+  const bodyStr = JSON.stringify(body);
+  if (bodyStr.length > 512 * 1024) {
+    return jsonResponse({ error: '데이터가 너무 큽니다 (최대 512KB)' }, 413);
+  }
+
   // body: { accounts, settings, columnState }
   const stmts = [];
   for (const key of ['accounts', 'settings', 'columnState']) {
@@ -346,6 +380,31 @@ async function handleSyncLoad(request, db) {
     try { data[row.key] = JSON.parse(row.value); } catch { data[row.key] = row.value; }
   }
   return jsonResponse(data);
+}
+
+// ===== WebSocket Stream Relay =====
+
+async function handleStreamUpgrade(request, env) {
+  if (request.headers.get('Upgrade') !== 'websocket') {
+    return new Response('Expected WebSocket upgrade', { status: 426 });
+  }
+
+  // Authenticate via session cookie
+  const db = env.FEDI_ACCOUNTS;
+  if (!_tablesInitialized) {
+    await ensureTables(db);
+    _tablesInitialized = true;
+  }
+
+  const user = await getSessionUser(request, db);
+  if (!user) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  // Route to per-user Durable Object
+  const doId = env.STREAM_RELAY.idFromName(`user:${user.id}`);
+  const stub = env.STREAM_RELAY.get(doId);
+  return stub.fetch(request);
 }
 
 // ===== Admin Endpoints =====
@@ -463,52 +522,70 @@ function corsHeaders() {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };
 }
 
-// ===== OG Metadata =====
+// ===== Security Helpers =====
 
-async function handleOgFetch(url) {
-  const targetUrl = url.searchParams.get('url');
-  if (!targetUrl) {
-    return jsonResponse({ error: 'Missing "url" parameter' }, 400);
+function isPrivateHost(hostname) {
+  // Block localhost and loopback
+  const lower = hostname.toLowerCase();
+  if (lower === 'localhost' || lower === '127.0.0.1' || lower === '::1' || lower === '[::1]' || lower === '0.0.0.0') return true;
+  // Block .local domains
+  if (lower.endsWith('.local') || lower.endsWith('.internal')) return true;
+  // Block private IPv4 ranges
+  const ipv4 = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (ipv4) {
+    const [, a, b] = [null, parseInt(ipv4[1]), parseInt(ipv4[2])];
+    if (a === 10) return true;                          // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true;   // 172.16.0.0/12
+    if (a === 192 && b === 168) return true;             // 192.168.0.0/16
+    if (a === 169 && b === 254) return true;             // 169.254.0.0/16 (link-local)
+    if (a === 0) return true;                            // 0.0.0.0/8
+    if (a === 127) return true;                          // 127.0.0.0/8
   }
-
-  let parsed;
-  try { parsed = new URL(targetUrl); } catch {
-    return jsonResponse({ error: 'Invalid URL' }, 400);
+  // Block IPv6 private ranges
+  if (hostname.startsWith('[')) {
+    const ipv6 = hostname.slice(1, -1).toLowerCase();
+    if (ipv6 === '::1' || ipv6 === '::' || ipv6.startsWith('fe80:') || ipv6.startsWith('fc') || ipv6.startsWith('fd')) return true;
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    return jsonResponse({ error: 'Only HTTP(S) URLs allowed' }, 400);
-  }
-
-  try {
-    const hostname = parsed.hostname.replace(/^(?:www\.|m\.|mobile\.)/, '');
-
-    // YouTube: direct thumbnail + oEmbed title (never fall through to generic fetch)
-    if (hostname === 'youtube.com' || hostname === 'youtu.be') {
-      const og = await fetchYoutubeOg(targetUrl);
-      if (og) return ogResponse(og);
-      // Even if extraction failed, don't fall through (YouTube consent page blocks generic fetch)
-      return ogResponse({ title: null, description: null, image: null, siteName: 'YouTube' });
-    }
-
-    // X/Twitter: use oEmbed + crawl-friendly fetch
-    if (hostname === 'twitter.com' || hostname === 'x.com') {
-      const og = await fetchTwitterOg(targetUrl);
-      if (og && (og.title || og.description)) return ogResponse(og);
-    }
-
-    // Generic: fetch HTML with bot UA (sites serve proper OG to crawlers)
-    return await fetchAndParseOg(targetUrl);
-  } catch (err) {
-    return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
-  }
+  return false;
 }
 
-async function handleInstanceTheme(url) {
+// ===== R2 Cache Helpers =====
+
+async function cacheKey(prefix, url) {
+  const data = new TextEncoder().encode(url);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hex = Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join('');
+  return `${prefix}/${hex}`;
+}
+
+async function r2Get(bucket, key, ttlSeconds) {
+  if (!bucket) return null;
+  const obj = await bucket.get(key);
+  if (!obj) return null;
+  const cached = obj.customMetadata?.cachedAt;
+  if (cached && (Date.now() - parseInt(cached)) > ttlSeconds * 1000) {
+    // Expired — delete in background, return null
+    bucket.delete(key).catch(() => {});
+    return null;
+  }
+  return obj;
+}
+
+async function r2PutJson(bucket, key, data) {
+  if (!bucket) return;
+  await bucket.put(key, JSON.stringify(data), {
+    httpMetadata: { contentType: 'application/json' },
+    customMetadata: { cachedAt: String(Date.now()) },
+  });
+}
+
+// ===== Image Cache Proxy =====
+
+async function handleImageCache(url, env) {
   const targetUrl = url.searchParams.get('url');
   if (!targetUrl) {
     return jsonResponse({ error: 'Missing "url" parameter' }, 400);
@@ -521,9 +598,176 @@ async function handleInstanceTheme(url) {
   if (parsed.protocol !== 'https:') {
     return jsonResponse({ error: 'Only HTTPS URLs allowed' }, 400);
   }
+  if (isPrivateHost(parsed.hostname)) {
+    return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
+  }
+
+  const bucket = env.STARSHIP_CACHE;
+  const key = await cacheKey('img', targetUrl);
+
+  // Check R2 cache
+  const cached = await r2Get(bucket, key, CACHE_TTL_IMAGE);
+  if (cached) {
+    const headers = {
+      'Content-Type': cached.httpMetadata?.contentType || 'image/png',
+      'Cache-Control': `public, max-age=${CACHE_TTL_IMAGE}`,
+      'X-Cache': 'HIT',
+      ...corsHeaders(),
+    };
+    return new Response(cached.body, { status: 200, headers });
+  }
+
+  // Fetch from origin
+  try {
+    const res = await fetch(targetUrl, {
+      headers: { 'User-Agent': 'StarShip/1.0', 'Accept': 'image/*' },
+      signal: AbortSignal.timeout(10000),
+      redirect: 'follow',
+    });
+
+    if (!res.ok) {
+      return new Response(null, { status: res.status, headers: corsHeaders() });
+    }
+
+    const contentType = res.headers.get('Content-Type') || '';
+    if (!contentType.startsWith('image/')) {
+      return jsonResponse({ error: 'Not an image' }, 400);
+    }
+
+    const contentLength = parseInt(res.headers.get('Content-Length') || '0');
+    if (contentLength > CACHE_MAX_IMAGE_SIZE) {
+      return jsonResponse({ error: 'Image too large' }, 413);
+    }
+
+    const imageData = await res.arrayBuffer();
+    if (imageData.byteLength > CACHE_MAX_IMAGE_SIZE) {
+      return jsonResponse({ error: 'Image too large' }, 413);
+    }
+
+    // Store in R2 (non-blocking)
+    if (bucket) {
+      const putPromise = bucket.put(key, imageData, {
+        httpMetadata: { contentType },
+        customMetadata: { cachedAt: String(Date.now()), originalUrl: targetUrl },
+      });
+      // Use waitUntil if available, otherwise await
+      putPromise.catch(() => {});
+    }
+
+    const headers = {
+      'Content-Type': contentType,
+      'Cache-Control': `public, max-age=${CACHE_TTL_IMAGE}`,
+      'X-Cache': 'MISS',
+      ...corsHeaders(),
+    };
+    return new Response(imageData, { status: 200, headers });
+  } catch (err) {
+    return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
+  }
+}
+
+// ===== OG Metadata =====
+
+async function handleOgFetch(url, env) {
+  const targetUrl = url.searchParams.get('url');
+  if (!targetUrl) {
+    return jsonResponse({ error: 'Missing "url" parameter' }, 400);
+  }
+
+  let parsed;
+  try { parsed = new URL(targetUrl); } catch {
+    return jsonResponse({ error: 'Invalid URL' }, 400);
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return jsonResponse({ error: 'Only HTTP(S) URLs allowed' }, 400);
+  }
+  if (isPrivateHost(parsed.hostname)) {
+    return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
+  }
+
+  // Check R2 cache
+  const bucket = env.STARSHIP_CACHE;
+  const key = await cacheKey('og', targetUrl);
+  const cached = await r2Get(bucket, key, CACHE_TTL_OG);
+  if (cached) {
+    const data = await cached.json();
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=86400',
+      'X-Cache': 'HIT',
+      ...corsHeaders(),
+    };
+    return new Response(JSON.stringify(data), { status: 200, headers });
+  }
+
+  try {
+    const hostname = parsed.hostname.replace(/^(?:www\.|m\.|mobile\.)/, '');
+
+    // YouTube: direct thumbnail + oEmbed title (never fall through to generic fetch)
+    if (hostname === 'youtube.com' || hostname === 'youtu.be') {
+      const og = await fetchYoutubeOg(targetUrl);
+      const result = og || { title: null, description: null, image: null, siteName: 'YouTube' };
+      r2PutJson(bucket, key, result).catch(() => {});
+      return ogResponse(result);
+    }
+
+    // X/Twitter: use oEmbed + crawl-friendly fetch
+    if (hostname === 'twitter.com' || hostname === 'x.com') {
+      const og = await fetchTwitterOg(targetUrl);
+      if (og && (og.title || og.description)) {
+        r2PutJson(bucket, key, og).catch(() => {});
+        return ogResponse(og);
+      }
+    }
+
+    // Generic: fetch HTML with bot UA (sites serve proper OG to crawlers)
+    const response = await fetchAndParseOg(targetUrl);
+    // Cache successful OG responses
+    if (response.status === 200) {
+      const cloned = response.clone();
+      cloned.json().then(data => r2PutJson(bucket, key, data)).catch(() => {});
+    }
+    return response;
+  } catch (err) {
+    return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
+  }
+}
+
+async function handleInstanceTheme(url, env) {
+  const targetUrl = url.searchParams.get('url');
+  if (!targetUrl) {
+    return jsonResponse({ error: 'Missing "url" parameter' }, 400);
+  }
+
+  let parsed;
+  try { parsed = new URL(targetUrl); } catch {
+    return jsonResponse({ error: 'Invalid URL' }, 400);
+  }
+  if (parsed.protocol !== 'https:') {
+    return jsonResponse({ error: 'Only HTTPS URLs allowed' }, 400);
+  }
+  if (isPrivateHost(parsed.hostname)) {
+    return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
+  }
+
+  // Check R2 cache
+  const bucket = env.STARSHIP_CACHE;
+  const key = await cacheKey('theme', targetUrl);
+  const cached = await r2Get(bucket, key, CACHE_TTL_THEME);
+  if (cached) {
+    const data = await cached.json();
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=86400',
+      'X-Cache': 'HIT',
+      ...corsHeaders(),
+    };
+    return new Response(JSON.stringify(data), { status: 200, headers });
+  }
 
   try {
     const res = await fetch(targetUrl, {
+      signal: AbortSignal.timeout(5000),
       headers: {
         'User-Agent': 'StarShip/1.0',
         'Accept': 'text/html,application/xhtml+xml',
@@ -534,13 +778,34 @@ async function handleInstanceTheme(url) {
       return jsonResponse({ color: null });
     }
     const html = await readPartial(res, 32768);
-    const color = extractMeta(html, 'theme-color', true, true);
+    // Try CSS --color-accent variable first (Mastodon 4.x accent color)
+    let color = null;
+    const cssMatch = html.match(/--color-accent:\s*([^;}]+)/);
+    if (cssMatch) {
+      color = cssMatch[1].trim();
+    }
+    // Normalize rgb() to hex
+    if (color) {
+      const rgbMatch = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
+      if (rgbMatch) {
+        const toHex = v => parseInt(v).toString(16).padStart(2, '0');
+        color = `#${toHex(rgbMatch[1])}${toHex(rgbMatch[2])}${toHex(rgbMatch[3])}`;
+      }
+    }
+    // Fall back to theme-color meta tag
+    if (!color) {
+      color = extractMeta(html, 'theme-color', true, true);
+    }
+    const result = { color: color || null };
+    // Cache the result
+    r2PutJson(bucket, key, result).catch(() => {});
     const headers = {
       'Content-Type': 'application/json',
       'Cache-Control': 'public, max-age=86400',
+      'X-Cache': 'MISS',
       ...corsHeaders(),
     };
-    return new Response(JSON.stringify({ color: color || null }), { status: 200, headers });
+    return new Response(JSON.stringify(result), { status: 200, headers });
   } catch {
     return jsonResponse({ color: null });
   }
@@ -559,7 +824,7 @@ async function fetchYoutubeOg(url) {
   try {
     const res = await fetch(
       `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
     );
     if (res.ok) {
       const data = await res.json();
@@ -583,7 +848,7 @@ async function fetchTwitterOg(url) {
     try {
       const oRes = await fetch(
         `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-        { headers: { 'User-Agent': 'Mozilla/5.0' } }
+        { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
       );
       if (oRes.ok) {
         const data = await oRes.json();
@@ -606,6 +871,7 @@ async function fetchTwitterOg(url) {
           'Accept': 'text/html',
         },
         redirect: 'follow',
+        signal: AbortSignal.timeout(5000),
       });
       if (htmlRes.ok) {
         const html = await readPartial(htmlRes, 65536);
@@ -628,6 +894,7 @@ async function fetchAndParseOg(targetUrl) {
       'Accept': 'text/html,application/xhtml+xml',
     },
     redirect: 'follow',
+    signal: AbortSignal.timeout(5000),
   });
 
   if (!res.ok) {
@@ -747,6 +1014,14 @@ async function handleProxy(request, url) {
   if (parsed.protocol !== 'https:') {
     return jsonResponse({ error: 'Only HTTPS targets are allowed' }, 400);
   }
+  if (isPrivateHost(parsed.hostname)) {
+    return jsonResponse({ error: 'Requests to private/internal addresses are not allowed' }, 403);
+  }
+  // Prevent self-proxy loops
+  const selfHost = new URL(request.url).hostname;
+  if (parsed.hostname === selfHost) {
+    return jsonResponse({ error: 'Cannot proxy to self' }, 400);
+  }
   if (!isAllowedApiPath(parsed.pathname)) {
     return jsonResponse({ error: 'Blocked: path not in allowlist' }, 403);
   }
@@ -793,9 +1068,11 @@ async function handleProxy(request, url) {
 
 function isAllowedApiPath(pathname) {
   const allowed = [
-    /^\/api\/v[12]\//,
-    /^\/oauth\//,
-    /^\/api\//,
+    /^\/api\/v[12]\//,       // Mastodon API
+    /^\/oauth\//,             // Mastodon OAuth
+    /^\/api\//,               // Misskey API (broad, covers all /api/* endpoints)
+    /^\/.well-known\//,       // WebFinger, NodeInfo (platform detection)
+    /^\/nodeinfo\//,          // NodeInfo (platform detection)
   ];
   return allowed.some((re) => re.test(pathname));
 }
