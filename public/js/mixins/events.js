@@ -374,18 +374,21 @@ export const EventsMixin = {
       if (e.target.closest('.post-action, .reaction-badge, a, button, [data-lightbox], .expand-toggle, .cw-toggle, .post-media, img')) return;
       const card = e.target.closest('.post-card');
       if (!card) return;
-      // Ignore clicks inside the thread modal (but allow clicks in thread columns)
-      if (card.closest('.modal .thread-content')) return;
+      const inThreadModal = card.closest('.modal .thread-content');
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;
       const columnType = card.closest('.column')?.dataset.columnType;
 
+      // Inside thread modal: allow quote-post clicks to navigate, block same-post clicks
       const quotePart = e.target.closest('.quote-post');
       if (quotePart && quotePart.dataset.quoteId) {
         this.openThreadView(quotePart.dataset.quoteId, platform, accountId, { columnType });
         return;
       }
+
+      // Block non-quote clicks inside the thread modal (clicking the same post again)
+      if (inThreadModal) return;
 
       const postId = card.dataset.postId;
       if (postId) {

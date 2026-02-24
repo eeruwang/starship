@@ -525,14 +525,23 @@ export const ColumnsMixin = {
     } else {
       overlay.style.zIndex = '';
     }
+    // Increment generation to invalidate any pending closeModal transitionend handlers
+    overlay._modalGen = (overlay._modalGen || 0) + 1;
     overlay.style.display = 'flex';
-    requestAnimationFrame(() => overlay.classList.add('visible'));
+    // Force synchronous reflow so display change commits before adding 'visible',
+    // ensuring the CSS transition triggers and 'visible' is present before any
+    // stale transitionend handler from a previous closeModal can check for it.
+    void overlay.offsetHeight;
+    overlay.classList.add('visible');
   },
 
   closeModal(overlay) {
     if (!overlay || overlay.style.display === 'none') return;
+    const gen = overlay._modalGen || 0;
     overlay.classList.remove('visible');
     overlay.addEventListener('transitionend', () => {
+      // Skip if a new openModal was called after this closeModal (stale handler)
+      if ((overlay._modalGen || 0) !== gen) return;
       if (!overlay.classList.contains('visible')) {
         overlay.style.display = 'none';
         overlay.style.zIndex = '';
