@@ -482,7 +482,11 @@ export const EventsMixin = {
     this.btnComposeEmoji.addEventListener('click', () => this.showComposeEmojiPicker());
     this.btnComposeVisibility.addEventListener('click', () => this.showComposeVisibilityPicker());
     this.composeFilesInput.addEventListener('change', () => this.handleComposeFileSelect());
-    this.btnComposeSubmit.addEventListener('click', () => this.handleComposeSubmit());
+    this.btnComposeSubmit.addEventListener('click', () => {
+      if (this.btnComposeSubmit.disabled) return;
+      this.btnComposeSubmit.disabled = true;
+      this.handleComposeSubmit();
+    });
     this.composeText.addEventListener('input', () => this._updateComposeWordCount());
 
     // Inline emoji autocomplete on ':' trigger
@@ -548,6 +552,8 @@ export const EventsMixin = {
 
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
+        if (this.btnComposeSubmit.disabled) return;
+        this.btnComposeSubmit.disabled = true;
         this.handleComposeSubmit();
       }
     });
