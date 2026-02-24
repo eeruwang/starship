@@ -215,12 +215,14 @@ export class StreamManager {
             accounts,
             since: this._lastEventTimestamp || undefined,
           }));
-          // Query upstream status after a short delay to let upstreams connect
-          setTimeout(() => {
+          // Query upstream status periodically to sync connection states
+          // and fall back to direct mode if relay upstreams never connect
+          this._relayStatusFailCount = 0;
+          this._relayStatusInterval = setInterval(() => {
             if (this._relayWs?.readyState === WebSocket.OPEN) {
               try { this._relayWs.send('{"type":"status"}'); } catch {}
             }
-          }, 2000);
+          }, 5000);
         }
 
         // Keep-alive ping every 30s
@@ -243,6 +245,10 @@ export class StreamManager {
         this._relayWs = null;
         this._relayConnecting = false;
         this._clearRelayPing();
+        if (this._relayStatusInterval) {
+          clearInterval(this._relayStatusInterval);
+          this._relayStatusInterval = null;
+        }
 
         if (this._mode === null) {
           // Never connected — fall back to direct
@@ -290,7 +296,10 @@ export class StreamManager {
       this._emit('disconnected', { accountId: msg.accountId });
     } else if (msg.type === 'status' && msg.accounts) {
       // Sync upstream connection statuses from relay server
-      for (const [accountId, connected] of Object.entries(msg.accounts)) {
+      const entries = Object.entries(msg.accounts);
+      let anyConnected = false;
+      for (const [accountId, connected] of entries) {
+        if (connected) anyConnected = true;
         const wasConnected = this._relayConnectedAccounts.has(accountId);
         if (connected && !wasConnected) {
           this._relayConnectedAccounts.add(accountId);
@@ -299,6 +308,18 @@ export class StreamManager {
           this._relayConnectedAccounts.delete(accountId);
           this._emit('disconnected', { accountId });
         }
+      }
+      // If relay has subscribed accounts but none connected upstream,
+      // track consecutive failures and fall back to direct mode
+      if (entries.length > 0 && !anyConnected) {
+        this._relayStatusFailCount = (this._relayStatusFailCount || 0) + 1;
+        if (this._relayStatusFailCount >= 3) {
+          console.warn('[Stream] Relay upstreams persistently disconnected, falling back to direct');
+          this._closeRelay();
+          this._fallbackToDirect();
+        }
+      } else {
+        this._relayStatusFailCount = 0;
       }
     }
     // 'pong' — just a keep-alive ack, no action needed
@@ -320,6 +341,10 @@ export class StreamManager {
       this._relayReconnectTimer = null;
     }
     this._clearRelayPing();
+    if (this._relayStatusInterval) {
+      clearInterval(this._relayStatusInterval);
+      this._relayStatusInterval = null;
+    }
     if (this._relayWs) {
       this._relayWs.onclose = null;
       try { this._relayWs.close(); } catch {}
