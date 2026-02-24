@@ -20,6 +20,11 @@ binding = "FEDI_ACCOUNTS"
 database_name = "fedi-accounts"
 database_id = "01f5e825-6777-4b3e-8716-2c02fe91555a"
 
+# 더 이상 사용하지 않는 Durable Object 클래스 삭제 마이그레이션
+[[migrations]]
+tag = "v1"
+deleted_classes = ["StreamRelay"]
+
 # Cloudflare Turnstile (회원가입 인간 확인)
 # 대시보드 > Turnstile에서 키 생성 후 아래에 입력
 # TURNSTILE_SECRET은 wrangler secret으로 설정: wrangler secret put TURNSTILE_SECRET
