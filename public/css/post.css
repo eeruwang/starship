@@ -907,6 +907,12 @@ h4.mfm-heading { font-size: 1em; }
   margin-right: 2px;
 }
 
+/* Hide bookmark & open-original buttons in account columns to save space */
+.column[data-column-type="account"] .post-action[data-action="bookmark"],
+.column[data-column-type="account"] .post-action[data-action="open"] {
+  display: none;
+}
+
 /* Only show separator when reactions follow */
 .engagement-likes:last-child {
   padding-right: 0;
