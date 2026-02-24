@@ -110,6 +110,14 @@ export class StreamRelay {
     } else if (msg.type === 'unsubscribe' && msg.accountId) {
       clientState.subscriptions.delete(msg.accountId);
       this._maybeCloseUpstream(msg.accountId);
+    } else if (msg.type === 'status') {
+      // Report upstream connection status for all subscribed accounts
+      const statuses = {};
+      for (const accountId of clientState.subscriptions) {
+        const upstream = this.upstreams.get(accountId);
+        statuses[accountId] = upstream?.connected || false;
+      }
+      this._sendTo(ws, { type: 'status', accounts: statuses });
     } else if (msg.type === 'ping') {
       this._sendTo(ws, { type: 'pong' });
     }

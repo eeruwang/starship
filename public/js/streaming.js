@@ -215,6 +215,12 @@ export class StreamManager {
             accounts,
             since: this._lastEventTimestamp || undefined,
           }));
+          // Query upstream status after a short delay to let upstreams connect
+          setTimeout(() => {
+            if (this._relayWs?.readyState === WebSocket.OPEN) {
+              try { this._relayWs.send('{"type":"status"}'); } catch {}
+            }
+          }, 2000);
         }
 
         // Keep-alive ping every 30s
@@ -282,6 +288,18 @@ export class StreamManager {
     } else if (msg.type === 'disconnected') {
       this._relayConnectedAccounts.delete(msg.accountId);
       this._emit('disconnected', { accountId: msg.accountId });
+    } else if (msg.type === 'status' && msg.accounts) {
+      // Sync upstream connection statuses from relay server
+      for (const [accountId, connected] of Object.entries(msg.accounts)) {
+        const wasConnected = this._relayConnectedAccounts.has(accountId);
+        if (connected && !wasConnected) {
+          this._relayConnectedAccounts.add(accountId);
+          this._emit('connected', { accountId });
+        } else if (!connected && wasConnected) {
+          this._relayConnectedAccounts.delete(accountId);
+          this._emit('disconnected', { accountId });
+        }
+      }
     }
     // 'pong' — just a keep-alive ack, no action needed
   }
