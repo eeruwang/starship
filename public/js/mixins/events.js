@@ -742,6 +742,15 @@ export const EventsMixin = {
       if (!col) return;
       this.focusColumn(col);
     });
+
+    // Double-click/tap header: scroll column to top
+    this.columnsContainer.addEventListener('dblclick', (e) => {
+      const header = e.target.closest('.column-header');
+      if (!header || e.target.closest('button')) return;
+      const col = header.closest('.column');
+      const content = col?.querySelector('.column-content');
+      if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   },
 
   _bindKeyboardEvents() {
