@@ -494,8 +494,8 @@ export const ColumnsMixin = {
         } else if (document.visibilityState === 'visible' && this._lastHiddenAt) {
           const away = Date.now() - this._lastHiddenAt;
           this._lastHiddenAt = null;
-          // Only refresh if tab was hidden for more than 30 seconds
-          if (away > 30_000 && !this.store.isEmpty()) {
+          // Only refresh if tab was hidden for more than 5 seconds
+          if (away > 5_000 && !this.store.isEmpty()) {
             this.refreshAll(false, { skipColumnTypes: ['thread'] });
           }
         }

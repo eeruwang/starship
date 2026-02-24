@@ -524,10 +524,10 @@ export class StreamManager {
           this._lastHiddenAt = Date.now();
         } else if (document.visibilityState === 'visible') {
           this._probeAllConnections();
-          // If hidden for >30s, emit event so mixin can refresh timelines
+          // If hidden for >5s, emit event so mixin can refresh timelines
           // to catch any events silently lost during background
           const hiddenDuration = this._lastHiddenAt ? Date.now() - this._lastHiddenAt : 0;
-          if (hiddenDuration > 30_000) {
+          if (hiddenDuration > 5_000) {
             this._emit('resumeFromBackground', { hiddenMs: hiddenDuration });
           }
           this._lastHiddenAt = 0;

@@ -450,6 +450,6 @@ export const StreamingMixin = {
       for (const col of this.columnsContainer.querySelectorAll('.column[data-column-type="thread"]')) {
         this.loadThreadForColumn(col);
       }
-    }, 1500);
+    }, 500);
   },
 };
