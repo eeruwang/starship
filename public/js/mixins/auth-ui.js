@@ -518,6 +518,9 @@ export const AuthUIMixin = {
               ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
               : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
             const orderLabel = i === 0 ? ' <span class="reauth-default-badge">기본</span>' : '';
+            const wsConnected = this.streamManager?.isConnected(a.id);
+            const wsStatusClass = wsConnected ? 'ws-connected' : 'ws-disconnected';
+            const wsStatusTitle = wsConnected ? '스트리밍 연결됨' : '스트리밍 끊김';
             return `
             <div class="reauth-picker-row${isHidden ? ' account-hidden' : ''}" data-account-id="${a.id}" data-index="${i}" draggable="true" style="border-left: 3px solid ${borderColor}; border-radius: var(--radius);">
               <span class="reauth-drag-handle" title="드래그하여 순서 변경">
@@ -529,6 +532,7 @@ export const AuthUIMixin = {
                   <span class="reauth-picker-name">${escapeHtml(a.profile?.displayName || a.label || '')}${orderLabel}</span>
                   <span class="reauth-picker-instance">${escapeHtml(a.instanceUrl.replace('https://', ''))}</span>
                 </div>
+                <span class="ws-status-dot ${wsStatusClass}" data-ws-account-id="${a.id}" title="${wsStatusTitle}"></span>
                 <span class="platform-badge ${sw}" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 8px; white-space: nowrap;">${escapeHtml(swLabel)}</span>
               </button>
               <button class="reauth-picker-eye" data-account-id="${a.id}" title="${isHidden ? '전체/알림에 표시' : '전체/알림에서 숨기기'}">
@@ -553,8 +557,21 @@ export const AuthUIMixin = {
     document.body.appendChild(picker);
     requestAnimationFrame(() => picker.classList.add('visible'));
 
+    // Real-time WebSocket status updates
+    const updateWsDot = ({ accountId }) => {
+      const dot = picker.querySelector(`.ws-status-dot[data-ws-account-id="${accountId}"]`);
+      if (!dot) return;
+      const connected = this.streamManager?.isConnected(accountId);
+      dot.className = `ws-status-dot ${connected ? 'ws-connected' : 'ws-disconnected'}`;
+      dot.title = connected ? '스트리밍 연결됨' : '스트리밍 끊김';
+    };
+    this.streamManager?.on('connected', updateWsDot);
+    this.streamManager?.on('disconnected', updateWsDot);
+
     // Close
     const close = () => {
+      this.streamManager?.off('connected', updateWsDot);
+      this.streamManager?.off('disconnected', updateWsDot);
       picker.classList.remove('visible');
       setTimeout(() => picker.remove(), 200);
       this.saveToCloud();

@@ -797,7 +797,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  width: min(400px, calc(100vw - 2rem));
+  width: min(440px, calc(100vw - 2rem));
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -954,6 +954,24 @@ textarea.input {
   color: var(--text-muted);
   opacity: 0.6;
 }
+
+/* WebSocket status dot */
+.ws-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.ws-status-dot.ws-connected {
+  background: #34d058;
+  box-shadow: 0 0 6px rgba(52, 208, 88, 0.5);
+}
+.ws-status-dot.ws-disconnected {
+  background: var(--text-muted);
+  opacity: 0.4;
+}
+
 .reauth-picker-footer {
   padding: 0.5rem 1rem 0.75rem;
   display: flex;
