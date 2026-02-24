@@ -686,11 +686,17 @@ export const ProfileModalMixin = {
         : 'btn btn-primary btn-small profile-follow-btn';
       followBtn.textContent = isFollowing ? '팔로우 해제' : '팔로우';
 
-      // Hover state for unfollow
+      // Hover state for unfollow (mouse), touch shows unfollow text directly
       if (isFollowing) {
-        followBtn.addEventListener('mouseenter', () => { followBtn.textContent = '팔로우 해제'; followBtn.classList.add('unfollow-hover'); });
-        followBtn.addEventListener('mouseleave', () => { followBtn.textContent = '팔로우 중'; followBtn.classList.remove('unfollow-hover'); });
-        followBtn.textContent = '팔로우 중';
+        const hasTouch = 'ontouchstart' in window;
+        if (hasTouch) {
+          // Touch devices: show "팔로우 해제" directly so intent is clear
+          followBtn.textContent = '팔로우 해제';
+        } else {
+          followBtn.addEventListener('mouseenter', () => { followBtn.textContent = '팔로우 해제'; followBtn.classList.add('unfollow-hover'); });
+          followBtn.addEventListener('mouseleave', () => { followBtn.textContent = '팔로우 중'; followBtn.classList.remove('unfollow-hover'); });
+          followBtn.textContent = '팔로우 중';
+        }
       }
 
       followBtn.addEventListener('click', async () => {

@@ -533,6 +533,8 @@ export const ColumnsMixin = {
     // stale transitionend handler from a previous closeModal can check for it.
     void overlay.offsetHeight;
     overlay.classList.add('visible');
+    // Prevent background scroll while modal is open (especially iOS)
+    this._updateBodyScroll();
   },
 
   closeModal(overlay) {
@@ -546,7 +548,15 @@ export const ColumnsMixin = {
         overlay.style.display = 'none';
         overlay.style.zIndex = '';
       }
+      this._updateBodyScroll();
     }, { once: true });
+  },
+
+  /** Prevent/restore body scroll depending on whether any modal is open. */
+  _updateBodyScroll() {
+    const anyVisible = [...document.querySelectorAll('.modal-overlay')]
+      .some(m => m.style.display !== 'none' && m.classList.contains('visible'));
+    document.body.style.overflow = anyVisible ? 'hidden' : '';
   },
 
   /** Close only the topmost visible modal (highest z-index). Returns true if a modal was closed. */

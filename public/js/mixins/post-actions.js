@@ -902,7 +902,8 @@ export const PostActionsMixin = {
         }
         picker.style.bottom = '';
       }
-      picker.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 330))}px`;
+      const pw = Math.min(320, window.innerWidth - 16);
+      picker.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pw - 8))}px`;
     };
 
     // Start hidden to avoid position jump, then fade in after final position

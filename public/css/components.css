@@ -518,12 +518,17 @@
 }
 
 @media (max-width: 600px) {
-  .lightbox-nav {
-    width: 36px;
-    height: 36px;
+  .lightbox-close {
+    width: 44px;
+    height: 44px;
+    top: env(safe-area-inset-top, 0.75rem);
   }
-  .lightbox-prev { left: 0.5rem; }
-  .lightbox-next { right: 0.5rem; }
+  .lightbox-nav {
+    width: 44px;
+    height: 44px;
+  }
+  .lightbox-prev { left: 0.25rem; }
+  .lightbox-next { right: 0.25rem; }
 }
 
 /* ===== Inline Custom Emoji ===== */
@@ -679,16 +684,18 @@
   }
   .header-right .btn {
     font-size: 11px;
-    padding: 4px 7px;
+    padding: 6px 8px;
     height: auto;
+    min-height: 36px;
   }
   .header-right .btn-icon {
-    padding: 4px;
-    min-width: 26px;
+    padding: 6px;
+    min-width: 36px;
+    min-height: 36px;
   }
   .header-right .btn-icon svg {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
   }
   #btn-refresh-all .btn-label {
     display: none;

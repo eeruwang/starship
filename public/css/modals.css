@@ -797,7 +797,7 @@ textarea.input {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  width: 340px;
+  width: min(340px, calc(100vw - 2rem));
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -1503,5 +1503,39 @@ textarea.input {
 .mute-duration-opt:hover {
   background: rgba(230, 126, 34, 0.15);
   color: #e67e22;
+}
+
+/* ===== Mobile responsive ===== */
+@media (max-width: 600px) {
+  .modal-overlay {
+    padding: 0.5rem;
+  }
+  .modal {
+    max-width: calc(100vw - 1rem);
+  }
+  .modal-profile {
+    max-width: calc(100vw - 1rem);
+  }
+  .profile-banner {
+    height: 120px;
+  }
+  .profile-avatar-wrap {
+    width: 68px;
+    height: 68px;
+  }
+  .profile-avatar {
+    width: 68px;
+    height: 68px;
+  }
+  .profile-main {
+    padding: 0 1rem 1rem;
+    margin-top: -34px;
+  }
+  .modal-auth {
+    padding: 1.25rem 1.25rem 1rem;
+  }
+  .invite-generate-row {
+    flex-direction: column;
+  }
 }
 

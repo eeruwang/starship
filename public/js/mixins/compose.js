@@ -399,7 +399,8 @@ export const ComposeMixin = {
     // Position near the emoji button: prefer above, fall back to below
     const btnRect = this.btnComposeEmoji.getBoundingClientRect();
     picker.style.position = 'fixed';
-    picker.style.left = `${Math.max(8, Math.min(btnRect.left, window.innerWidth - 330))}px`;
+    const pickerWidth = Math.min(320, window.innerWidth - 16);
+    picker.style.left = `${Math.max(8, Math.min(btnRect.left, window.innerWidth - pickerWidth - 8))}px`;
 
     document.body.appendChild(picker);
 
