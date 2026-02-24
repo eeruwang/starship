@@ -547,9 +547,11 @@ export class StreamManager {
       window.addEventListener('pageshow', this._pageshowHandler);
     }
 
-    // bfcache: close sockets cleanly so the page is bfcache-eligible
+    // bfcache: close sockets cleanly only when entering bfcache,
+    // so normal app-switches keep connections alive on desktop.
     if (!this._pagehideHandler) {
-      this._pagehideHandler = () => {
+      this._pagehideHandler = (e) => {
+        if (!e.persisted) return;   // not entering bfcache → keep sockets open
         if (this._mode === 'relay' && this._relayWs) {
           this._relayWs.onclose = null;
           try { this._relayWs.close(1000, 'pagehide'); } catch {}
