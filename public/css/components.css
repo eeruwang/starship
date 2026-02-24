@@ -642,16 +642,8 @@
     scroll-padding-right: 0.5rem;
   }
   .column {
-    min-width: min(var(--column-width), 70vw);
-    max-width: min(var(--column-width), 70vw);
-  }
-}
-
-/* Tablet portrait (narrower, ~600-768px) */
-@media (min-width: 601px) and (max-width: 768px) {
-  .column {
-    min-width: min(var(--column-width), 80vw);
-    max-width: min(var(--column-width), 80vw);
+    min-width: min(var(--column-width), calc(100vw - 1rem));
+    max-width: min(var(--column-width), calc(100vw - 1rem));
   }
 }
 
@@ -664,8 +656,8 @@
     scroll-padding-right: 0.5rem;
   }
   .column {
-    min-width: min(var(--column-width), 85vw);
-    max-width: min(var(--column-width), 85vw);
+    min-width: min(var(--column-width), calc(100vw - 1rem));
+    max-width: min(var(--column-width), calc(100vw - 1rem));
   }
   .app-header {
     flex-direction: row;
@@ -712,8 +704,8 @@
 
 @media (max-width: 480px) {
   .column {
-    min-width: min(var(--column-width), 92vw);
-    max-width: min(var(--column-width), 92vw);
+    min-width: min(var(--column-width), calc(100vw - 1rem));
+    max-width: min(var(--column-width), calc(100vw - 1rem));
   }
 }
 
