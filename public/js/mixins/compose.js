@@ -77,6 +77,13 @@ export const ComposeMixin = {
     this._composeEmojiMap = {};
     this._composeEmojiMapAccountIds = new Set();
 
+    // Restore saved draft for new posts (not reply/edit/quote)
+    if (!replyToId && this._composeDraft) {
+      this.composeText.value = this._composeDraft.text || '';
+      this.composeCw.value = this._composeDraft.cw || '';
+      this._composeDraft = null;
+    }
+
     const replyCtx = document.getElementById('compose-reply-context');
     if (replyToId) {
       this.composeText.dataset.replyTo = replyToId;
@@ -154,6 +161,23 @@ export const ComposeMixin = {
 
     this.openModal(this.modalCompose);
     this.composeText.focus();
+  },
+
+  _saveComposeDraft() {
+    const ct = this.composeText;
+    // Only save for new posts (not reply/edit/quote)
+    if (ct.dataset.editPostId || ct.dataset.replyTo || ct.dataset.quoteId) return;
+    const text = ct.value;
+    const cw = this.composeCw.value;
+    if (!text.trim() && !cw.trim()) {
+      this._composeDraft = null;
+      return;
+    }
+    this._composeDraft = { text, cw };
+  },
+
+  _clearComposeDraft() {
+    this._composeDraft = null;
   },
 
   _getAccountVisibility(accountId) {
@@ -846,6 +870,7 @@ export const ComposeMixin = {
       for (const accountId of selectedIds) {
         this._saveAccountVisibility(accountId, visibility);
       }
+      this._clearComposeDraft();
       this.closeModal(this.modalCompose);
     }
 

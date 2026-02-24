@@ -68,13 +68,14 @@ export const EventsMixin = {
     document.querySelectorAll('[data-close-modal]').forEach(btn => {
       btn.addEventListener('click', () => {
         const modalId = btn.dataset.closeModal;
+        if (modalId === 'modal-compose') { this._saveComposeDraft(); this.closeComposeEmojiPicker(); this.closeComposeVisibilityPicker(); this._closeEmojiAutocomplete(); }
         this.closeModal(document.getElementById(modalId));
-        if (modalId === 'modal-compose') { this.closeComposeEmojiPicker(); this.closeComposeVisibilityPicker(); this._closeEmojiAutocomplete(); }
       });
     });
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
+          if (overlay.id === 'modal-compose') this._saveComposeDraft();
           this.closeModal(overlay);
           this.closeComposeEmojiPicker();
           this.closeComposeVisibilityPicker();

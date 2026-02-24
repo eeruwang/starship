@@ -1536,6 +1536,14 @@ export const DataLoadingMixin = {
           (!post.mergedAccounts || post.mergedAccounts.length <= 1)) {
         post.mergedAccounts = existing.mergedAccounts;
       }
+      // Preserve enriched data (quotePost, replyTo) from existing cache when
+      // the new entry doesn't include them (e.g. notification payloads may omit quotes)
+      if (existing) {
+        const edp = existing.reblog || existing;
+        const ndp = post.reblog || post;
+        if (edp.quotePost && !ndp.quotePost) ndp.quotePost = edp.quotePost;
+        if (edp.replyTo && !ndp.replyTo) ndp.replyTo = edp.replyTo;
+      }
       this.postCache.set(key, post);
     }
     // Evict oldest entries if over limit
