@@ -307,6 +307,20 @@ export class MisskeyClient {
     return this.request('notes/favorites/delete', { noteId });
   }
 
+  async getDirectNotes(limit = 20, untilId = null) {
+    const body = { limit, visibility: 'specified' };
+    if (untilId) body.untilId = untilId;
+    try {
+      return await this.request('notes/mentions', body);
+    } catch {
+      // Fallback: fetch mentions and filter client-side
+      const fbBody = { limit: limit * 3 };
+      if (untilId) fbBody.untilId = untilId;
+      const mentions = await this.request('notes/mentions', fbBody);
+      return mentions.filter(n => n.visibility === 'specified').slice(0, limit);
+    }
+  }
+
   async pinNote(noteId) {
     return this.request('i/pin', { noteId });
   }

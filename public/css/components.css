@@ -55,6 +55,13 @@
   font-size: 0.85rem;
   flex-shrink: 0;
 }
+.column-permission-warn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  color: #d4a017;
+  background: color-mix(in srgb, #d4a017 10%, transparent);
+  border-bottom: 1px solid var(--border-color);
+}
 
 /* ===== Inline Icons ===== */
 .icon-inline {

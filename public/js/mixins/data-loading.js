@@ -1408,6 +1408,7 @@ export const DataLoadingMixin = {
 
     try {
       const allPosts = [];
+      const failedAccounts = [];
       const results = await Promise.allSettled(
         accounts.map(async (account) => {
           const client = this.store.getClient(account.id);
@@ -1423,6 +1424,7 @@ export const DataLoadingMixin = {
             return items.map(item => this._addPostMeta(client.normalizePost(item), account));
           } catch (err) {
             console.error(`Bookmarks error for ${account.label}:`, err);
+            failedAccounts.push(account.label || account.profile?.displayName || account.id);
             return [];
           }
         })
@@ -1445,7 +1447,15 @@ export const DataLoadingMixin = {
       this.cachePosts(allPosts);
 
       container.innerHTML = '';
-      if (allPosts.length === 0) {
+
+      if (failedAccounts.length > 0) {
+        const warn = document.createElement('div');
+        warn.className = 'column-permission-warn';
+        warn.textContent = `권한 부족: ${failedAccounts.join(', ')}`;
+        container.appendChild(warn);
+      }
+
+      if (allPosts.length === 0 && failedAccounts.length === 0) {
         container.appendChild(renderLoadingText('북마크가 없습니다.'));
         return;
       }
@@ -1474,6 +1484,7 @@ export const DataLoadingMixin = {
 
     try {
       const allConversations = [];
+      const failedAccounts = [];
       const results = await Promise.allSettled(
         accounts.map(async (account) => {
           const client = this.store.getClient(account.id);
@@ -1493,10 +1504,21 @@ export const DataLoadingMixin = {
                 return post;
               }).filter(Boolean);
             }
-            // Misskey doesn't have a direct conversations API
+            // Misskey: fetch DMs via notes/mentions with specified visibility
+            if (client.getDirectNotes) {
+              const notes = await client.getDirectNotes(20);
+              return notes.map(n => {
+                const post = client.normalizePost(n);
+                post.accountId = account.id;
+                post.accountPlatform = account.platform;
+                post.themeColor = this._accountColor(account);
+                return post;
+              });
+            }
             return [];
           } catch (err) {
             console.error(`Conversations error for ${account.label}:`, err);
+            failedAccounts.push(account.label || account.profile?.displayName || account.id);
             return [];
           }
         })
@@ -1512,7 +1534,15 @@ export const DataLoadingMixin = {
       this.cachePosts(allConversations);
 
       container.innerHTML = '';
-      if (allConversations.length === 0) {
+
+      if (failedAccounts.length > 0) {
+        const warn = document.createElement('div');
+        warn.className = 'column-permission-warn';
+        warn.textContent = `권한 부족: ${failedAccounts.join(', ')}`;
+        container.appendChild(warn);
+      }
+
+      if (allConversations.length === 0 && failedAccounts.length === 0) {
         container.appendChild(renderLoadingText('다이렉트 메시지가 없습니다.'));
         return;
       }
