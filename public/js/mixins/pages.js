@@ -539,6 +539,12 @@ export const PagesMixin = {
   // ============================================================
 
   _bindPagesEvents() {
+    // Edit button in page viewer
+    const editBtn = document.getElementById('page-viewer-edit');
+    if (editBtn) {
+      editBtn.addEventListener('click', () => this._openPageEditor());
+    }
+
     // Delegated events for pages modal
     document.addEventListener('click', (e) => {
       // Account selector
@@ -694,9 +700,11 @@ export const PagesMixin = {
     const titleEl = document.getElementById('page-viewer-title');
     const bodyEl = document.getElementById('page-viewer-body');
     const extLink = document.getElementById('page-viewer-external');
+    const editBtn = document.getElementById('page-viewer-edit');
 
     titleEl.textContent = '';
     extLink.href = '#';
+    if (editBtn) editBtn.style.display = 'none';
     bodyEl.innerHTML = '<div class="pages-loading"><div class="spinner"></div></div>';
     this.openModal(overlay);
 
@@ -712,6 +720,19 @@ export const PagesMixin = {
 
       titleEl.textContent = page.title;
       extLink.href = page.url;
+
+      // Check if this is the user's own page
+      const account = this.store.getById(accountId);
+      const isOwnPage = account && page.user &&
+        String(account.profile?.id) === String(page.user.id);
+
+      // Store current page data for editing
+      this._viewerPageData = { rawPage, page, accountId, pageId, isOwnPage };
+
+      // Show edit button for own pages
+      if (editBtn && isOwnPage) {
+        editBtn.style.display = '';
+      }
 
       // Build file map from attachedFiles
       const fileMap = {};
@@ -751,7 +772,7 @@ export const PagesMixin = {
       if (page.alignCenter) contentEl.classList.add('text-center');
       if (page.font === 'serif') contentEl.style.fontFamily = 'serif';
 
-      this._renderPageBlocks(page.content, fileMap, contentEl);
+      this._renderPageBlocks(page.content, fileMap, contentEl, client);
       bodyEl.appendChild(contentEl);
 
     } catch (err) {
@@ -759,22 +780,136 @@ export const PagesMixin = {
     }
   },
 
-  _renderPageBlocks(blocks, fileMap, container) {
+  // Switch viewer to edit mode
+  _openPageEditor() {
+    const data = this._viewerPageData;
+    if (!data || !data.isOwnPage) return;
+
+    const bodyEl = document.getElementById('page-viewer-body');
+    const titleEl = document.getElementById('page-viewer-title');
+    if (!bodyEl) return;
+
+    const { rawPage, page, accountId, pageId } = data;
+
+    // Flatten all text blocks into a single editable content
+    const textBlocks = this._collectTextBlocks(rawPage.content || []);
+    const fullText = textBlocks.map(b => b.text || '').join('\n\n');
+
+    bodyEl.innerHTML = '';
+
+    // Title editor
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'input page-editor-title';
+    titleInput.value = page.title;
+    titleInput.placeholder = '페이지 제목';
+    bodyEl.appendChild(titleInput);
+
+    // Summary editor
+    const summaryInput = document.createElement('input');
+    summaryInput.type = 'text';
+    summaryInput.className = 'input page-editor-summary';
+    summaryInput.value = page.summary || '';
+    summaryInput.placeholder = '요약 (선택)';
+    bodyEl.appendChild(summaryInput);
+
+    // Content editor
+    const textarea = document.createElement('textarea');
+    textarea.className = 'input page-editor-content';
+    textarea.value = fullText;
+    textarea.placeholder = '페이지 내용 (MFM/마크다운 사용 가능)';
+    textarea.rows = 16;
+    bodyEl.appendChild(textarea);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'page-editor-actions';
+    actions.innerHTML = `
+      <button class="btn btn-secondary" id="page-editor-cancel">취소</button>
+      <button class="btn btn-primary" id="page-editor-save">저장</button>
+    `;
+    bodyEl.appendChild(actions);
+
+    titleEl.textContent = '페이지 수정';
+
+    // Event handlers
+    document.getElementById('page-editor-cancel').addEventListener('click', () => {
+      this.openPageViewer(pageId, accountId);
+    });
+
+    document.getElementById('page-editor-save').addEventListener('click', async () => {
+      const saveBtn = document.getElementById('page-editor-save');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '저장 중...';
+
+      try {
+        const client = this.store.getClient(accountId);
+        if (!client) throw new Error('클라이언트를 찾을 수 없습니다.');
+
+        // Rebuild content blocks from edited text
+        const newText = textarea.value;
+        const newContent = newText
+          ? [{ id: rawPage.content?.[0]?.id || '0', type: 'text', text: newText }]
+          : rawPage.content;
+
+        await client.updatePage(pageId, {
+          title: titleInput.value || page.title,
+          name: rawPage.name,
+          summary: summaryInput.value || null,
+          content: newContent,
+          variables: rawPage.variables || [],
+          script: rawPage.script || '',
+          alignCenter: rawPage.alignCenter || false,
+          font: rawPage.font || 'sans-serif',
+        });
+
+        this.showToast('페이지가 수정되었습니다!');
+        this.openPageViewer(pageId, accountId);
+      } catch (err) {
+        this.showToast('수정 실패: ' + err.message);
+        saveBtn.disabled = false;
+        saveBtn.textContent = '저장';
+      }
+    });
+  },
+
+  _collectTextBlocks(blocks) {
+    const result = [];
+    for (const block of blocks) {
+      if ((block.type === 'text' || block.type === 'textarea') && block.text) {
+        result.push(block);
+      }
+      if (block.children && Array.isArray(block.children)) {
+        result.push(...this._collectTextBlocks(block.children));
+      }
+    }
+    return result;
+  },
+
+  _renderPageBlocks(blocks, fileMap, container, client) {
     if (!Array.isArray(blocks)) return;
     for (const block of blocks) {
-      const el = this._renderPageBlock(block, fileMap);
+      const el = this._renderPageBlock(block, fileMap, client);
       if (el) container.appendChild(el);
     }
   },
 
-  _renderPageBlock(block, fileMap) {
+  _renderPageBlock(block, fileMap, client) {
     if (!block || !block.type) return null;
+
+    // Use MFM renderer if client supports it, otherwise fallback to escapeHtml
+    const renderText = (text) => {
+      if (client && client.mfmToHtml) {
+        return client.mfmToHtml(text || '');
+      }
+      return escapeHtml(text || '').replace(/\n/g, '<br>');
+    };
 
     switch (block.type) {
       case 'text': {
         const el = document.createElement('div');
         el.className = 'page-block page-block-text';
-        el.innerHTML = escapeHtml(block.text || '').replace(/\n/g, '<br>');
+        el.innerHTML = renderText(block.text);
         return el;
       }
 
@@ -788,7 +923,7 @@ export const PagesMixin = {
           el.appendChild(h);
         }
         if (block.children) {
-          this._renderPageBlocks(block.children, fileMap, el);
+          this._renderPageBlocks(block.children, fileMap, el, client);
         }
         return el;
       }
@@ -811,17 +946,16 @@ export const PagesMixin = {
       }
 
       default: {
-        // Render text if present, recurse into children if present
         if (block.text) {
           const el = document.createElement('div');
           el.className = 'page-block';
-          el.innerHTML = escapeHtml(block.text).replace(/\n/g, '<br>');
+          el.innerHTML = renderText(block.text);
           return el;
         }
         if (block.children && Array.isArray(block.children)) {
           const el = document.createElement('div');
           el.className = 'page-block';
-          this._renderPageBlocks(block.children, fileMap, el);
+          this._renderPageBlocks(block.children, fileMap, el, client);
           return el.children.length > 0 ? el : null;
         }
         return null;

@@ -350,6 +350,35 @@
   line-height: 1.5;
 }
 
+/* Page Editor (in viewer modal) */
+.page-editor-title {
+  width: 100%;
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0.75rem 1.25rem 0.5rem;
+  width: calc(100% - 2.5rem);
+}
+.page-editor-summary {
+  width: calc(100% - 2.5rem);
+  margin: 0 1.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+.page-editor-content {
+  width: calc(100% - 2.5rem);
+  margin: 0 1.25rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: monospace;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 200px;
+}
+.page-editor-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0 1.25rem 1rem;
+}
+
 /* ============================================================
    Pages Feed Column
    ============================================================ */
