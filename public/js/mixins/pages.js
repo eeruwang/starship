@@ -1175,6 +1175,232 @@ export const PagesMixin = {
     }
   },
 
+  _showNewPageAccountPicker() {
+    const pagesAccounts = this.store.getPagesAccounts();
+    if (pagesAccounts.length === 0) {
+      this.showToast('Pages를 지원하는 계정이 없습니다.');
+      return;
+    }
+    // Only one account → skip picker, open editor directly
+    if (pagesAccounts.length === 1) {
+      this._openNewPageEditor(pagesAccounts[0].id);
+      return;
+    }
+    // Build account picker popup
+    const existing = document.querySelector('.page-account-picker');
+    if (existing) existing.remove();
+
+    const picker = document.createElement('div');
+    picker.className = 'page-account-picker';
+    picker.innerHTML = pagesAccounts.map(a => {
+      const avatar = a.profile?.avatarUrl ? `<img src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" class="page-account-picker-avatar">` : '';
+      const name = escapeHtml(a.profile?.displayName || a.profile?.username || a.id);
+      const host = escapeHtml(new URL(a.instanceUrl).host);
+      return `<button class="page-account-picker-item" data-account-id="${a.id}">${avatar}<span class="page-account-picker-name">${name}<small>${host}</small></span></button>`;
+    }).join('');
+
+    // Position near the add button
+    const addBtn = document.querySelector('[data-action="add-page"]');
+    if (addBtn) {
+      const rect = addBtn.getBoundingClientRect();
+      picker.style.position = 'fixed';
+      picker.style.top = (rect.bottom + 4) + 'px';
+      picker.style.right = (window.innerWidth - rect.right) + 'px';
+    }
+
+    document.body.appendChild(picker);
+
+    const handlePick = (e) => {
+      const item = e.target.closest('.page-account-picker-item');
+      if (item) {
+        const accountId = item.dataset.accountId;
+        picker.remove();
+        document.removeEventListener('click', handleOutside, true);
+        this._openNewPageEditor(accountId);
+      }
+    };
+    picker.addEventListener('click', handlePick);
+
+    const handleOutside = (e) => {
+      if (!picker.contains(e.target) && !e.target.closest('[data-action="add-page"]')) {
+        picker.remove();
+        document.removeEventListener('click', handleOutside, true);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', handleOutside, true), 0);
+  },
+
+  _openNewPageEditor(accountId) {
+    const overlay = document.getElementById('modal-page-viewer');
+    if (!overlay) return;
+
+    const titleEl = document.getElementById('page-viewer-title');
+    const bodyEl = document.getElementById('page-viewer-body');
+    const editBtn = document.getElementById('page-viewer-edit');
+    const extLink = document.getElementById('page-viewer-external');
+    if (!bodyEl) return;
+
+    if (titleEl) titleEl.textContent = '새 페이지';
+    if (editBtn) editBtn.style.display = 'none';
+    if (extLink) extLink.style.display = 'none';
+    bodyEl.innerHTML = '';
+
+    // Title input
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'input page-editor-title';
+    titleInput.placeholder = '페이지 제목';
+    bodyEl.appendChild(titleInput);
+
+    // Summary input
+    const summaryInput = document.createElement('input');
+    summaryInput.type = 'text';
+    summaryInput.className = 'input page-editor-summary';
+    summaryInput.placeholder = '요약 (선택)';
+    bodyEl.appendChild(summaryInput);
+
+    // Editor area
+    const imageList = [];
+    const editorContainer = document.createElement('div');
+    editorContainer.className = 'page-editor-content';
+
+    const makeSegment = (value = '') => {
+      const ta = document.createElement('textarea');
+      ta.className = 'input page-editor-segment';
+      ta.value = value;
+      const resize = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 28) + 'px'; };
+      ta.addEventListener('input', resize);
+      requestAnimationFrame(resize);
+      return ta;
+    };
+
+    editorContainer.appendChild(makeSegment(''));
+    bodyEl.appendChild(editorContainer);
+
+    // Image upload toolbar
+    const toolbar = document.createElement('div');
+    toolbar.className = 'page-editor-toolbar';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.style.display = 'none';
+    const imgBtn = document.createElement('button');
+    imgBtn.type = 'button';
+    imgBtn.className = 'btn btn-small btn-secondary';
+    imgBtn.textContent = '이미지 추가';
+    imgBtn.addEventListener('click', () => fileInput.click());
+    toolbar.appendChild(imgBtn);
+    toolbar.appendChild(fileInput);
+    bodyEl.appendChild(toolbar);
+
+    const insertImageAfter = async (file, afterEl) => {
+      const client = this.store.getClient(accountId);
+      if (!client) return;
+      try {
+        const compressed = await compressImage(file);
+        const uploaded = await client.uploadFile(compressed, file.name);
+        const idx = imageList.length;
+        imageList.push({ fileId: uploaded.id, file: uploaded });
+        const imgEl = document.createElement('div');
+        imgEl.className = 'page-editor-inline-image';
+        imgEl.innerHTML = `<img src="${escapeHtml(uploaded.url || uploaded.thumbnailUrl || '')}" alt="" referrerpolicy="no-referrer"><span class="page-editor-image-label">[image:${idx + 1}]</span>`;
+        const newSeg = makeSegment('');
+        if (afterEl && afterEl.nextSibling) {
+          editorContainer.insertBefore(imgEl, afterEl.nextSibling);
+          editorContainer.insertBefore(newSeg, imgEl.nextSibling);
+        } else {
+          editorContainer.appendChild(imgEl);
+          editorContainer.appendChild(newSeg);
+        }
+        newSeg.focus();
+      } catch (err) {
+        this.showToast('이미지 업로드 실패: ' + err.message);
+      }
+    };
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) {
+        const focusedSeg = editorContainer.querySelector('.page-editor-segment:focus') || editorContainer.querySelector('.page-editor-segment:last-of-type');
+        insertImageAfter(fileInput.files[0], focusedSeg);
+        fileInput.value = '';
+      }
+    });
+
+    // Buttons
+    const btnRow = document.createElement('div');
+    btnRow.className = 'page-editor-actions';
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-primary';
+    saveBtn.textContent = '발행';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = '취소';
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(saveBtn);
+    bodyEl.appendChild(btnRow);
+
+    cancelBtn.addEventListener('click', () => {
+      this.closeModal(overlay);
+    });
+
+    const collectText = () => {
+      const parts = [];
+      for (const child of editorContainer.children) {
+        if (child.classList.contains('page-editor-segment')) {
+          parts.push(child.value);
+        } else if (child.classList.contains('page-editor-inline-image')) {
+          const label = child.querySelector('.page-editor-image-label');
+          if (label) parts.push(label.textContent);
+        }
+      }
+      return parts.join('\n');
+    };
+
+    saveBtn.addEventListener('click', async () => {
+      const title = titleInput.value.trim();
+      if (!title) {
+        this.showToast('제목을 입력해주세요.');
+        return;
+      }
+      saveBtn.disabled = true;
+      saveBtn.textContent = '발행 중...';
+
+      try {
+        const client = this.store.getClient(accountId);
+        if (!client) throw new Error('클라이언트를 찾을 수 없습니다.');
+
+        const content = this._unifiedTextToBlocks(collectText(), imageList);
+        const name = Date.now().toString(36);
+
+        await client.createPage({
+          title,
+          name,
+          summary: summaryInput.value.trim() || null,
+          content: content.length > 0 ? content : [{ id: '0', type: 'text', text: '' }],
+          variables: [],
+          script: '',
+          alignCenter: false,
+          font: 'sans-serif',
+        });
+
+        this.showToast('페이지가 발행되었습니다!');
+        this.closeModal(overlay);
+        // Refresh pages column
+        const pagesCol = this.columnsContainer.querySelector('.column[data-column-type="pages"]');
+        if (pagesCol) {
+          this.loadPagesFeedForColumn(pagesCol.querySelector('.column-content'), this.store.getVisible());
+        }
+      } catch (err) {
+        this.showToast('발행 실패: ' + err.message);
+        saveBtn.disabled = false;
+        saveBtn.textContent = '발행';
+      }
+    });
+
+    this.openModal(overlay);
+    titleInput.focus();
+  },
+
   _renderPageBlock(block, fileMap, client) {
     if (!block || !block.type) return null;
 

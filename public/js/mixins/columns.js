@@ -405,11 +405,16 @@ export const ColumnsMixin = {
       }
     }
 
+    const iconPlus = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    const headerActions = type === 'pages'
+      ? `<button class="btn btn-icon btn-small" data-action="add-page" title="새 페이지">${iconPlus}</button>`
+      : `<button class="btn btn-icon btn-small" data-action="refresh-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="새로고침">${iconRefresh}</button>`;
+
     col.innerHTML = `
       <div class="column-header">
         <h2>${avatarHtml}${title}</h2>
         <div class="column-header-actions">
-          <button class="btn btn-icon btn-small" data-action="refresh-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="새로고침">${iconRefresh}</button>
+          ${headerActions}
           <button class="btn btn-icon btn-small" data-action="close-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="닫기">${iconClose}</button>
         </div>
       </div>

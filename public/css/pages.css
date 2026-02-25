@@ -601,3 +601,46 @@
     font-size: 0.75rem;
   }
 }
+
+/* --- New Page Account Picker --- */
+.page-account-picker {
+  z-index: 10000;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  min-width: 200px;
+  max-width: 280px;
+  overflow: hidden;
+}
+.page-account-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-align: left;
+}
+.page-account-picker-item:hover {
+  background: var(--bg-tertiary);
+}
+.page-account-picker-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.page-account-picker-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.page-account-picker-name small {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

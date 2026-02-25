@@ -689,6 +689,11 @@ export const EventsMixin = {
         const accountId = refreshBtn.dataset.accountId;
         this.refreshColumn(colType, accountId);
       }
+
+      const addPageBtn = e.target.closest('[data-action="add-page"]');
+      if (addPageBtn) {
+        this._showNewPageAccountPicker();
+      }
     });
   },
 
