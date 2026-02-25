@@ -102,7 +102,19 @@ export const PagesMixin = {
     }
 
     try {
-      const rawPages = await client.getMyPages(50);
+      let rawPages;
+      try {
+        rawPages = await client.getMyPages(50);
+      } catch (permErr) {
+        // i/pages requires read:pages permission – fall back to users/pages
+        const account = this.store.getById(accountId);
+        const userId = account?.profile?.id;
+        if (userId) {
+          rawPages = await client.getUserPages(userId, 50);
+        } else {
+          throw permErr;
+        }
+      }
       if (!rawPages || rawPages.length === 0) {
         listEl.innerHTML = '<div class="pages-empty">아직 작성한 페이지가 없습니다.</div>';
         return;
