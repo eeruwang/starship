@@ -393,6 +393,16 @@
 .page-editor-segment:focus {
   background: transparent;
 }
+.page-editor-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem 1.25rem 0.5rem;
+}
+.page-editor-add-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
 .page-editor-inline-image {
   text-align: center;
   padding: 0.5rem 0;
@@ -402,6 +412,42 @@
   max-height: 300px;
   border-radius: 8px;
   pointer-events: none;
+}
+.page-editor-content.drag-over {
+  outline: 2px dashed var(--accent-primary);
+  outline-offset: -2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+}
+.page-editor-upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.page-editor-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.page-editor-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent-primary);
+  border-radius: 2px;
+  transition: width 0.2s;
+}
+.spinner-small {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
 }
 .page-editor-actions {
   display: flex;

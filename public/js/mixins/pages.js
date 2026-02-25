@@ -3,7 +3,7 @@
  * Blog-like page management: dashboard, drafts, series, feed column, profile tab, sharing.
  * Handles non-Pages platforms gracefully.
  */
-import { escapeHtml } from '../ui/utils.js';
+import { escapeHtml, compressImage } from '../ui/utils.js';
 
 const DRAFTS_KEY = 'starship_page_drafts';
 const SERIES_KEY = 'starship_page_series';
@@ -831,6 +831,27 @@ export const PagesMixin = {
     const editorContainer = document.createElement('div');
     editorContainer.className = 'page-editor-content';
 
+    // Helper: create an auto-resizing textarea segment
+    const makeSegment = (value = '') => {
+      const ta = document.createElement('textarea');
+      ta.className = 'input page-editor-segment';
+      ta.value = value;
+      const resize = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 28) + 'px'; };
+      ta.addEventListener('input', resize);
+      requestAnimationFrame(resize);
+      return ta;
+    };
+
+    // Helper: create an inline image element
+    const makeInlineImage = (ref, url) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'page-editor-inline-image';
+      wrap.dataset.imageRef = ref;
+      wrap.innerHTML = `<img src="${escapeHtml(url)}" alt="" referrerpolicy="no-referrer">`;
+      return wrap;
+    };
+
+    // Build initial segments from unified text
     const segments = unifiedText.split(/(\[image:\d+\])/);
     for (const seg of segments) {
       const imgMatch = seg.match(/^\[image:(\d+)\]$/);
@@ -838,33 +859,141 @@ export const PagesMixin = {
         const idx = parseInt(imgMatch[1]) - 1;
         const img = imageList[idx];
         if (img && img.file) {
-          const imgWrap = document.createElement('div');
-          imgWrap.className = 'page-editor-inline-image';
-          imgWrap.dataset.imageRef = seg;
-          imgWrap.innerHTML = `<img src="${escapeHtml(img.file.url || img.file.thumbnailUrl || '')}" alt="" referrerpolicy="no-referrer">`;
-          editorContainer.appendChild(imgWrap);
+          editorContainer.appendChild(makeInlineImage(seg, img.file.url || img.file.thumbnailUrl || ''));
         }
       } else {
-        const ta = document.createElement('textarea');
-        ta.className = 'input page-editor-segment';
-        ta.value = seg;
-        const resize = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 28) + 'px'; };
-        ta.addEventListener('input', resize);
-        editorContainer.appendChild(ta);
-        requestAnimationFrame(resize);
+        editorContainer.appendChild(makeSegment(seg));
       }
     }
-    // Ensure there's always a textarea at the end for appending
-    const lastChild = editorContainer.lastElementChild;
-    if (!lastChild || lastChild.dataset.imageRef) {
-      const ta = document.createElement('textarea');
-      ta.className = 'input page-editor-segment';
-      ta.value = '';
-      const resize = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 28) + 'px'; };
-      ta.addEventListener('input', resize);
-      editorContainer.appendChild(ta);
+    // Ensure there's always a textarea at the end
+    if (!editorContainer.lastElementChild || editorContainer.lastElementChild.dataset.imageRef) {
+      editorContainer.appendChild(makeSegment());
     }
+
+    // --- Image upload logic ---
+    const client = this.store.getClient(accountId);
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.multiple = true;
+    fileInput.style.display = 'none';
+    bodyEl.appendChild(fileInput);
+
+    // Find the currently focused textarea (for insertion point)
+    const getActiveSegment = () => {
+      const active = document.activeElement;
+      if (active?.tagName === 'TEXTAREA' && editorContainer.contains(active)) return active;
+      // Fallback: last textarea
+      const all = editorContainer.querySelectorAll('textarea');
+      return all[all.length - 1] || null;
+    };
+
+    // Insert uploaded image after a given textarea, splitting it at cursor
+    const insertImageAfterSegment = (ta, fileId, url) => {
+      const ref = `[image:${imageList.length}]`;
+      imageList.push({ fileId, file: { url } });
+      const imgEl = makeInlineImage(ref, url);
+
+      // Split textarea at cursor position
+      const pos = ta.selectionStart ?? ta.value.length;
+      const before = ta.value.slice(0, pos);
+      const after = ta.value.slice(pos);
+
+      ta.value = before.endsWith('\n') || before === '' ? before : before + '\n';
+      const resize = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 28) + 'px'; };
+      resize();
+
+      const afterTa = makeSegment(after.startsWith('\n') || after === '' ? after : '\n' + after);
+      ta.after(imgEl);
+      imgEl.after(afterTa);
+      afterTa.focus();
+    };
+
+    // Upload a single image file and insert it
+    const uploadAndInsert = async (file, targetTa) => {
+      if (!client?.uploadFile) {
+        this.showToast('이 계정은 파일 업로드를 지원하지 않습니다.');
+        return;
+      }
+      // Show progress placeholder
+      const placeholder = document.createElement('div');
+      placeholder.className = 'page-editor-upload-progress';
+      placeholder.innerHTML = '<div class="spinner-small"></div><span>업로드 중...</span><div class="page-editor-progress-bar"><div class="page-editor-progress-fill"></div></div>';
+      targetTa.after(placeholder);
+
+      try {
+        const compressed = await compressImage(file);
+        const result = await client.uploadFile(compressed, {
+          onProgress: (ratio) => {
+            const fill = placeholder.querySelector('.page-editor-progress-fill');
+            if (fill) fill.style.width = `${Math.round(ratio * 100)}%`;
+          },
+        });
+        placeholder.remove();
+        insertImageAfterSegment(targetTa, result.id, result.url || result.thumbnailUrl || '');
+      } catch (err) {
+        placeholder.remove();
+        this.showToast('이미지 업로드 실패: ' + err.message);
+      }
+    };
+
+    // Process multiple image files
+    const handleImageFiles = async (files) => {
+      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+      if (imageFiles.length === 0) return;
+      const ta = getActiveSegment();
+      if (!ta) return;
+      for (const file of imageFiles) {
+        await uploadAndInsert(file, ta);
+      }
+    };
+
+    // 1) Button click → file picker
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) handleImageFiles(fileInput.files);
+      fileInput.value = '';
+    });
+
+    // 2) Drag & drop on editor
+    editorContainer.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      editorContainer.classList.add('drag-over');
+    });
+    editorContainer.addEventListener('dragleave', () => {
+      editorContainer.classList.remove('drag-over');
+    });
+    editorContainer.addEventListener('drop', (e) => {
+      e.preventDefault();
+      editorContainer.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) handleImageFiles(e.dataTransfer.files);
+    });
+
+    // 3) Clipboard paste in any segment
+    editorContainer.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const imageFiles = [];
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
+        }
+      }
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        handleImageFiles(imageFiles);
+      }
+    });
+
     bodyEl.appendChild(editorContainer);
+
+    // Toolbar with image add button
+    const toolbar = document.createElement('div');
+    toolbar.className = 'page-editor-toolbar';
+    toolbar.innerHTML = `<button class="btn btn-secondary btn-small page-editor-add-image"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> 이미지 추가</button>`;
+    toolbar.querySelector('.page-editor-add-image').addEventListener('click', () => fileInput.click());
+    // Insert toolbar before editorContainer
+    bodyEl.insertBefore(toolbar, editorContainer);
 
     // Collect all segments back into unified text
     const collectText = () => {
