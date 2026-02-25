@@ -121,10 +121,7 @@
   border-radius: 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  transition: background 0.15s;
-  cursor: pointer;
 }
-.page-card:hover { background: var(--bg-tertiary); }
 .page-card-thumb {
   width: 80px;
   height: 60px;
@@ -321,6 +318,20 @@
   color: var(--text-primary);
 }
 .page-viewer-content.text-center { text-align: center; }
+
+/* Links in viewer content */
+.page-viewer-content a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+.page-viewer-content a:hover {
+  text-decoration: underline;
+}
+
+/* Ensure btn links never show underlines */
+.page-card-actions a.btn {
+  text-decoration: none;
+}
 
 /* Content blocks */
 .page-block { margin-bottom: 1rem; }

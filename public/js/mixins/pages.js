@@ -147,9 +147,6 @@ export const PagesMixin = {
   _createPageCard(page, accountId, seriesMap = {}) {
     const card = document.createElement('div');
     card.className = 'page-card';
-    card.dataset.pageAction = 'view';
-    card.dataset.pageId = page.id;
-    card.dataset.accountId = accountId;
 
     const dateStr = (page.updatedAt || page.createdAt).toLocaleDateString('ko-KR');
     const eyeCatch = page.eyeCatchingImage
@@ -176,7 +173,8 @@ export const PagesMixin = {
         </div>
         ${page.summary ? `<div class="page-card-summary">${escapeHtml(page.summary)}</div>` : ''}
         <div class="page-card-actions">
-          <button class="btn btn-secondary btn-small" data-page-action="view" data-page-id="${page.id}" data-account-id="${accountId}">보기</button>
+          <a class="btn btn-secondary btn-small" href="${escapeHtml(page.url)}" target="_blank" rel="noopener">보기</a>
+          <button class="btn btn-secondary btn-small" data-page-action="edit" data-page-id="${page.id}" data-account-id="${accountId}">수정</button>
           <button class="btn btn-secondary btn-small" data-page-action="copy-link" data-page-url="${escapeHtml(page.url)}">링크 복사</button>
           <button class="btn btn-secondary btn-small" data-page-action="share" data-page-id="${page.id}" data-page-title="${escapeHtml(page.title)}" data-page-url="${escapeHtml(page.url)}">노트로 공유</button>
           <button class="btn btn-danger btn-small" data-page-action="delete" data-page-id="${page.id}">삭제</button>
@@ -583,7 +581,7 @@ export const PagesMixin = {
       const pageAction = e.target.closest('[data-page-action]');
       if (pageAction) {
         const action = pageAction.dataset.pageAction;
-        if (action === 'view') {
+        if (action === 'view' || action === 'edit') {
           const pageId = pageAction.dataset.pageId;
           const acctId = pageAction.dataset.accountId;
           if (pageId && acctId) {
