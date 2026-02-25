@@ -77,12 +77,10 @@ export const ProfileModalMixin = {
     this._profileEditAvatarFile = null;
     this._profileEditBannerFile = null;
     tabsEl.style.display = 'none';
-    const showPagesTab = this.store.supportsPages(this.store.getById(effectiveAccountId));
     tabsEl.innerHTML = `
       <button class="profile-tab active" data-profile-tab="notes">노트</button>
       <button class="profile-tab" data-profile-tab="renotes">리노트</button>
       <button class="profile-tab" data-profile-tab="replies">댓글</button>
-      ${showPagesTab ? '<button class="profile-tab" data-profile-tab="pages">페이지</button>' : ''}
     `;
     postsEl.style.display = 'none';
     postsEl.innerHTML = '';
@@ -184,6 +182,14 @@ export const ProfileModalMixin = {
       this._profileStatsClickHandler = statsClickHandler;
 
       if (myAccount) {
+        // Add Pages tab for Misskey-family accounts
+        if (this.store.supportsPages(account)) {
+          const pagesTab = document.createElement('button');
+          pagesTab.className = 'profile-tab';
+          pagesTab.dataset.profileTab = 'pages';
+          pagesTab.textContent = '페이지';
+          tabsEl.appendChild(pagesTab);
+        }
         tabsEl.style.display = 'flex';
         postsEl.style.display = 'block';
         this._loadProfileNotes(user.id, platform, effectiveAccountId, client, isMisskey, account);

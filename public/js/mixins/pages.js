@@ -4,7 +4,6 @@
  * Handles non-Pages platforms gracefully.
  */
 import { escapeHtml } from '../ui/utils.js';
-import { iconRefresh, iconClose } from '../ui/dashboard.js';
 
 const DRAFTS_KEY = 'starship_page_drafts';
 const SERIES_KEY = 'starship_page_series';
