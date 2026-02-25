@@ -788,7 +788,7 @@ export const PagesMixin = {
     }
   },
 
-  // Switch viewer to edit mode (block-based in-place editing)
+  // Switch viewer to edit mode (unified single-textarea editing)
   _openPageEditor() {
     const data = this._viewerPageData;
     if (!data || !data.isOwnPage) return;
@@ -823,23 +823,37 @@ export const PagesMixin = {
     summaryInput.placeholder = '요약 (선택)';
     bodyEl.appendChild(summaryInput);
 
-    // Block editors
-    const blocksContainer = document.createElement('div');
-    blocksContainer.className = 'page-editor-blocks';
-    this._buildBlockEditors(rawPage.content || [], blocksContainer, fileMap);
-    bodyEl.appendChild(blocksContainer);
+    // Convert blocks to unified text
+    const imageList = []; // [{fileId, file}]
+    const unifiedText = this._blocksToUnifiedText(rawPage.content || [], fileMap, imageList);
 
-    // Add block button
-    const addRow = document.createElement('div');
-    addRow.className = 'page-editor-add-row';
-    addRow.innerHTML = `<button class="btn btn-secondary btn-small page-editor-add-btn">+ 텍스트 블록 추가</button>`;
-    addRow.querySelector('.page-editor-add-btn').addEventListener('click', () => {
-      const newBlock = { id: `${Date.now()}`, type: 'text', text: '' };
-      const blockEl = this._createBlockEditor(newBlock, fileMap);
-      blocksContainer.appendChild(blockEl);
-      blockEl.querySelector('textarea')?.focus();
-    });
-    bodyEl.appendChild(addRow);
+    // Image reference strip (if any images exist)
+    if (imageList.length > 0) {
+      const imgStrip = document.createElement('div');
+      imgStrip.className = 'page-editor-image-strip';
+      for (let i = 0; i < imageList.length; i++) {
+        const { file } = imageList[i];
+        if (!file) continue;
+        const thumb = document.createElement('div');
+        thumb.className = 'page-editor-image-ref';
+        thumb.innerHTML = `
+          <img src="${escapeHtml(file.thumbnailUrl || file.url || '')}" alt="" referrerpolicy="no-referrer">
+          <span class="page-editor-image-label">[image:${i + 1}]</span>
+        `;
+        imgStrip.appendChild(thumb);
+      }
+      bodyEl.appendChild(imgStrip);
+    }
+
+    // Unified text editor
+    const textArea = document.createElement('textarea');
+    textArea.className = 'input page-editor-unified';
+    textArea.value = unifiedText;
+    textArea.placeholder = '페이지 내용을 입력하세요...\n\n## 섹션 제목\n본문 텍스트\n[image:1]';
+    const resize = () => { textArea.style.height = 'auto'; textArea.style.height = Math.max(200, textArea.scrollHeight) + 'px'; };
+    textArea.addEventListener('input', resize);
+    bodyEl.appendChild(textArea);
+    requestAnimationFrame(resize);
 
     // Sticky save/cancel bar
     const actions = document.createElement('div');
@@ -865,7 +879,7 @@ export const PagesMixin = {
         const client = this.store.getClient(accountId);
         if (!client) throw new Error('클라이언트를 찾을 수 없습니다.');
 
-        const newContent = this._collectEditedBlocks(blocksContainer);
+        const newContent = this._unifiedTextToBlocks(textArea.value, imageList);
 
         await client.updatePage(pageId, {
           title: titleInput.value || page.title,
@@ -892,103 +906,112 @@ export const PagesMixin = {
     });
   },
 
-  _buildBlockEditors(blocks, container, fileMap, depth = 0) {
-    for (const block of blocks) {
-      const el = this._createBlockEditor(block, fileMap, depth);
-      container.appendChild(el);
-    }
-  },
-
-  _createBlockEditor(block, fileMap, depth = 0) {
-    const wrap = document.createElement('div');
-    wrap.className = 'page-editor-block';
-    wrap.dataset.blockType = block.type;
-    wrap.dataset.blockId = block.id || `${Date.now()}`;
-    if (depth > 0) wrap.style.marginLeft = `${depth * 1}rem`;
-
-    // Block type label + delete button
-    const header = document.createElement('div');
-    header.className = 'page-editor-block-header';
-    const typeLabel = { text: '텍스트', section: '섹션', image: '이미지', textarea: '텍스트 영역' }[block.type] || block.type;
-    header.innerHTML = `<span class="page-editor-block-type">${escapeHtml(typeLabel)}</span>`;
-    const delBtn = document.createElement('button');
-    delBtn.className = 'btn btn-icon page-editor-block-delete';
-    delBtn.title = '삭제';
-    delBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-    delBtn.addEventListener('click', () => wrap.remove());
-    header.appendChild(delBtn);
-    wrap.appendChild(header);
-
-    if (block.type === 'text' || block.type === 'textarea') {
-      const ta = document.createElement('textarea');
-      ta.className = 'input page-editor-block-text';
-      if (block.type === 'textarea') ta.style.fontFamily = 'monospace';
-      ta.value = block.text || '';
-      ta.placeholder = '내용 입력...';
-      // Auto-resize
-      const resize = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
-      ta.addEventListener('input', resize);
-      wrap.appendChild(ta);
-      requestAnimationFrame(resize);
-    } else if (block.type === 'image') {
-      wrap.dataset.fileId = block.fileId || '';
-      const file = fileMap[block.fileId];
-      if (file) {
-        const imgWrap = document.createElement('div');
-        imgWrap.className = 'page-editor-block-image';
-        imgWrap.innerHTML = `<img src="${escapeHtml(file.url || file.thumbnailUrl || '')}" alt="" referrerpolicy="no-referrer">`;
-        wrap.appendChild(imgWrap);
+  // Convert block tree → single text string for unified editor
+  _blocksToUnifiedText(blocks, fileMap, imageList) {
+    const lines = [];
+    const process = (blockList) => {
+      for (const block of blockList) {
+        if (block.type === 'section') {
+          lines.push(`## ${block.title || ''}`);
+          if (block.children && block.children.length > 0) {
+            process(block.children);
+          }
+          lines.push('');
+        } else if (block.type === 'text') {
+          lines.push(block.text || '');
+          lines.push('');
+        } else if (block.type === 'textarea') {
+          lines.push('```');
+          lines.push(block.text || '');
+          lines.push('```');
+          lines.push('');
+        } else if (block.type === 'image') {
+          const file = fileMap[block.fileId] || null;
+          imageList.push({ fileId: block.fileId, file });
+          lines.push(`[image:${imageList.length}]`);
+          lines.push('');
+        }
       }
-    } else if (block.type === 'section') {
-      const titleInput = document.createElement('input');
-      titleInput.type = 'text';
-      titleInput.className = 'input page-editor-section-title';
-      titleInput.value = block.title || '';
-      titleInput.placeholder = '섹션 제목';
-      wrap.appendChild(titleInput);
-      // Render children
-      if (block.children && block.children.length > 0) {
-        const childContainer = document.createElement('div');
-        childContainer.className = 'page-editor-section-children';
-        this._buildBlockEditors(block.children, childContainer, fileMap, depth + 1);
-        wrap.appendChild(childContainer);
+    };
+    process(blocks);
+    return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  },
+
+  // Parse unified text → block tree for API submission
+  _unifiedTextToBlocks(text, imageList) {
+    const lines = text.split('\n');
+    const result = [];
+    let currentSection = null;
+    let textBuf = [];
+    let inCode = false;
+    let codeBuf = [];
+    let blockId = 1;
+
+    const makeId = () => String(blockId++);
+    const getTarget = () => currentSection ? currentSection.children : result;
+
+    const flushText = (target) => {
+      const joined = textBuf.join('\n').trim();
+      if (joined) {
+        target.push({ id: makeId(), type: 'text', text: joined });
       }
+      textBuf = [];
+    };
+
+    const flushCode = (target) => {
+      target.push({ id: makeId(), type: 'textarea', text: codeBuf.join('\n') });
+      codeBuf = [];
+    };
+
+    for (const line of lines) {
+      if (inCode) {
+        if (line.trim() === '```') {
+          inCode = false;
+          flushCode(getTarget());
+        } else {
+          codeBuf.push(line);
+        }
+        continue;
+      }
+
+      if (line.trim() === '```') {
+        flushText(getTarget());
+        inCode = true;
+        continue;
+      }
+
+      const sectionMatch = line.match(/^## (.*)$/);
+      if (sectionMatch) {
+        flushText(getTarget());
+        if (currentSection) result.push(currentSection);
+        currentSection = {
+          id: makeId(),
+          type: 'section',
+          title: sectionMatch[1],
+          children: []
+        };
+        continue;
+      }
+
+      const imageMatch = line.match(/^\[image:(\d+)\]$/);
+      if (imageMatch) {
+        flushText(getTarget());
+        const idx = parseInt(imageMatch[1]) - 1;
+        const img = imageList[idx];
+        if (img) {
+          getTarget().push({ id: makeId(), type: 'image', fileId: img.fileId });
+        }
+        continue;
+      }
+
+      textBuf.push(line);
     }
 
-    return wrap;
-  },
+    if (inCode) flushCode(getTarget());
+    flushText(getTarget());
+    if (currentSection) result.push(currentSection);
 
-  _collectEditedBlocks(container) {
-    const blocks = [];
-    for (const el of container.children) {
-      if (!el.classList.contains('page-editor-block')) continue;
-      const block = this._collectSingleBlock(el);
-      if (block) blocks.push(block);
-    }
-    return blocks;
-  },
-
-  _collectSingleBlock(el) {
-    const type = el.dataset.blockType;
-    const id = el.dataset.blockId;
-
-    if (type === 'text' || type === 'textarea') {
-      const ta = el.querySelector('textarea');
-      const text = ta?.value || '';
-      if (!text.trim()) return null;
-      return { id, type, text };
-    }
-    if (type === 'image') {
-      const fileId = el.dataset.fileId;
-      return fileId ? { id, type, fileId } : null;
-    }
-    if (type === 'section') {
-      const titleInput = el.querySelector('.page-editor-section-title');
-      const childContainer = el.querySelector('.page-editor-section-children');
-      const children = childContainer ? this._collectEditedBlocks(childContainer) : [];
-      return { id, type, title: titleInput?.value || '', children };
-    }
-    return null;
+    return result;
   },
 
   _renderPageBlocks(blocks, fileMap, container, client) {
