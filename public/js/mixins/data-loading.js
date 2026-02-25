@@ -51,6 +51,8 @@ export const DataLoadingMixin = {
           loadPromise = this.loadBookmarksForColumn(content, this.store.getVisible());
         } else if (type === 'dm') {
           loadPromise = this.loadConversationsForColumn(content, this.store.getVisible());
+        } else if (type === 'pages') {
+          loadPromise = this.loadPagesFeedForColumn(content, this.store.getVisible());
         } else if (type === 'thread') {
           loadPromise = this.loadThreadForColumn(col);
         }
