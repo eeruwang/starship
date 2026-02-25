@@ -147,6 +147,7 @@ export const PagesMixin = {
   _createPageCard(page, accountId, seriesMap = {}) {
     const card = document.createElement('div');
     card.className = 'page-card';
+    card.dataset.pageAction = 'view';
     card.dataset.pageId = page.id;
     card.dataset.accountId = accountId;
 
@@ -775,12 +776,22 @@ export const PagesMixin = {
       this._renderPageBlocks(page.content, fileMap, contentEl, client);
       bodyEl.appendChild(contentEl);
 
+      // Ensure all content links open in new tab without closing the viewer
+      contentEl.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (link) {
+          e.stopPropagation();
+          link.target = '_blank';
+          link.rel = 'noopener';
+        }
+      });
+
     } catch (err) {
       bodyEl.innerHTML = `<div class="pages-empty">페이지를 불러올 수 없습니다: ${escapeHtml(err.message)}</div>`;
     }
   },
 
-  // Switch viewer to edit mode
+  // Switch viewer to edit mode (block-based in-place editing)
   _openPageEditor() {
     const data = this._viewerPageData;
     if (!data || !data.isOwnPage) return;
@@ -791,9 +802,11 @@ export const PagesMixin = {
 
     const { rawPage, page, accountId, pageId } = data;
 
-    // Flatten all text blocks into a single editable content
-    const textBlocks = this._collectTextBlocks(rawPage.content || []);
-    const fullText = textBlocks.map(b => b.text || '').join('\n\n');
+    // Build file map
+    const fileMap = {};
+    if (rawPage.attachedFiles) {
+      for (const f of rawPage.attachedFiles) fileMap[f.id] = f;
+    }
 
     bodyEl.innerHTML = '';
 
@@ -813,15 +826,25 @@ export const PagesMixin = {
     summaryInput.placeholder = '요약 (선택)';
     bodyEl.appendChild(summaryInput);
 
-    // Content editor
-    const textarea = document.createElement('textarea');
-    textarea.className = 'input page-editor-content';
-    textarea.value = fullText;
-    textarea.placeholder = '페이지 내용 (MFM/마크다운 사용 가능)';
-    textarea.rows = 16;
-    bodyEl.appendChild(textarea);
+    // Block editors
+    const blocksContainer = document.createElement('div');
+    blocksContainer.className = 'page-editor-blocks';
+    this._buildBlockEditors(rawPage.content || [], blocksContainer, fileMap);
+    bodyEl.appendChild(blocksContainer);
 
-    // Actions
+    // Add block button
+    const addRow = document.createElement('div');
+    addRow.className = 'page-editor-add-row';
+    addRow.innerHTML = `<button class="btn btn-secondary btn-small page-editor-add-btn">+ 텍스트 블록 추가</button>`;
+    addRow.querySelector('.page-editor-add-btn').addEventListener('click', () => {
+      const newBlock = { id: `${Date.now()}`, type: 'text', text: '' };
+      const blockEl = this._createBlockEditor(newBlock, fileMap);
+      blocksContainer.appendChild(blockEl);
+      blockEl.querySelector('textarea')?.focus();
+    });
+    bodyEl.appendChild(addRow);
+
+    // Sticky save/cancel bar
     const actions = document.createElement('div');
     actions.className = 'page-editor-actions';
     actions.innerHTML = `
@@ -832,7 +855,6 @@ export const PagesMixin = {
 
     titleEl.textContent = '페이지 수정';
 
-    // Event handlers
     document.getElementById('page-editor-cancel').addEventListener('click', () => {
       this.openPageViewer(pageId, accountId);
     });
@@ -846,17 +868,13 @@ export const PagesMixin = {
         const client = this.store.getClient(accountId);
         if (!client) throw new Error('클라이언트를 찾을 수 없습니다.');
 
-        // Rebuild content blocks from edited text
-        const newText = textarea.value;
-        const newContent = newText
-          ? [{ id: rawPage.content?.[0]?.id || '0', type: 'text', text: newText }]
-          : rawPage.content;
+        const newContent = this._collectEditedBlocks(blocksContainer);
 
         await client.updatePage(pageId, {
           title: titleInput.value || page.title,
           name: rawPage.name,
           summary: summaryInput.value || null,
-          content: newContent,
+          content: newContent.length > 0 ? newContent : rawPage.content,
           variables: rawPage.variables || [],
           script: rawPage.script || '',
           alignCenter: rawPage.alignCenter || false,
@@ -864,6 +882,10 @@ export const PagesMixin = {
         });
 
         this.showToast('페이지가 수정되었습니다!');
+        // Refresh dashboard if it's open
+        if (this._pagesSelectedAccountId) {
+          this._loadPagesForAccount(this._pagesSelectedAccountId);
+        }
         this.openPageViewer(pageId, accountId);
       } catch (err) {
         this.showToast('수정 실패: ' + err.message);
@@ -873,17 +895,103 @@ export const PagesMixin = {
     });
   },
 
-  _collectTextBlocks(blocks) {
-    const result = [];
+  _buildBlockEditors(blocks, container, fileMap, depth = 0) {
     for (const block of blocks) {
-      if ((block.type === 'text' || block.type === 'textarea') && block.text) {
-        result.push(block);
+      const el = this._createBlockEditor(block, fileMap, depth);
+      container.appendChild(el);
+    }
+  },
+
+  _createBlockEditor(block, fileMap, depth = 0) {
+    const wrap = document.createElement('div');
+    wrap.className = 'page-editor-block';
+    wrap.dataset.blockType = block.type;
+    wrap.dataset.blockId = block.id || `${Date.now()}`;
+    if (depth > 0) wrap.style.marginLeft = `${depth * 1}rem`;
+
+    // Block type label + delete button
+    const header = document.createElement('div');
+    header.className = 'page-editor-block-header';
+    const typeLabel = { text: '텍스트', section: '섹션', image: '이미지', textarea: '텍스트 영역' }[block.type] || block.type;
+    header.innerHTML = `<span class="page-editor-block-type">${escapeHtml(typeLabel)}</span>`;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-icon page-editor-block-delete';
+    delBtn.title = '삭제';
+    delBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    delBtn.addEventListener('click', () => wrap.remove());
+    header.appendChild(delBtn);
+    wrap.appendChild(header);
+
+    if (block.type === 'text' || block.type === 'textarea') {
+      const ta = document.createElement('textarea');
+      ta.className = 'input page-editor-block-text';
+      if (block.type === 'textarea') ta.style.fontFamily = 'monospace';
+      ta.value = block.text || '';
+      ta.placeholder = '내용 입력...';
+      // Auto-resize
+      const resize = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+      ta.addEventListener('input', resize);
+      wrap.appendChild(ta);
+      requestAnimationFrame(resize);
+    } else if (block.type === 'image') {
+      wrap.dataset.fileId = block.fileId || '';
+      const file = fileMap[block.fileId];
+      if (file) {
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'page-editor-block-image';
+        imgWrap.innerHTML = `<img src="${escapeHtml(file.url || file.thumbnailUrl || '')}" alt="" referrerpolicy="no-referrer">`;
+        wrap.appendChild(imgWrap);
       }
-      if (block.children && Array.isArray(block.children)) {
-        result.push(...this._collectTextBlocks(block.children));
+    } else if (block.type === 'section') {
+      const titleInput = document.createElement('input');
+      titleInput.type = 'text';
+      titleInput.className = 'input page-editor-section-title';
+      titleInput.value = block.title || '';
+      titleInput.placeholder = '섹션 제목';
+      wrap.appendChild(titleInput);
+      // Render children
+      if (block.children && block.children.length > 0) {
+        const childContainer = document.createElement('div');
+        childContainer.className = 'page-editor-section-children';
+        this._buildBlockEditors(block.children, childContainer, fileMap, depth + 1);
+        wrap.appendChild(childContainer);
       }
     }
-    return result;
+
+    return wrap;
+  },
+
+  _collectEditedBlocks(container) {
+    const blocks = [];
+    for (const el of container.children) {
+      if (!el.classList.contains('page-editor-block')) continue;
+      const block = this._collectSingleBlock(el);
+      if (block) blocks.push(block);
+    }
+    return blocks;
+  },
+
+  _collectSingleBlock(el) {
+    const type = el.dataset.blockType;
+    const id = el.dataset.blockId;
+
+    if (type === 'text' || type === 'textarea') {
+      const ta = el.querySelector('textarea');
+      const text = ta?.value || '';
+      if (!text.trim()) return null;
+      return { id, type, text };
+    }
+    if (type === 'image') {
+      const fileId = el.dataset.fileId;
+      return fileId ? { id, type, fileId } : null;
+    }
+    if (type === 'section') {
+      const titleInput = el.querySelector('.page-editor-section-title');
+      const childContainer = el.querySelector('.page-editor-section-children');
+      const children = childContainer ? this._collectEditedBlocks(childContainer) : [];
+      return { id, type, title: titleInput?.value || '', children };
+    }
+    return null;
   },
 
   _renderPageBlocks(blocks, fileMap, container, client) {

@@ -122,6 +122,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   transition: background 0.15s;
+  cursor: pointer;
 }
 .page-card:hover { background: var(--bg-tertiary); }
 .page-card-thumb {
@@ -352,31 +353,99 @@
 
 /* Page Editor (in viewer modal) */
 .page-editor-title {
-  width: 100%;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 600;
   margin: 0.75rem 1.25rem 0.5rem;
   width: calc(100% - 2.5rem);
 }
 .page-editor-summary {
   width: calc(100% - 2.5rem);
-  margin: 0 1.25rem 0.5rem;
+  margin: 0 1.25rem 0.75rem;
   font-size: 0.85rem;
 }
-.page-editor-content {
-  width: calc(100% - 2.5rem);
-  margin: 0 1.25rem 0.75rem;
+.page-editor-blocks {
+  padding: 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.page-editor-block {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.page-editor-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.5rem;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+.page-editor-block-type {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.page-editor-block-delete {
+  padding: 0.15rem;
+  opacity: 0.5;
+}
+.page-editor-block-delete:hover { opacity: 1; }
+.page-editor-block-text {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.6rem 0.75rem;
   font-size: 0.9rem;
-  font-family: monospace;
-  line-height: 1.6;
-  resize: vertical;
-  min-height: 200px;
+  line-height: 1.7;
+  resize: none;
+  min-height: 3rem;
+  overflow: hidden;
+}
+.page-editor-block-text:focus {
+  outline: none;
+  background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+}
+.page-editor-block-image {
+  padding: 0.5rem;
+  text-align: center;
+}
+.page-editor-block-image img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 6px;
+  opacity: 0.8;
+}
+.page-editor-section-title {
+  margin: 0.4rem 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  width: calc(100% - 1rem);
+}
+.page-editor-section-children {
+  padding: 0 0.5rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.page-editor-add-row {
+  padding: 0.5rem 1.25rem;
+  text-align: center;
 }
 .page-editor-actions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
-  padding: 0 1.25rem 1rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border-color);
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-primary);
 }
 
 /* ============================================================
