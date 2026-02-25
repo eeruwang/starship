@@ -175,7 +175,7 @@ export const PagesMixin = {
         </div>
         ${page.summary ? `<div class="page-card-summary">${escapeHtml(page.summary)}</div>` : ''}
         <div class="page-card-actions">
-          <a class="btn btn-secondary btn-small" href="${escapeHtml(page.url)}" target="_blank" rel="noopener">보기</a>
+          <button class="btn btn-secondary btn-small" data-page-action="view" data-page-id="${page.id}" data-account-id="${accountId}">보기</button>
           <button class="btn btn-secondary btn-small" data-page-action="copy-link" data-page-url="${escapeHtml(page.url)}">링크 복사</button>
           <button class="btn btn-secondary btn-small" data-page-action="share" data-page-id="${page.id}" data-page-title="${escapeHtml(page.title)}" data-page-url="${escapeHtml(page.url)}">노트로 공유</button>
           <button class="btn btn-danger btn-small" data-page-action="delete" data-page-id="${page.id}">삭제</button>
@@ -403,8 +403,10 @@ export const PagesMixin = {
       const results = await Promise.allSettled(
         pagesAccounts.map(async (account) => {
           const client = this.store.getClient(account.id);
-          if (!client?.getPages) return [];
-          const raw = await client.getPages(20);
+          if (!client?.getUserPages) return [];
+          const userId = account.profile?.id;
+          if (!userId) return [];
+          const raw = await client.getUserPages(userId, 30);
           return (raw || []).map(p => ({
             ...client.normalizePage(p),
             accountId: account.id,
@@ -421,7 +423,7 @@ export const PagesMixin = {
 
       content.innerHTML = '';
       if (allPages.length === 0) {
-        content.innerHTML = '<div class="column-empty">인기 페이지가 없습니다.</div>';
+        content.innerHTML = '<div class="column-empty">페이지가 없습니다.</div>';
         return;
       }
 
@@ -444,7 +446,7 @@ export const PagesMixin = {
     const borderStyle = page.themeColor ? `style="border-left:3px solid ${page.themeColor}"` : '';
 
     item.innerHTML = `
-      <a class="page-feed-link" href="${escapeHtml(page.url)}" target="_blank" rel="noopener" ${borderStyle}>
+      <div class="page-feed-link" data-page-action="view" data-page-id="${page.id}" data-account-id="${page.accountId}" ${borderStyle}>
         ${eyeCatch}
         <div class="page-feed-body">
           <div class="page-feed-title">${escapeHtml(page.title)}</div>
@@ -456,7 +458,7 @@ export const PagesMixin = {
             ${page.likedCount > 0 ? `<span class="page-feed-likes">♥ ${page.likedCount}</span>` : ''}
           </div>
         </div>
-      </a>
+      </div>
     `;
     return item;
   },
@@ -487,11 +489,12 @@ export const PagesMixin = {
       const grid = container.querySelector('.profile-pages-grid');
 
       for (const page of pages) {
-        const card = document.createElement('a');
+        const card = document.createElement('div');
         card.className = 'profile-page-card';
-        card.href = page.url;
-        card.target = '_blank';
-        card.rel = 'noopener';
+        card.dataset.pageAction = 'view';
+        card.dataset.pageId = page.id;
+        card.dataset.accountId = account.id;
+        card.style.cursor = 'pointer';
 
         const eyeCatch = page.eyeCatchingImage
           ? `<div class="profile-page-thumb"><img src="${escapeHtml(page.eyeCatchingImage.url || page.eyeCatchingImage.thumbnailUrl || '')}" alt="" referrerpolicy="no-referrer"></div>`
@@ -573,6 +576,15 @@ export const PagesMixin = {
       const pageAction = e.target.closest('[data-page-action]');
       if (pageAction) {
         const action = pageAction.dataset.pageAction;
+        if (action === 'view') {
+          const pageId = pageAction.dataset.pageId;
+          const acctId = pageAction.dataset.accountId;
+          if (pageId && acctId) {
+            e.preventDefault();
+            this.openPageViewer(pageId, acctId);
+          }
+          return;
+        }
         if (action === 'copy-link') {
           const url = pageAction.dataset.pageUrl;
           navigator.clipboard.writeText(url).then(() => this.showToast('링크가 복사되었습니다.'));
@@ -668,6 +680,152 @@ export const PagesMixin = {
       this._loadPagesForAccount(this._pagesSelectedAccountId);
     } catch (err) {
       this.showToast('삭제 실패: ' + err.message);
+    }
+  },
+
+  // ============================================================
+  //  In-App Page Viewer
+  // ============================================================
+
+  async openPageViewer(pageId, accountId) {
+    const overlay = document.getElementById('modal-page-viewer');
+    if (!overlay) return;
+
+    const titleEl = document.getElementById('page-viewer-title');
+    const bodyEl = document.getElementById('page-viewer-body');
+    const extLink = document.getElementById('page-viewer-external');
+
+    titleEl.textContent = '';
+    extLink.href = '#';
+    bodyEl.innerHTML = '<div class="pages-loading"><div class="spinner"></div></div>';
+    this.openModal(overlay);
+
+    const client = this.store.getClient(accountId);
+    if (!client) {
+      bodyEl.innerHTML = '<div class="pages-empty">계정을 찾을 수 없습니다.</div>';
+      return;
+    }
+
+    try {
+      const rawPage = await client.getPage(pageId);
+      const page = client.normalizePage(rawPage);
+
+      titleEl.textContent = page.title;
+      extLink.href = page.url;
+
+      // Build file map from attachedFiles
+      const fileMap = {};
+      if (rawPage.attachedFiles) {
+        for (const f of rawPage.attachedFiles) {
+          fileMap[f.id] = f;
+        }
+      }
+
+      bodyEl.innerHTML = '';
+
+      // Eye-catching image
+      if (page.eyeCatchingImage) {
+        const imgEl = document.createElement('div');
+        imgEl.className = 'page-viewer-eyecatch';
+        imgEl.innerHTML = `<img src="${escapeHtml(page.eyeCatchingImage.url || page.eyeCatchingImage.thumbnailUrl || '')}" alt="" referrerpolicy="no-referrer">`;
+        bodyEl.appendChild(imgEl);
+      }
+
+      // Author info
+      if (page.user) {
+        const authorEl = document.createElement('div');
+        authorEl.className = 'page-viewer-author';
+        const dateStr = page.createdAt.toLocaleDateString('ko-KR');
+        authorEl.innerHTML = `
+          <img src="${escapeHtml(page.user.avatarUrl || '')}" alt="" referrerpolicy="no-referrer">
+          <span class="page-viewer-author-name">${escapeHtml(page.user.displayName)}</span>
+          <span class="page-viewer-date">${dateStr}</span>
+          ${page.likedCount > 0 ? `<span class="page-viewer-likes">♥ ${page.likedCount}</span>` : ''}
+        `;
+        bodyEl.appendChild(authorEl);
+      }
+
+      // Content blocks
+      const contentEl = document.createElement('div');
+      contentEl.className = 'page-viewer-content';
+      if (page.alignCenter) contentEl.classList.add('text-center');
+      if (page.font === 'serif') contentEl.style.fontFamily = 'serif';
+
+      this._renderPageBlocks(page.content, fileMap, contentEl);
+      bodyEl.appendChild(contentEl);
+
+    } catch (err) {
+      bodyEl.innerHTML = `<div class="pages-empty">페이지를 불러올 수 없습니다: ${escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  _renderPageBlocks(blocks, fileMap, container) {
+    if (!Array.isArray(blocks)) return;
+    for (const block of blocks) {
+      const el = this._renderPageBlock(block, fileMap);
+      if (el) container.appendChild(el);
+    }
+  },
+
+  _renderPageBlock(block, fileMap) {
+    if (!block || !block.type) return null;
+
+    switch (block.type) {
+      case 'text': {
+        const el = document.createElement('div');
+        el.className = 'page-block page-block-text';
+        el.innerHTML = escapeHtml(block.text || '').replace(/\n/g, '<br>');
+        return el;
+      }
+
+      case 'section': {
+        const el = document.createElement('div');
+        el.className = 'page-block page-block-section';
+        if (block.title) {
+          const h = document.createElement('h3');
+          h.className = 'page-block-section-title';
+          h.textContent = block.title;
+          el.appendChild(h);
+        }
+        if (block.children) {
+          this._renderPageBlocks(block.children, fileMap, el);
+        }
+        return el;
+      }
+
+      case 'image': {
+        const el = document.createElement('div');
+        el.className = 'page-block page-block-image';
+        const file = fileMap[block.fileId];
+        if (file) {
+          el.innerHTML = `<img src="${escapeHtml(file.url || file.thumbnailUrl || '')}" alt="${escapeHtml(file.comment || file.name || '')}" referrerpolicy="no-referrer" loading="lazy">`;
+        }
+        return el;
+      }
+
+      case 'textarea': {
+        const el = document.createElement('div');
+        el.className = 'page-block page-block-textarea';
+        el.innerHTML = `<pre>${escapeHtml(block.text || '')}</pre>`;
+        return el;
+      }
+
+      default: {
+        // Render text if present, recurse into children if present
+        if (block.text) {
+          const el = document.createElement('div');
+          el.className = 'page-block';
+          el.innerHTML = escapeHtml(block.text).replace(/\n/g, '<br>');
+          return el;
+        }
+        if (block.children && Array.isArray(block.children)) {
+          const el = document.createElement('div');
+          el.className = 'page-block';
+          this._renderPageBlocks(block.children, fileMap, el);
+          return el.children.length > 0 ? el : null;
+        }
+        return null;
+      }
     }
   },
 };
