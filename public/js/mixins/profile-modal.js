@@ -77,10 +77,12 @@ export const ProfileModalMixin = {
     this._profileEditAvatarFile = null;
     this._profileEditBannerFile = null;
     tabsEl.style.display = 'none';
+    const showPagesTab = this.store.supportsPages(this.store.getById(effectiveAccountId));
     tabsEl.innerHTML = `
       <button class="profile-tab active" data-profile-tab="notes">노트</button>
       <button class="profile-tab" data-profile-tab="renotes">리노트</button>
       <button class="profile-tab" data-profile-tab="replies">댓글</button>
+      ${showPagesTab ? '<button class="profile-tab" data-profile-tab="pages">페이지</button>' : ''}
     `;
     postsEl.style.display = 'none';
     postsEl.innerHTML = '';
@@ -490,7 +492,7 @@ export const ProfileModalMixin = {
       this._renderProfileTab('notes', postsEl);
 
       // Tab click
-      const tabClickHandler = (e) => {
+      const tabClickHandler = async (e) => {
         const tab = e.target.closest('.profile-tab');
         if (!tab) return;
         const tabName = tab.dataset.profileTab;
@@ -498,7 +500,11 @@ export const ProfileModalMixin = {
         tabsEl.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         this._profileState.activeTab = tabName;
-        this._renderProfileTab(tabName, postsEl);
+        if (tabName === 'pages') {
+          await this._loadProfilePages(postsEl, client, account, user.id);
+        } else {
+          this._renderProfileTab(tabName, postsEl);
+        }
       };
       tabsEl.addEventListener('click', tabClickHandler);
       this._profileTabsClickHandler = tabClickHandler;
@@ -853,10 +859,12 @@ export const ProfileModalMixin = {
   },
 
   async _loadOtherProfileTabs(userId, platform, accountId, client, isMisskey, account, tabsEl, postsEl) {
-    // Replace default tab buttons with Posts/Pinned
+    // Replace default tab buttons with Posts/Pinned (+ Pages if supported)
+    const showPages = this.store.supportsPages(account);
     tabsEl.innerHTML = `
       <button class="profile-tab active" data-profile-tab="posts">게시물</button>
       <button class="profile-tab" data-profile-tab="pinned">고정됨</button>
+      ${showPages ? '<button class="profile-tab" data-profile-tab="pages">페이지</button>' : ''}
     `;
 
     // Tab switching
@@ -874,6 +882,8 @@ export const ProfileModalMixin = {
           await this._loadProfilePosts(postsEl, client, account, userId);
         } else if (tabName === 'pinned') {
           await this._loadProfilePinned(postsEl, client, account, userId);
+        } else if (tabName === 'pages') {
+          await this._loadProfilePages(postsEl, client, account, userId);
         }
       } catch (err) {
         postsEl.innerHTML = `<div class="profile-posts-empty">로딩 오류: ${err.message}</div>`;

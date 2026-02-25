@@ -224,6 +224,20 @@ export class AccountStore {
     return this.accounts.find(a => a.id === accountId);
   }
 
+  /** Misskey-family platforms support Pages */
+  static PAGES_PLATFORMS = new Set(['misskey', 'iceshrimp', 'cherrypick']);
+
+  supportsPages(accountOrId) {
+    const account = typeof accountOrId === 'string' ? this.getById(accountOrId) : accountOrId;
+    if (!account) return false;
+    return AccountStore.PAGES_PLATFORMS.has(account.platform);
+  }
+
+  /** Get all accounts that support Pages */
+  getPagesAccounts() {
+    return this.accounts.filter(a => !a.hidden && AccountStore.PAGES_PLATFORMS.has(a.platform));
+  }
+
   isEmpty() {
     return this.accounts.length === 0;
   }

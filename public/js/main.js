@@ -17,6 +17,7 @@ import { EventsMixin } from './mixins/events.js';
 import { ColumnsMixin } from './mixins/columns.js';
 import { LinkEnrichmentMixin } from './mixins/link-enrichment.js';
 import { StreamingMixin } from './mixins/streaming.js';
+import { PagesMixin } from './mixins/pages.js';
 
 const COLUMN_STATE_KEY = 'starship_column_state';
 const SETTINGS_KEY = 'starship_settings';
@@ -202,6 +203,7 @@ Object.assign(StarShipApp.prototype,
   ColumnsMixin,
   LinkEnrichmentMixin,
   StreamingMixin,
+  PagesMixin,
 );
 
 // Initialize

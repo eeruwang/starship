@@ -367,6 +367,81 @@ export class MisskeyClient {
     return this.request('notes/global-timeline', body);
   }
 
+  // ===== Pages API =====
+
+  async getMyPages(limit = 20, sinceId = null, untilId = null) {
+    const body = { limit };
+    if (sinceId) body.sinceId = sinceId;
+    if (untilId) body.untilId = untilId;
+    return this.request('i/pages', body);
+  }
+
+  async getPages(limit = 20, sinceId = null, untilId = null) {
+    const body = { limit };
+    if (sinceId) body.sinceId = sinceId;
+    if (untilId) body.untilId = untilId;
+    return this.request('pages/featured', body);
+  }
+
+  async getUserPages(userId, limit = 20, untilId = null) {
+    const body = { userId, limit };
+    if (untilId) body.untilId = untilId;
+    return this.request('users/pages', body);
+  }
+
+  async getPage(pageId) {
+    return this.request('pages/show', { pageId });
+  }
+
+  async getPageByName(username, name) {
+    return this.request('pages/show', { name, username });
+  }
+
+  async createPage(params) {
+    return this.request('pages/create', params);
+  }
+
+  async updatePage(pageId, params) {
+    return this.request('pages/update', { pageId, ...params });
+  }
+
+  async deletePage(pageId) {
+    return this.request('pages/delete', { pageId });
+  }
+
+  async likePage(pageId) {
+    return this.request('pages/like', { pageId });
+  }
+
+  async unlikePage(pageId) {
+    return this.request('pages/unlike', { pageId });
+  }
+
+  normalizePage(page) {
+    return {
+      id: page.id,
+      createdAt: new Date(page.createdAt),
+      updatedAt: page.updatedAt ? new Date(page.updatedAt) : null,
+      title: page.title || '',
+      name: page.name || '',
+      summary: page.summary || null,
+      content: page.content || [],
+      variables: page.variables || [],
+      script: page.script || '',
+      eyeCatchingImage: page.eyeCatchingImage || null,
+      eyeCatchingImageId: page.eyeCatchingImageId || null,
+      user: page.user ? this.normalizeUser(page.user) : null,
+      likedCount: page.likedCount || 0,
+      isLiked: !!page.isLiked,
+      visibility: page.visibility || 'public',
+      hideTitleWhenPinned: !!page.hideTitleWhenPinned,
+      alignCenter: !!page.alignCenter,
+      font: page.font || 'sans-serif',
+      url: `${this.instanceUrl}/@${page.user?.username}/pages/${page.name}`,
+      instanceUrl: this.instanceUrl,
+    };
+  }
+
   async getLocalTimeline(limit = 30, untilId = null) {
     const body = { limit };
     if (untilId) body.untilId = untilId;

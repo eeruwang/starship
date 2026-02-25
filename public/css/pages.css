@@ -1,0 +1,392 @@
+/* ============================================================
+   Pages Management - Dashboard, Feed Column, Profile Tab
+   ============================================================ */
+
+/* --- Modal --- */
+.modal-pages {
+  max-width: 640px;
+  width: 95vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.modal-pages .modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding-bottom: 1rem;
+}
+
+/* --- Account Selector --- */
+.pages-account-selector {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.pages-account-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pages-account-btn:hover { background: var(--bg-tertiary); }
+.pages-account-btn.active {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+.pages-account-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.pages-no-support-hint {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pages-no-support-badge {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+/* --- Tabs --- */
+.pages-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0.75rem;
+}
+.pages-tab {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.pages-tab:hover { color: var(--text-primary); }
+.pages-tab.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+/* --- Toolbar --- */
+.pages-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.pages-sort {
+  max-width: 120px;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.5rem;
+}
+
+/* --- Page List --- */
+.pages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pages-loading, .pages-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* --- Page Card --- */
+.page-card {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  transition: background 0.15s;
+}
+.page-card:hover { background: var(--bg-tertiary); }
+.page-card-thumb {
+  width: 80px;
+  height: 60px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.page-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.page-card-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.page-card-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+}
+.page-card-likes { color: #e0627a; }
+.page-card-summary {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.4rem;
+}
+.page-card-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Draft badge */
+.draft-badge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  background: var(--accent-primary);
+  color: white;
+  font-weight: 500;
+}
+.draft-card {
+  border-left: 3px solid var(--accent-primary);
+}
+
+/* Series badge */
+.page-series-badge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+/* --- Series Section --- */
+.series-create-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.series-name-input {
+  flex: 1;
+  font-size: 0.85rem;
+}
+.series-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+}
+.series-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.series-card-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  flex: 1;
+}
+.series-card-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.series-card-pages {
+  padding: 0.5rem 0.75rem;
+}
+.series-empty-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0;
+}
+.series-page-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.82rem;
+}
+.series-page-num {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Pages Feed Column
+   ============================================================ */
+.page-feed-item {
+  padding: 0;
+}
+.page-feed-link {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.15s;
+}
+.page-feed-link:hover { background: var(--bg-tertiary); }
+.page-feed-thumb {
+  width: 64px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.page-feed-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.page-feed-body {
+  flex: 1;
+  min-width: 0;
+}
+.page-feed-title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin-bottom: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-feed-summary {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.25rem;
+}
+.page-feed-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.page-feed-avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+.page-feed-likes { color: #e0627a; }
+
+/* ============================================================
+   Profile Pages Tab (Card Grid)
+   ============================================================ */
+.profile-pages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+.profile-page-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.profile-page-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.profile-page-thumb {
+  width: 100%;
+  height: 100px;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+}
+.profile-page-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.profile-page-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+.profile-page-info {
+  padding: 0.5rem 0.6rem;
+}
+.profile-page-title {
+  font-weight: 600;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.2rem;
+}
+.profile-page-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 480px) {
+  .profile-pages-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+  .page-card-thumb {
+    width: 60px;
+    height: 45px;
+  }
+  .page-card-actions {
+    flex-direction: column;
+  }
+  .page-card-actions .btn {
+    font-size: 0.75rem;
+  }
+}

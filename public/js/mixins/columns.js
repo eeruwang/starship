@@ -30,6 +30,8 @@ export const ColumnsMixin = {
     // Hide/show header action buttons based on login state
     document.getElementById('btn-compose-header').style.display = loggedIn ? '' : 'none';
     document.getElementById('btn-refresh-all').style.display = loggedIn ? '' : 'none';
+    const pagesBtn = document.getElementById('btn-pages-header');
+    if (pagesBtn) pagesBtn.style.display = (loggedIn && this.store.getPagesAccounts().length > 0) ? '' : 'none';
 
     // Ensure all accounts have a column state entry
     for (const account of this.store.getAll()) {
@@ -83,6 +85,15 @@ export const ColumnsMixin = {
     dmToggle.dataset.toggleType = 'dm';
     dmToggle.textContent = 'DM';
     this.toggleBar.appendChild(dmToggle);
+
+    // "페이지" toggle (only if there are Pages-capable accounts)
+    if (this.store.getPagesAccounts().length > 0) {
+      const pagesToggle = document.createElement('button');
+      pagesToggle.className = `col-toggle fixed ${this.columnState.pages ? 'active' : ''}`;
+      pagesToggle.dataset.toggleType = 'pages';
+      pagesToggle.textContent = '페이지';
+      this.toggleBar.appendChild(pagesToggle);
+    }
 
     if (accounts.length > 0) {
       // Separator
@@ -154,6 +165,12 @@ export const ColumnsMixin = {
       this.saveColumnState();
       this.renderToggleBar();
       this.toggleColumnSmooth('dm', this.columnState.dm);
+    } else if (type === 'pages') {
+      this.columnState.pages = !this.columnState.pages;
+      this.updateColumnOrder('pages', this.columnState.pages);
+      this.saveColumnState();
+      this.renderToggleBar();
+      this.toggleColumnSmooth('pages', this.columnState.pages);
     } else if (type === 'account') {
       const accountId = toggle.dataset.accountId;
       this.columnState.accounts[accountId] = !this.columnState.accounts[accountId];
@@ -221,6 +238,8 @@ export const ColumnsMixin = {
       return this.createColumn('북마크', 'bookmarks', null);
     } else if (type === 'dm') {
       return this.createColumn('DM', 'dm', null);
+    } else if (type === 'pages') {
+      return this.createColumn('페이지', 'pages', null);
     } else if (type === 'account' && accountId) {
       const account = this.store.getById(accountId);
       if (!account) return null;
@@ -255,6 +274,8 @@ export const ColumnsMixin = {
       this.loadBookmarksForColumn(content, accounts);
     } else if (type === 'dm') {
       this.loadConversationsForColumn(content, accounts);
+    } else if (type === 'pages') {
+      this.loadPagesFeedForColumn(content, accounts);
     } else if (type === 'thread') {
       this.loadThreadForColumn(col);
     }
@@ -327,6 +348,10 @@ export const ColumnsMixin = {
         const col = this.createColumn('DM', 'dm', null);
         this.columnsContainer.appendChild(col);
         this.loadConversationsForColumn(col.querySelector('.column-content'), visibleAccounts);
+      } else if (key === 'pages' && this.columnState.pages) {
+        const col = this.createColumn('페이지', 'pages', null);
+        this.columnsContainer.appendChild(col);
+        this.loadPagesFeedForColumn(col.querySelector('.column-content'), visibleAccounts);
       } else if (key.startsWith('account:')) {
         const accountId = key.slice('account:'.length);
         if (this.columnState.accounts[accountId]) {
@@ -460,6 +485,8 @@ export const ColumnsMixin = {
             await this.loadBookmarksForColumn(content, this.store.getVisible());
           } else if (colType === 'dm') {
             await this.loadConversationsForColumn(content, this.store.getVisible());
+          } else if (colType === 'pages') {
+            await this.loadPagesFeedForColumn(content, this.store.getVisible());
           } else if (colType === 'thread') {
             await this.loadThreadForColumn(col);
           }

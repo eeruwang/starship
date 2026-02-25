@@ -16,12 +16,14 @@ export const EventsMixin = {
     this._bindComposeEvents();
     this._bindColumnEvents();
     this._bindKeyboardEvents();
+    this._bindPagesEvents();
   },
 
   _bindHeaderEvents() {
     this.btnAddAccount?.addEventListener('click', () => this.openAddAccountModal());
     this.btnAddFirst?.addEventListener('click', () => this.openAddAccountModal());
     document.getElementById('btn-welcome-login')?.addEventListener('click', () => this.handleAuthButtonClick());
+    document.getElementById('btn-pages-header')?.addEventListener('click', () => this.openPagesDashboard());
     document.getElementById('btn-compose-header').addEventListener('click', () => {
       const accountId = this.getFocusedColumnAccountId();
       this.openComposeModal(null, accountId || null);
@@ -666,6 +668,12 @@ export const EventsMixin = {
           this.columnState.all = false;
         } else if (colType === 'notifications') {
           this.columnState.notifications = false;
+        } else if (colType === 'pages') {
+          this.columnState.pages = false;
+        } else if (colType === 'bookmarks') {
+          this.columnState.bookmarks = false;
+        } else if (colType === 'dm') {
+          this.columnState.dm = false;
         } else if (accountId) {
           this.columnState.accounts[accountId] = false;
         }
