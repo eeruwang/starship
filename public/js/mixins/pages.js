@@ -827,33 +827,57 @@ export const PagesMixin = {
     const imageList = []; // [{fileId, file}]
     const unifiedText = this._blocksToUnifiedText(rawPage.content || [], fileMap, imageList);
 
-    // Image reference strip (if any images exist)
-    if (imageList.length > 0) {
-      const imgStrip = document.createElement('div');
-      imgStrip.className = 'page-editor-image-strip';
-      for (let i = 0; i < imageList.length; i++) {
-        const { file } = imageList[i];
-        if (!file) continue;
-        const thumb = document.createElement('div');
-        thumb.className = 'page-editor-image-ref';
-        thumb.innerHTML = `
-          <img src="${escapeHtml(file.thumbnailUrl || file.url || '')}" alt="" referrerpolicy="no-referrer">
-          <span class="page-editor-image-label">[image:${i + 1}]</span>
-        `;
-        imgStrip.appendChild(thumb);
-      }
-      bodyEl.appendChild(imgStrip);
-    }
+    // Segmented editor: text areas split by inline images
+    const editorContainer = document.createElement('div');
+    editorContainer.className = 'page-editor-content';
 
-    // Unified text editor
-    const textArea = document.createElement('textarea');
-    textArea.className = 'input page-editor-unified';
-    textArea.value = unifiedText;
-    textArea.placeholder = '페이지 내용을 입력하세요...\n\n## 섹션 제목\n본문 텍스트\n[image:1]';
-    const resize = () => { textArea.style.height = 'auto'; textArea.style.height = Math.max(200, textArea.scrollHeight) + 'px'; };
-    textArea.addEventListener('input', resize);
-    bodyEl.appendChild(textArea);
-    requestAnimationFrame(resize);
+    const segments = unifiedText.split(/(\[image:\d+\])/);
+    for (const seg of segments) {
+      const imgMatch = seg.match(/^\[image:(\d+)\]$/);
+      if (imgMatch) {
+        const idx = parseInt(imgMatch[1]) - 1;
+        const img = imageList[idx];
+        if (img && img.file) {
+          const imgWrap = document.createElement('div');
+          imgWrap.className = 'page-editor-inline-image';
+          imgWrap.dataset.imageRef = seg;
+          imgWrap.innerHTML = `<img src="${escapeHtml(img.file.url || img.file.thumbnailUrl || '')}" alt="" referrerpolicy="no-referrer">`;
+          editorContainer.appendChild(imgWrap);
+        }
+      } else {
+        const ta = document.createElement('textarea');
+        ta.className = 'input page-editor-segment';
+        ta.value = seg;
+        const resize = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 28) + 'px'; };
+        ta.addEventListener('input', resize);
+        editorContainer.appendChild(ta);
+        requestAnimationFrame(resize);
+      }
+    }
+    // Ensure there's always a textarea at the end for appending
+    const lastChild = editorContainer.lastElementChild;
+    if (!lastChild || lastChild.dataset.imageRef) {
+      const ta = document.createElement('textarea');
+      ta.className = 'input page-editor-segment';
+      ta.value = '';
+      const resize = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 28) + 'px'; };
+      ta.addEventListener('input', resize);
+      editorContainer.appendChild(ta);
+    }
+    bodyEl.appendChild(editorContainer);
+
+    // Collect all segments back into unified text
+    const collectText = () => {
+      const parts = [];
+      for (const child of editorContainer.children) {
+        if (child.dataset.imageRef) {
+          parts.push(child.dataset.imageRef);
+        } else if (child.tagName === 'TEXTAREA') {
+          parts.push(child.value);
+        }
+      }
+      return parts.join('');
+    };
 
     // Sticky save/cancel bar
     const actions = document.createElement('div');
@@ -879,7 +903,7 @@ export const PagesMixin = {
         const client = this.store.getClient(accountId);
         if (!client) throw new Error('클라이언트를 찾을 수 없습니다.');
 
-        const newContent = this._unifiedTextToBlocks(textArea.value, imageList);
+        const newContent = this._unifiedTextToBlocks(collectText(), imageList);
 
         await client.updatePage(pageId, {
           title: titleInput.value || page.title,
