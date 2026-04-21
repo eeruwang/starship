@@ -31,7 +31,9 @@ export class MisskeyClient {
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
-      throw new Error(`Misskey API error ${res.status}: ${errText}`);
+      const err = new Error(`Misskey API error ${res.status}: ${errText}`);
+      err.status = res.status;
+      throw err;
     }
 
     // Some endpoints (e.g. reactions/create, reactions/delete) return 204 No Content

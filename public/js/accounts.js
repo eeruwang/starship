@@ -58,24 +58,33 @@ export class AccountStore {
     return new MisskeyClient(account.instanceUrl, account.accessToken, account.platform);
   }
 
+  normalizeUrl(url) {
+    try {
+      const u = new URL((url || '').trim().replace(/\/+$/, ''));
+      return `${u.protocol}//${u.host.toLowerCase()}`;
+    } catch {
+      return (url || '').trim().replace(/\/+$/, '').toLowerCase();
+    }
+  }
+
   getClient(accountId) {
     return this.clients.get(accountId);
   }
 
   async addAccount(platform, instanceUrl, accessToken, label = '', software = '') {
+    const normalizedUrl = this.normalizeUrl(instanceUrl);
     const client = platform === 'mastodon'
-      ? new MastodonClient(instanceUrl, accessToken, software || 'mastodon')
-      : new MisskeyClient(instanceUrl, accessToken, platform);
+      ? new MastodonClient(normalizedUrl, accessToken, software || 'mastodon')
+      : new MisskeyClient(normalizedUrl, accessToken, platform);
 
     const [profile, themeColor] = await Promise.all([
       client.verifyCredentials(),
       client.fetchThemeColor().catch(() => null),
     ]);
 
-    // 중복 계정 확인: 같은 인스턴스 + 같은 유저 ID
-    const normalizedUrl = instanceUrl.replace(/\/+$/, '');
+    // 중복 계정 확인: 같은 인스턴스(정규화) + 같은 유저 ID
     const existing = this.accounts.find(a =>
-      a.instanceUrl === normalizedUrl && a.profile?.id === profile.id
+      this.normalizeUrl(a.instanceUrl) === normalizedUrl && a.profile?.id === profile.id
     );
     if (existing) {
       const name = existing.profile?.displayName || existing.label || existing.profile?.username;
@@ -88,7 +97,7 @@ export class AccountStore {
         id: `mastodon_${profile.id}_${Date.now()}`,
         platform,
         software: software || platform,
-        instanceUrl: instanceUrl.replace(/\/+$/, ''),
+        instanceUrl: normalizedUrl,
         accessToken,
         themeColor,
         label: label || profile.display_name || profile.username,
@@ -108,7 +117,7 @@ export class AccountStore {
         id: `${platform}_${profile.id}_${Date.now()}`,
         platform,
         software: software || platform,
-        instanceUrl: instanceUrl.replace(/\/+$/, ''),
+        instanceUrl: normalizedUrl,
         accessToken,
         themeColor,
         label: label || profile.name || profile.username,
@@ -146,6 +155,7 @@ export class AccountStore {
       }
       updates.push(
         client.verifyCredentials().then(profile => {
+          if (account.needsReauth) account.needsReauth = false;
           const oldDisplayName = account.profile?.displayName;
           if (account.platform === 'mastodon') {
             const newDisplayName = profile.display_name || profile.username;
@@ -180,6 +190,9 @@ export class AccountStore {
             };
           }
         }).catch(err => {
+          if (err?.status === 401 || err?.status === 403) {
+            account.needsReauth = true;
+          }
           console.error(`Profile refresh failed for ${account.label}:`, err);
         })
       );

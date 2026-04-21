@@ -2,7 +2,7 @@
  * Compose Mixin
  * Handles the compose modal: opening, emoji picker, file attachments, and submission
  */
-import { escapeHtml, compressImage } from '../ui/utils.js';
+import { escapeHtml, compressImage, cachedImageUrl } from '../ui/utils.js';
 import { COMMON_EMOJIS, UNICODE_EMOJI_MAP, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
 
 export const ComposeMixin = {
@@ -110,7 +110,7 @@ export const ComposeMixin = {
         const dp = origPost.reblog || origPost;
         const authorName = dp.author?.displayNameHtml || escapeHtml(dp.author?.displayName || '');
         const avatarHtml = dp.author?.avatarUrl
-          ? `<img class="compose-reply-context-avatar" src="${escapeHtml(dp.author.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+          ? `<img class="compose-reply-context-avatar" src="${escapeHtml(cachedImageUrl(dp.author.avatarUrl))}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
           : '';
         replyCtx.innerHTML = `
           <div class="compose-reply-context-header">

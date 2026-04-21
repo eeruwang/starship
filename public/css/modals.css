@@ -45,6 +45,19 @@
   text-transform: uppercase;
 }
 
+.account-card-reauth {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent-danger);
+  background: rgba(255,85,85,0.12);
+  border: 1px solid rgba(255,85,85,0.35);
+  border-radius: var(--radius);
+  cursor: help;
+}
+
 
 .account-card-stats {
   display: flex;
