@@ -6,6 +6,11 @@
   transition: background 0.2s;
   border-left: 3px solid transparent;
   flex-shrink: 0;
+  /* Skip layout/paint for cards outside the viewport — major scroll perf win
+     for long timelines. contain-intrinsic-size reserves space so scrollbars
+     and scroll anchoring stay stable. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 220px;
 }
 
 .post-card:hover {

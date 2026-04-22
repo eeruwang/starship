@@ -603,18 +603,33 @@ export const EventsMixin = {
       }
     }, { passive: false });
 
-    // Infinite scroll (timeline + notifications)
+    // Infinite scroll (timeline + notifications) — rAF-throttled so the layout
+    // reads (scrollHeight/scrollTop/clientHeight) don't fire on every pixel.
+    const pendingScrollTargets = new Set();
+    let scrollRafScheduled = false;
+    const processScrollTargets = () => {
+      scrollRafScheduled = false;
+      for (const columnContent of pendingScrollTargets) {
+        if (!columnContent.isConnected) continue;
+        const distFromBottom = columnContent.scrollHeight - columnContent.scrollTop - columnContent.clientHeight;
+        if (distFromBottom < 300) {
+          const column = columnContent.closest('.column');
+          if (column && column.dataset.columnType === 'notifications') {
+            this.loadOlderNotifications(columnContent);
+          } else {
+            this.loadOlderPosts(columnContent);
+          }
+        }
+      }
+      pendingScrollTargets.clear();
+    };
     this.columnsContainer.addEventListener('scroll', (e) => {
       const columnContent = e.target;
-      if (!columnContent.classList.contains('column-content')) return;
-      const distFromBottom = columnContent.scrollHeight - columnContent.scrollTop - columnContent.clientHeight;
-      if (distFromBottom < 300) {
-        const column = columnContent.closest('.column');
-        if (column && column.dataset.columnType === 'notifications') {
-          this.loadOlderNotifications(columnContent);
-        } else {
-          this.loadOlderPosts(columnContent);
-        }
+      if (!columnContent.classList?.contains('column-content')) return;
+      pendingScrollTargets.add(columnContent);
+      if (!scrollRafScheduled) {
+        scrollRafScheduled = true;
+        requestAnimationFrame(processScrollTargets);
       }
     }, { passive: true, capture: true });
 

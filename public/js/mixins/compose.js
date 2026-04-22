@@ -110,7 +110,7 @@ export const ComposeMixin = {
         const dp = origPost.reblog || origPost;
         const authorName = dp.author?.displayNameHtml || escapeHtml(dp.author?.displayName || '');
         const avatarHtml = dp.author?.avatarUrl
-          ? `<img class="compose-reply-context-avatar" src="${escapeHtml(cachedImageUrl(dp.author.avatarUrl))}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+          ? `<img class="compose-reply-context-avatar" src="${escapeHtml(cachedImageUrl(dp.author.avatarUrl))}" alt="" width="20" height="20" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
           : '';
         replyCtx.innerHTML = `
           <div class="compose-reply-context-header">

@@ -51,6 +51,7 @@ class StarShipApp {
     this.bindEvents();
     this.render();
     this.startAutoRefresh();
+    this.startTimeUpdater();
     this._siteInfo = { registrationMode: 'open', turnstileSiteKey: null };
     this._turnstileWidgetId = null;
     this._turnstileToken = null;

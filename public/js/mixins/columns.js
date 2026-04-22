@@ -3,7 +3,7 @@
  * Column rendering, toggle bar, column lifecycle, auto-refresh, modals, and toast.
  */
 import { escapeHtml } from '../ui/utils.js';
-import { iconRefresh, iconClose } from '../ui/dashboard.js';
+import { iconRefresh, iconClose, timeAgo } from '../ui/dashboard.js';
 
 export const ColumnsMixin = {
 
@@ -389,7 +389,7 @@ export const ColumnsMixin = {
       if (account?.profile?.avatarUrl) {
         const acColor = this._accountColor(account);
         const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
-        avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
+        avatarHtml = `<img class="column-header-avatar" width="22" height="22" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
       }
     } else if (type === 'all' || type === 'notifications') {
       // Show visible account avatars stacked horizontally
@@ -399,7 +399,7 @@ export const ColumnsMixin = {
           if (!a.profile?.avatarUrl) return '';
           const acColor = this._accountColor(a);
           const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
-          return `<img class="column-header-avatar stacked" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
+          return `<img class="column-header-avatar stacked" width="22" height="22" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
         }).filter(Boolean).join('');
         avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
       }
@@ -443,7 +443,7 @@ export const ColumnsMixin = {
           if (account.profile?.avatarUrl) {
             const acColor = this._accountColor(account);
             const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
-            avatarHtml = `<img class="column-header-avatar" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
+            avatarHtml = `<img class="column-header-avatar" width="22" height="22" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
           }
           h2.innerHTML = `${avatarHtml}${name}`;
         }
@@ -456,7 +456,7 @@ export const ColumnsMixin = {
             if (!a.profile?.avatarUrl) return '';
             const acColor = this._accountColor(a);
             const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
-            return `<img class="column-header-avatar stacked" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
+            return `<img class="column-header-avatar stacked" width="22" height="22" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
           }).filter(Boolean).join('');
           avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
         }
@@ -526,6 +526,8 @@ export const ColumnsMixin = {
         } else if (document.visibilityState === 'visible' && this._lastHiddenAt) {
           const away = Date.now() - this._lastHiddenAt;
           this._lastHiddenAt = null;
+          // Refresh displayed times immediately (background throttling stalls our interval)
+          this.refreshDisplayedTimes?.();
           // Only refresh if tab was hidden for more than 5 seconds
           if (away > 5_000 && !this.store.isEmpty()) {
             this.refreshAll(false, { skipColumnTypes: ['thread'] });
@@ -544,6 +546,30 @@ export const ColumnsMixin = {
     if (this._visibilityRefreshHandler) {
       document.removeEventListener('visibilitychange', this._visibilityRefreshHandler);
       this._visibilityRefreshHandler = null;
+    }
+  },
+
+  startTimeUpdater() {
+    if (this._timeUpdaterTimer) return;
+    // Update visible timestamps every minute. Skip when the tab is hidden to
+    // avoid burning the background throttle budget.
+    this._timeUpdaterTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      this.refreshDisplayedTimes();
+    }, 60_000);
+  },
+
+  refreshDisplayedTimes() {
+    const nodes = document.querySelectorAll('[data-time] .time-text');
+    if (nodes.length === 0) return;
+    for (const textEl of nodes) {
+      const wrap = textEl.parentElement;
+      const iso = wrap?.dataset?.time;
+      if (!iso) continue;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) continue;
+      const next = timeAgo(d);
+      if (textEl.textContent !== next) textEl.textContent = next;
     }
   },
 
