@@ -277,6 +277,14 @@ export const StreamingMixin = {
 
       setTimeout(() => el.classList.remove('new-post'), 400);
       this.enrichLinkCards(content);
+      // Streaming notifications skip the bulk-load enrichment path, so trigger
+      // per-notification reaction enrichment here. Without this, Mastodon-only
+      // reactions arriving via WebSocket never get their custom emoji URLs
+      // resolved (the payload doesn't include emoji_reactions metadata) and
+      // the avatar badge falls back to the heart icon.
+      if (notif.type === 'reaction' && notif.post) {
+        this._fetchMissingReactions([notif], content, { isNotification: true });
+      }
     }
   },
 
