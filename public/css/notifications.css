@@ -44,15 +44,22 @@
   height: 28px;
 }
 .notif-indicator-actor .notif-type-badge {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   bottom: -3px;
   right: -5px;
   border-width: 2px;
 }
 .notif-indicator-actor .notif-type-badge .notif-svg-icon svg {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
+}
+.notif-indicator-actor .notif-type-badge .notif-emoji {
+  font-size: 0.7rem;
+}
+.notif-indicator-actor .notif-type-badge .notif-custom-emoji {
+  width: 12px;
+  height: 12px;
 }
 .notif-indicator-label {
   font-size: 0.8rem;
@@ -94,8 +101,8 @@
   position: absolute;
   bottom: -4px;
   right: -6px;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   background: var(--bg-card);
   border-radius: 50%;
   display: flex;
@@ -103,11 +110,13 @@
   justify-content: center;
   border: 2.5px solid var(--bg-card);
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transform-origin: center;
 }
 
 .notif-type-badge .notif-svg-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 19px;
+  height: 19px;
 }
 
 /* Icon colors per notification type */
@@ -136,13 +145,20 @@
 }
 
 .notif-type-badge .notif-emoji {
-  font-size: 0.75rem;
+  font-size: 0.95rem;
   line-height: 1;
 }
 
 .notif-type-badge .notif-custom-emoji {
-  width: 16px;
-  height: 16px;
+  width: 19px;
+  height: 19px;
+}
+
+/* Reaction badge: enlarge on hover so the user can read the actual emoji */
+.notif-actor-wrap:hover .notif-type-badge.notif-type-reaction {
+  transform: scale(1.7);
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 
 .notif-icon {
