@@ -1473,6 +1473,79 @@ export const DataLoadingMixin = {
         }
       })();
     }
+
+    // --- Phase 2d: Resolve missing custom emoji URLs for reaction notifications ---
+    // Vanilla Mastodon may deliver an emoji_reaction with a `:shortcode:` in
+    // the emoji field but no emoji_url. Without a URL, the badge can't render
+    // an image and our renderer falls back to a heart SVG. Look the URL up
+    // from the actor's instance public /api/v1/custom_emojis endpoint (cached
+    // per instance, one fetch per actor host).
+    {
+      const shortcodeNotifs = items.filter(n =>
+        n.platform === 'mastodon' && n.type === 'reaction'
+        && n.reactionEmoji && /^:.+:$/.test(n.reactionEmoji)
+        && !n.reactionEmojiUrl
+      );
+      if (shortcodeNotifs.length > 0) {
+        const byActorInstance = new Map();
+        for (const notif of shortcodeNotifs) {
+          const acct = notif.actor?.acct;
+          if (!acct || !acct.includes('@')) continue;
+          const host = acct.split('@').pop();
+          const instanceUrl = `https://${host}`;
+          if (!byActorInstance.has(instanceUrl)) byActorInstance.set(instanceUrl, []);
+          byActorInstance.get(instanceUrl).push(notif);
+        }
+        for (const [instanceUrl, notifGroup] of byActorInstance) {
+          (async () => {
+            const emojiMap = await this._getInstanceEmojiMap(instanceUrl);
+            if (!emojiMap || emojiMap.size === 0) return;
+            for (const notif of notifGroup) {
+              const stripped = notif.reactionEmoji.replace(/^:|:$/g, '');
+              const url = emojiMap.get(stripped);
+              if (!url) continue;
+              notif.reactionEmojiUrl = url;
+              if (isNotification) {
+                const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
+                for (const card of cards) {
+                  if (card.isConnected) card.replaceWith(renderNotification(notif));
+                }
+              }
+            }
+          })();
+        }
+      }
+    }
+  },
+
+  // Fetch and cache the public custom emoji map (shortcode → URL) for an
+  // instance. Returns an empty Map on failure so callers can still iterate
+  // safely. One fetch per host per session.
+  async _getInstanceEmojiMap(instanceUrl) {
+    if (!this._instanceEmojiCache) this._instanceEmojiCache = new Map();
+    if (this._instanceEmojiCache.has(instanceUrl)) return this._instanceEmojiCache.get(instanceUrl);
+    const result = new Map();
+    try {
+      const targetUrl = `${instanceUrl}/api/v1/custom_emojis`;
+      const useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+      const fetchUrl = useProxy ? `/proxy?url=${encodeURIComponent(targetUrl)}` : targetUrl;
+      const res = await fetch(fetchUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list)) {
+          for (const e of list) {
+            if (e.shortcode) result.set(e.shortcode, e.url || e.static_url || '');
+          }
+        }
+      }
+    } catch { /* result stays empty */ }
+    this._instanceEmojiCache.set(instanceUrl, result);
+    if (this._instanceEmojiCache.size > 50) {
+      const toDelete = this._instanceEmojiCache.size - 50;
+      const keys = this._instanceEmojiCache.keys();
+      for (let i = 0; i < toDelete; i++) this._instanceEmojiCache.delete(keys.next().value);
+    }
+    return result;
   },
 
   // Detect whether a remote instance is Misskey-compatible (cached, unauthenticated)
