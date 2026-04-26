@@ -808,7 +808,18 @@ export class MastodonClient {
         || null;
     }
     reactionEmojiUrl = cachedImageUrl(reactionEmojiUrl) || null;
-    // For favourite type with reaction emoji, normalize to 'reaction' type
+    // Default-favourite emojis (heart and star) are how Misskey-family servers
+    // record a "Like" activity in their reaction store. When such reactions
+    // are federated to a Mastodon-compatible server with emoji_reaction
+    // support, they arrive here as type 'reaction' with emoji='❤' or '⭐'.
+    // We treat those as plain favourites so the user sees a Mastodon-native
+    // "좋아요" instead of a flood of identical heart/star reactions.
+    if (type === 'reaction' && (reactionEmoji === '❤' || reactionEmoji === '❤️' || reactionEmoji === '⭐' || reactionEmoji === '⭐️')) {
+      type = 'favourite';
+      reactionEmoji = null;
+      reactionEmojiUrl = null;
+    }
+    // For favourite type with a real custom reaction emoji, normalize to 'reaction'
     if (type === 'favourite' && reactionEmoji) {
       type = 'reaction';
     }

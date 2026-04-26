@@ -989,8 +989,13 @@ export const DataLoadingMixin = {
         // likely just pressed favourite on Mastodon (recorded as ❤ on Misskey).
         const emoji = reactionByUser.get(actorAcct);
         if (!emoji) continue;
-        // Heart reactions are federated Mastodon favourites — don't convert
-        if (emoji === '❤' || emoji === '❤️') continue;
+        // Default-favourite reactions are federated Mastodon favourites — don't
+        // convert. Misskey instances vary on what their default favourite is:
+        // newer ones use ❤, but misskey.io and many older deployments record
+        // it as ⭐. Treating both as "this was just a Like activity" keeps
+        // those notifications looking like proper Mastodon favourites instead
+        // of mass-appearing as star reactions.
+        if (emoji === '❤' || emoji === '❤️' || emoji === '⭐' || emoji === '⭐️') continue;
 
         notif.type = 'reaction';
         notif.label = '리액션';
