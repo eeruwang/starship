@@ -505,8 +505,25 @@ export const DataLoadingMixin = {
         const match = emoji.match(/^:(.+):$/);
         if (match) {
           const name = match[1];
+          const baseName = name.replace(/@\.$/, '');
           n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
-                            || dp.emojis?.[name] || dp.emojis?.[name + '@.'] || null;
+                            || dp.emojis?.[name] || dp.emojis?.[name + '@.']
+                            || null;
+          // Fallback URL: prefer the actor's own host (they're the ones who
+          // actually have the emoji file — Misskey-family servers expose
+          // /emoji/{name}.webp publicly), then the post's origin instance, and
+          // finally our own server. The <img>'s onerror cleanly hides the
+          // badge if none of these host the file.
+          if (!n.reactionEmojiUrl && !baseName.includes('@')) {
+            const acct = n.actor?.acct;
+            if (acct && acct.includes('@')) {
+              const host = acct.split('@').pop();
+              n.reactionEmojiUrl = `https://${host}/emoji/${encodeURIComponent(baseName)}.webp`;
+            } else {
+              const baseUrl = dp._reactionInstanceUrl || dp.instanceUrl;
+              if (baseUrl) n.reactionEmojiUrl = `${baseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+            }
+          }
         }
       }
 
@@ -1806,8 +1823,25 @@ export const DataLoadingMixin = {
         const match = emoji.match(/^:(.+):$/);
         if (match) {
           const name = match[1];
+          const baseName = name.replace(/@\.$/, '');
           n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
-                            || dp.emojis?.[name] || dp.emojis?.[name + '@.'] || null;
+                            || dp.emojis?.[name] || dp.emojis?.[name + '@.']
+                            || null;
+          // Fallback URL: prefer the actor's own host (they're the ones who
+          // actually have the emoji file — Misskey-family servers expose
+          // /emoji/{name}.webp publicly), then the post's origin instance, and
+          // finally our own server. The <img>'s onerror cleanly hides the
+          // badge if none of these host the file.
+          if (!n.reactionEmojiUrl && !baseName.includes('@')) {
+            const acct = n.actor?.acct;
+            if (acct && acct.includes('@')) {
+              const host = acct.split('@').pop();
+              n.reactionEmojiUrl = `https://${host}/emoji/${encodeURIComponent(baseName)}.webp`;
+            } else {
+              const baseUrl = dp._reactionInstanceUrl || dp.instanceUrl;
+              if (baseUrl) n.reactionEmojiUrl = `${baseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+            }
+          }
         }
       }
 
