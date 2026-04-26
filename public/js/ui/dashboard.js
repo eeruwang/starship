@@ -699,10 +699,23 @@ export function renderNotification(notif) {
   // --- Standard notification layout (non-mention) ---
   let iconHtml;
   const notifTypeClass = `notif-type-${notif.type}`;
-  if (notif.reactionEmojiUrl) {
+  // If the notification arrived without a resolved emoji URL (common when the
+  // reaction emoji isn't otherwise referenced in the post or actor profile),
+  // fall back to the post's own reactionEmojis map — that one is populated
+  // from the post payload and origin-instance enrichment.
+  let resolvedReactionUrl = notif.reactionEmojiUrl;
+  if (!resolvedReactionUrl && notif.reactionEmoji && displayPost?.reactionEmojis) {
+    const stripped = String(notif.reactionEmoji).replace(/^:/, '').replace(/:$/, '');
+    if (stripped && stripped !== notif.reactionEmoji) {
+      resolvedReactionUrl = displayPost.reactionEmojis[stripped]
+        || displayPost.reactionEmojis[stripped + '@.']
+        || null;
+    }
+  }
+  if (resolvedReactionUrl) {
     // Render custom emoji image; if it fails to load, swap in a heart SVG so the
     // badge never collapses to an empty white circle.
-    iconHtml = `<img class="notif-custom-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.reactionEmoji || '')}" title="${escapeHtml(notif.reactionEmoji || '')}" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='')"><span class="notif-svg-icon" style="display:none">${iconHeartFill}</span>`;
+    iconHtml = `<img class="notif-custom-emoji" src="${escapeHtml(resolvedReactionUrl)}" alt="${escapeHtml(notif.reactionEmoji || '')}" title="${escapeHtml(notif.reactionEmoji || '')}" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='')"><span class="notif-svg-icon" style="display:none">${iconHeartFill}</span>`;
   } else {
     const icon = getNotifIcon(notif.type, notif.reactionEmoji);
     const isEmoji = typeof icon === 'string' && !icon.startsWith('<svg');
