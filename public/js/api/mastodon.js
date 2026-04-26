@@ -783,10 +783,31 @@ export class MastodonClient {
 
     const acct = notif.account;
 
-    // Extract reaction emoji from notification (Fedibird, glitch-soc, Pleroma, Akkoma)
-    // Some forks include emoji/emoji_url even on 'favourite' notifications
-    const reactionEmoji = notif.emoji || notif.emoji_reaction || null;
-    const reactionEmojiUrl = cachedImageUrl(notif.emoji_url) || null;
+    // Extract reaction emoji from notification (Fedibird, glitch-soc, Pleroma, Akkoma, Hollo)
+    // Some forks include emoji/emoji_url even on 'favourite' notifications.
+    // Field name varies: emoji/emoji_reaction (shortcode), emoji_url/emojiURL/emoji_reaction.url
+    let reactionEmoji = notif.emoji || notif.emoji_reaction?.shortcode || notif.emoji_reaction || null;
+    if (reactionEmoji && typeof reactionEmoji === 'object') {
+      reactionEmoji = reactionEmoji.shortcode || reactionEmoji.name || null;
+    }
+    let reactionEmojiUrl = notif.emoji_url
+      || notif.emojiURL
+      || notif.emoji_reaction?.url
+      || notif.emoji_reaction?.static_url
+      || null;
+    // If only shortcode is present, try resolving the URL from the post or actor emoji maps
+    if (!reactionEmojiUrl && reactionEmoji) {
+      const stripped = String(reactionEmoji).replace(/^:/, '').replace(/:$/, '');
+      const lookupIn = (list) => {
+        if (!Array.isArray(list)) return null;
+        const found = list.find(e => e.shortcode === stripped);
+        return found ? (found.url || found.static_url || null) : null;
+      };
+      reactionEmojiUrl = lookupIn(notif.status?.emojis)
+        || lookupIn(acct?.emojis)
+        || null;
+    }
+    reactionEmojiUrl = cachedImageUrl(reactionEmojiUrl) || null;
     // For favourite type with reaction emoji, normalize to 'reaction' type
     if (type === 'favourite' && reactionEmoji) {
       type = 'reaction';

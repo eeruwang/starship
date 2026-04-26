@@ -7,7 +7,7 @@ import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
   iconQuote, iconSmile, iconTrash, iconEdit,
-  iconHeartSmall, iconStarSmall,
+  iconHeartSmall, iconStarSmall, iconHeartFill,
   iconReplyNotif, iconBoostNotif, iconMegaphone,
   iconVisPublic, iconVisHome, iconVisFollowers, iconVisDirect,
   iconBookmark, iconBookmarkFill, iconPin,
@@ -700,13 +700,22 @@ export function renderNotification(notif) {
   let iconHtml;
   const notifTypeClass = `notif-type-${notif.type}`;
   if (notif.reactionEmojiUrl) {
-    iconHtml = `<img class="notif-custom-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.reactionEmoji || '')}" title="${escapeHtml(notif.reactionEmoji || '')}" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
+    // Render custom emoji image; if it fails to load, swap in a heart SVG so the
+    // badge never collapses to an empty white circle.
+    iconHtml = `<img class="notif-custom-emoji" src="${escapeHtml(notif.reactionEmojiUrl)}" alt="${escapeHtml(notif.reactionEmoji || '')}" title="${escapeHtml(notif.reactionEmoji || '')}" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='')"><span class="notif-svg-icon" style="display:none">${iconHeartFill}</span>`;
   } else {
     const icon = getNotifIcon(notif.type, notif.reactionEmoji);
     const isEmoji = typeof icon === 'string' && !icon.startsWith('<svg');
-    iconHtml = isEmoji
-      ? `<span class="notif-emoji">${icon}</span>`
-      : `<span class="notif-svg-icon">${icon}</span>`;
+    // If we ended up with a raw shortcode (":foo:") because the URL couldn't be
+    // resolved, the badge is too small to render the literal text — fall back
+    // to the default reaction icon instead.
+    if (isEmoji && typeof icon === 'string' && /^:.+:$/.test(icon)) {
+      iconHtml = `<span class="notif-svg-icon">${iconHeartFill}</span>`;
+    } else {
+      iconHtml = isEmoji
+        ? `<span class="notif-emoji">${icon}</span>`
+        : `<span class="notif-svg-icon">${icon}</span>`;
+    }
   }
 
   // Actor avatar with notification type badge overlay
