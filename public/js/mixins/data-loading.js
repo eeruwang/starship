@@ -1097,10 +1097,15 @@ export const DataLoadingMixin = {
     }
 
     // --- Phase 2: Convert Mastodon favourite notifications to reactions ---
+    // Also include 'reaction' notifications that arrived without an emoji
+    // payload (some Mastodon-compat servers preserve the type but strip the
+    // emoji during federation, so the badge would otherwise fall back to a
+    // heart). These get the same enrichment treatment.
     if (!isNotification) return;
 
     const favNotifs = items.filter(n =>
-      n.type === 'favourite' && n.platform === 'mastodon' && n.post
+      n.platform === 'mastodon' && n.post
+      && ((n.type === 'favourite') || (n.type === 'reaction' && !n.reactionEmoji))
     );
     if (favNotifs.length === 0) return;
 
