@@ -1101,7 +1101,10 @@ export const DataLoadingMixin = {
         const acctClient = this.store.getClient(accountId);
         if (!acct || !acctClient) continue;
         if (acct.platform !== 'mastodon') continue;
-        if (!acctClient.supportsReactions) continue;
+        // Don't gate on supportsReactions — try the endpoint anyway. The
+        // software flag may be stale (account added before NodeInfo detection,
+        // running an upstream patch, etc.). client.getReactions already
+        // catches errors and returns [] on 404, so attempting is cheap.
         (async () => {
           for (const [uri, groupNotifs] of [...uriMap.entries()].slice(0, 10)) {
             try {
@@ -1144,6 +1147,81 @@ export const DataLoadingMixin = {
         })();
       }
     }
+
+    // --- Phase 2c: Best-effort unauthenticated Mastodon-compat reactions ---
+    // For pure-vanilla-Mastodon receivers with no Misskey accounts, the only
+    // way to learn what an actor on a Mastodon-compat fork (Hollo / glitch-soc
+    // / Akkoma / Pleroma / Fedibird) reacted with is to query the actor's
+    // instance directly. This requires unauth access to /api/v2/search and
+    // the reactions endpoint, which Pleroma/Akkoma typically allow but other
+    // instances may not. Fail gracefully on auth errors.
+    (async () => {
+      for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 5)) {
+        try {
+          // Find an actor on a Mastodon-compat instance with reactions support
+          let actorInstance = null;
+          let actorSoftware = null;
+          for (const notif of groupNotifs) {
+            const acct = notif.actor?.acct;
+            if (!acct || !acct.includes('@')) continue;
+            const host = acct.split('@').pop();
+            const instanceUrl = `https://${host}`;
+            const sw = await this._detectMastodonReactionsSoftware(instanceUrl);
+            if (sw) { actorInstance = instanceUrl; actorSoftware = sw; break; }
+          }
+          if (!actorInstance) continue;
+
+          // Resolve the post URI on actor's instance to obtain its local ID.
+          // resolve=false avoids triggering a remote fetch storm; the actor
+          // already federated this post (they reacted to it), so the local
+          // copy should exist.
+          let localId = null;
+          try {
+            const search = await this._unauthMastodonGet(
+              actorInstance,
+              `/api/v2/search?q=${encodeURIComponent(uri)}&type=statuses&resolve=false&limit=1`
+            );
+            if (search?.statuses?.length) localId = search.statuses[0].id;
+          } catch { /* search may require auth on this instance */ }
+          if (!localId) continue;
+
+          // Get per-user reactions
+          const reactionsPath = (actorSoftware === 'akkoma' || actorSoftware === 'pleroma')
+            ? `/api/v1/pleroma/statuses/${encodeURIComponent(localId)}/reactions`
+            : `/api/v1/statuses/${encodeURIComponent(localId)}/emoji_reactions`;
+          let reactionsArr;
+          try {
+            reactionsArr = await this._unauthMastodonGet(actorInstance, reactionsPath);
+          } catch { continue; }
+          if (!Array.isArray(reactionsArr) || reactionsArr.length === 0) continue;
+
+          const reactionByUser = new Map();
+          const reactionEmojis = {};
+          const actorHost = new URL(actorInstance).hostname;
+          for (const r of reactionsArr) {
+            const emoji = r.name;
+            if (emoji && /^:.+:$/.test(emoji) && r.url) {
+              reactionEmojis[emoji.replace(/^:|:$/g, '')] = r.url;
+            }
+            for (const u of (r.accounts || [])) {
+              let userAcct = (u.acct || u.username || '').toLowerCase();
+              if (!userAcct) continue;
+              if (!userAcct.includes('@')) userAcct = `${userAcct}@${actorHost}`;
+              reactionByUser.set(userAcct, emoji);
+            }
+          }
+          if (reactionByUser.size === 0) continue;
+
+          const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, actorInstance);
+          if (changed) {
+            rerenderGroup(groupNotifs);
+            favByUri.delete(uri);
+          }
+        } catch (e) {
+          console.warn('[StarShip] mastodon-compat unauth fav→reaction error:', e?.message || e);
+        }
+      }
+    })();
 
     if (client) {
       // --- Authenticated approach using Misskey account (sequential to avoid rate limits) ---
@@ -1254,6 +1332,61 @@ export const DataLoadingMixin = {
   },
 
   // Detect whether a remote instance is Misskey-compatible (cached, unauthenticated)
+  // Detect Mastodon-compatible software that supports the emoji_reactions API
+  // (Hollo / glitch-soc / Akkoma / Pleroma / Fedibird). Uses NodeInfo.
+  // Returns the software name (lowercased) or null.
+  async _detectMastodonReactionsSoftware(instanceUrl) {
+    if (!this._mastodonReactionsCache) this._mastodonReactionsCache = new Map();
+    if (this._mastodonReactionsCache.has(instanceUrl)) return this._mastodonReactionsCache.get(instanceUrl);
+    const SUPPORTED = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+    let result = null;
+    try {
+      const useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+      const buildUrl = (target) => useProxy ? `/proxy?url=${encodeURIComponent(target)}` : target;
+      const discRes = await fetch(buildUrl(`${instanceUrl}/.well-known/nodeinfo`), {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (discRes.ok) {
+        const disc = await discRes.json();
+        const link = (disc.links || []).find(l => (l.rel || '').includes('nodeinfo'));
+        if (link?.href) {
+          let niUrl;
+          try { niUrl = new URL(link.href); } catch { niUrl = null; }
+          if (niUrl && niUrl.host === new URL(instanceUrl).host) {
+            const niRes = await fetch(buildUrl(link.href), { headers: { 'Accept': 'application/json' } });
+            if (niRes.ok) {
+              const ni = await niRes.json();
+              const sw = (ni.software?.name || '').toLowerCase();
+              if (SUPPORTED.has(sw)) result = sw;
+            }
+          }
+        }
+      }
+    } catch { /* result stays null */ }
+    this._mastodonReactionsCache.set(instanceUrl, result);
+    if (this._mastodonReactionsCache.size > 100) {
+      const toDelete = this._mastodonReactionsCache.size - 100;
+      const keys = this._mastodonReactionsCache.keys();
+      for (let i = 0; i < toDelete; i++) this._mastodonReactionsCache.delete(keys.next().value);
+    }
+    return result;
+  },
+
+  // Unauthenticated GET to a Mastodon-compatible instance API (via proxy).
+  // Throws on non-2xx so callers can fall through to the next path.
+  async _unauthMastodonGet(instanceUrl, path) {
+    const targetUrl = `${instanceUrl}${path}`;
+    const useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    const fetchUrl = useProxy ? `/proxy?url=${encodeURIComponent(targetUrl)}` : targetUrl;
+    const res = await fetch(fetchUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+    if (!res.ok) {
+      const err = new Error(`Mastodon unauthenticated API error ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  },
+
   async _detectMisskeyInstance(instanceUrl) {
     if (!this._misskeyInstanceCache) this._misskeyInstanceCache = new Map();
     if (this._misskeyInstanceCache.has(instanceUrl)) return this._misskeyInstanceCache.get(instanceUrl);
