@@ -985,6 +985,11 @@ export const DataLoadingMixin = {
         byOrigin.get(originUrl).push({ item, post, dp, postUrl: ref });
       }
 
+      const REACTIONS_MASTODON_COMPAT = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+      const MISSKEY_FAMILY = new Set([
+        'misskey', 'sharkey', 'firefish', 'iceshrimp', 'iceshrimp.net',
+        'cherrypick', 'foundkey', 'hajkey', 'catodon',
+      ]);
       const originLimit = 6;
       const perOriginLimit = 5;
       let originSeen = 0;
@@ -992,63 +997,99 @@ export const DataLoadingMixin = {
         if (++originSeen > originLimit) break;
         const subset = posts.slice(0, perOriginLimit);
         (async () => {
-          const software = await this._detectMastodonReactionsSoftware(originUrl);
+          const software = await this._detectInstanceSoftware(originUrl);
           if (!software) return;
-          for (const { item, post, dp, postUrl } of subset) {
-            try {
-              // Try to extract local status ID from the URL pattern first.
-              // Avoids a search call that some instances gate behind auth.
-              let localId = this._extractStatusIdFromUrl(postUrl, software);
-              if (!localId) {
-                try {
-                  const search = await this._unauthMastodonGet(
-                    originUrl,
-                    `/api/v2/search?q=${encodeURIComponent(postUrl)}&type=statuses&resolve=false&limit=1`
-                  );
-                  if (search?.statuses?.length) localId = search.statuses[0].id;
-                } catch { /* search may require auth */ }
-              }
-              if (!localId) continue;
 
-              const reactionsPath = (software === 'akkoma' || software === 'pleroma')
-                ? `/api/v1/pleroma/statuses/${encodeURIComponent(localId)}/reactions`
-                : `/api/v1/statuses/${encodeURIComponent(localId)}/emoji_reactions`;
-              let reactionsArr;
+          const applyAndRender = (item, post, dp, reactions, reactionEmojis) => {
+            if (!reactions || Object.keys(reactions).length === 0) return;
+            dp.reactions = reactions;
+            dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...reactionEmojis };
+            dp._reactionInstanceUrl = dp._reactionInstanceUrl || originUrl;
+            this._adjustFavouritesForReactions(dp);
+            this.postCache.set(`${post.platform}:${post.id}`, post);
+            if (isNotification) {
+              const cards = container.querySelectorAll(`.notif-card[data-notif-id="${item.id}"]`);
+              for (const card of cards) {
+                if (card.isConnected) card.replaceWith(renderNotification(item));
+              }
+            } else {
+              const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
+              for (const card of cards) {
+                if (card.isConnected) card.replaceWith(renderPost(item));
+              }
+            }
+          };
+
+          if (REACTIONS_MASTODON_COMPAT.has(software)) {
+            for (const { item, post, dp, postUrl } of subset) {
               try {
-                reactionsArr = await this._unauthMastodonGet(originUrl, reactionsPath);
-              } catch { continue; }
-              if (!Array.isArray(reactionsArr) || reactionsArr.length === 0) continue;
-
-              const reactions = {};
-              const reactionEmojis = {};
-              for (const r of reactionsArr) {
-                if (!r.name || !r.count) continue;
-                reactions[r.name] = r.count;
-                if (/^:.+:$/.test(r.name) && r.url) {
-                  reactionEmojis[r.name.replace(/^:|:$/g, '')] = r.url;
+                if (dp.reactions && Object.keys(dp.reactions).length > 0) continue;
+                let localId = this._extractStatusIdFromUrl(postUrl, software);
+                if (!localId) {
+                  try {
+                    const search = await this._unauthMastodonGet(
+                      originUrl,
+                      `/api/v2/search?q=${encodeURIComponent(postUrl)}&type=statuses&resolve=false&limit=1`
+                    );
+                    if (search?.statuses?.length) localId = search.statuses[0].id;
+                  } catch { /* search may require auth */ }
                 }
+                if (!localId) continue;
+
+                const reactionsPath = (software === 'akkoma' || software === 'pleroma')
+                  ? `/api/v1/pleroma/statuses/${encodeURIComponent(localId)}/reactions`
+                  : `/api/v1/statuses/${encodeURIComponent(localId)}/emoji_reactions`;
+                let reactionsArr;
+                try {
+                  reactionsArr = await this._unauthMastodonGet(originUrl, reactionsPath);
+                } catch { continue; }
+                if (!Array.isArray(reactionsArr) || reactionsArr.length === 0) continue;
+
+                const reactions = {};
+                const reactionEmojis = {};
+                for (const r of reactionsArr) {
+                  if (!r.name || !r.count) continue;
+                  reactions[r.name] = r.count;
+                  if (/^:.+:$/.test(r.name) && r.url) {
+                    reactionEmojis[r.name.replace(/^:|:$/g, '')] = r.url;
+                  }
+                }
+                applyAndRender(item, post, dp, reactions, reactionEmojis);
+              } catch (e) {
+                console.warn('[StarShip] mastodon-compat origin enrichment error:', e?.message || e);
               }
-              if (Object.keys(reactions).length === 0) continue;
-
-              dp.reactions = reactions;
-              dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...reactionEmojis };
-              dp._reactionInstanceUrl = dp._reactionInstanceUrl || originUrl;
-              this._adjustFavouritesForReactions(dp);
-              this.postCache.set(`${post.platform}:${post.id}`, post);
-
-              if (isNotification) {
-                const cards = container.querySelectorAll(`.notif-card[data-notif-id="${item.id}"]`);
-                for (const card of cards) {
-                  if (card.isConnected) card.replaceWith(renderNotification(item));
+            }
+          } else if (MISSKEY_FAMILY.has(software)) {
+            for (const { item, post, dp, postUrl } of subset) {
+              try {
+                if (dp.reactions && Object.keys(dp.reactions).length > 0) continue;
+                // Try URL-pattern parse first: /notes/{id}
+                let noteId = null;
+                try {
+                  const u = new URL(postUrl);
+                  const m = u.pathname.match(/^\/notes\/([\w-]+)\/?$/);
+                  if (m) noteId = m[1];
+                } catch { /* parse failed */ }
+                if (!noteId) {
+                  // Fallback: ap/show with the URI
+                  try {
+                    const apResult = await this._unauthMisskeyRequest(originUrl, 'ap/show', { uri: postUrl });
+                    if (apResult?.type === 'Note' && apResult.object?.id) noteId = apResult.object.id;
+                  } catch { continue; }
                 }
-              } else {
-                const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
-                for (const card of cards) {
-                  if (card.isConnected) card.replaceWith(renderPost(item));
-                }
+                if (!noteId) continue;
+
+                let note;
+                try {
+                  note = await this._unauthMisskeyRequest(originUrl, 'notes/show', { noteId });
+                } catch { continue; }
+                const reactions = note?.reactions || null;
+                if (!reactions || Object.keys(reactions).length === 0) continue;
+                const reactionEmojis = note.reactionEmojis || {};
+                applyAndRender(item, post, dp, reactions, reactionEmojis);
+              } catch (e) {
+                console.warn('[StarShip] misskey origin enrichment error:', e?.message || e);
               }
-            } catch (e) {
-              console.warn('[StarShip] origin-instance enrichment error:', e?.message || e);
             }
           }
         })();
@@ -1452,13 +1493,11 @@ export const DataLoadingMixin = {
     return null;
   },
 
-  // Detect Mastodon-compatible software that supports the emoji_reactions API
-  // (Hollo / glitch-soc / Akkoma / Pleroma / Fedibird). Uses NodeInfo.
-  // Returns the software name (lowercased) or null.
-  async _detectMastodonReactionsSoftware(instanceUrl) {
-    if (!this._mastodonReactionsCache) this._mastodonReactionsCache = new Map();
-    if (this._mastodonReactionsCache.has(instanceUrl)) return this._mastodonReactionsCache.get(instanceUrl);
-    const SUPPORTED = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+  // Detect a fediverse instance's software via NodeInfo. Returns the
+  // lowercased software name or null. Result is cached.
+  async _detectInstanceSoftware(instanceUrl) {
+    if (!this._instanceSoftwareCache) this._instanceSoftwareCache = new Map();
+    if (this._instanceSoftwareCache.has(instanceUrl)) return this._instanceSoftwareCache.get(instanceUrl);
     let result = null;
     try {
       const useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
@@ -1477,19 +1516,27 @@ export const DataLoadingMixin = {
             if (niRes.ok) {
               const ni = await niRes.json();
               const sw = (ni.software?.name || '').toLowerCase();
-              if (SUPPORTED.has(sw)) result = sw;
+              if (sw) result = sw;
             }
           }
         }
       }
     } catch { /* result stays null */ }
-    this._mastodonReactionsCache.set(instanceUrl, result);
-    if (this._mastodonReactionsCache.size > 100) {
-      const toDelete = this._mastodonReactionsCache.size - 100;
-      const keys = this._mastodonReactionsCache.keys();
-      for (let i = 0; i < toDelete; i++) this._mastodonReactionsCache.delete(keys.next().value);
+    this._instanceSoftwareCache.set(instanceUrl, result);
+    if (this._instanceSoftwareCache.size > 100) {
+      const toDelete = this._instanceSoftwareCache.size - 100;
+      const keys = this._instanceSoftwareCache.keys();
+      for (let i = 0; i < toDelete; i++) this._instanceSoftwareCache.delete(keys.next().value);
     }
     return result;
+  },
+
+  // Backwards-compat wrapper used by Phase 2c — only returns software when it
+  // belongs to the Mastodon-compat-with-reactions set.
+  async _detectMastodonReactionsSoftware(instanceUrl) {
+    const SUPPORTED = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+    const sw = await this._detectInstanceSoftware(instanceUrl);
+    return sw && SUPPORTED.has(sw) ? sw : null;
   },
 
   // Unauthenticated GET to a Mastodon-compatible instance API (via proxy).
