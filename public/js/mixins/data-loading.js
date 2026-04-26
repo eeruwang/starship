@@ -957,6 +957,104 @@ export const DataLoadingMixin = {
       })();
     }
 
+    // --- Phase 1b: Best-effort unauth enrichment via post's origin instance ---
+    // Phase 1 only runs when the user has a Misskey-family account. For pure
+    // Mastodon users, posts that came in without reaction data would otherwise
+    // never get them. Try the post's origin instance (extracted from post.url
+    // or canonicalUri host) — Hollo/Akkoma/Pleroma/glitch-soc/Fedibird hold
+    // the authoritative reaction state for their own posts and the public
+    // emoji_reactions endpoint usually doesn't require auth.
+    {
+      const seenUris = new Set();
+      const byOrigin = new Map();
+      for (const item of items) {
+        const post = isNotification ? item.post : item;
+        if (!post) continue;
+        const dp = post.reblog || post;
+        if (dp.reactions && Object.keys(dp.reactions).length > 0) continue;
+        if (!dp.stats?.favourites || dp.stats.favourites <= 0) continue;
+        const ref = dp.url || dp.canonicalUri;
+        if (!ref) continue;
+        if (seenUris.has(ref)) continue;
+        let parsed;
+        try { parsed = new URL(ref); } catch { continue; }
+        if (parsed.protocol !== 'https:') continue;
+        seenUris.add(ref);
+        const originUrl = `https://${parsed.host}`;
+        if (!byOrigin.has(originUrl)) byOrigin.set(originUrl, []);
+        byOrigin.get(originUrl).push({ item, post, dp, postUrl: ref });
+      }
+
+      const originLimit = 6;
+      const perOriginLimit = 5;
+      let originSeen = 0;
+      for (const [originUrl, posts] of byOrigin) {
+        if (++originSeen > originLimit) break;
+        const subset = posts.slice(0, perOriginLimit);
+        (async () => {
+          const software = await this._detectMastodonReactionsSoftware(originUrl);
+          if (!software) return;
+          for (const { item, post, dp, postUrl } of subset) {
+            try {
+              // Try to extract local status ID from the URL pattern first.
+              // Avoids a search call that some instances gate behind auth.
+              let localId = this._extractStatusIdFromUrl(postUrl, software);
+              if (!localId) {
+                try {
+                  const search = await this._unauthMastodonGet(
+                    originUrl,
+                    `/api/v2/search?q=${encodeURIComponent(postUrl)}&type=statuses&resolve=false&limit=1`
+                  );
+                  if (search?.statuses?.length) localId = search.statuses[0].id;
+                } catch { /* search may require auth */ }
+              }
+              if (!localId) continue;
+
+              const reactionsPath = (software === 'akkoma' || software === 'pleroma')
+                ? `/api/v1/pleroma/statuses/${encodeURIComponent(localId)}/reactions`
+                : `/api/v1/statuses/${encodeURIComponent(localId)}/emoji_reactions`;
+              let reactionsArr;
+              try {
+                reactionsArr = await this._unauthMastodonGet(originUrl, reactionsPath);
+              } catch { continue; }
+              if (!Array.isArray(reactionsArr) || reactionsArr.length === 0) continue;
+
+              const reactions = {};
+              const reactionEmojis = {};
+              for (const r of reactionsArr) {
+                if (!r.name || !r.count) continue;
+                reactions[r.name] = r.count;
+                if (/^:.+:$/.test(r.name) && r.url) {
+                  reactionEmojis[r.name.replace(/^:|:$/g, '')] = r.url;
+                }
+              }
+              if (Object.keys(reactions).length === 0) continue;
+
+              dp.reactions = reactions;
+              dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...reactionEmojis };
+              dp._reactionInstanceUrl = dp._reactionInstanceUrl || originUrl;
+              this._adjustFavouritesForReactions(dp);
+              this.postCache.set(`${post.platform}:${post.id}`, post);
+
+              if (isNotification) {
+                const cards = container.querySelectorAll(`.notif-card[data-notif-id="${item.id}"]`);
+                for (const card of cards) {
+                  if (card.isConnected) card.replaceWith(renderNotification(item));
+                }
+              } else {
+                const cards = container.querySelectorAll(`.post-card[data-post-id="${post.id}"][data-platform="${post.platform}"]`);
+                for (const card of cards) {
+                  if (card.isConnected) card.replaceWith(renderPost(item));
+                }
+              }
+            } catch (e) {
+              console.warn('[StarShip] origin-instance enrichment error:', e?.message || e);
+            }
+          }
+        })();
+      }
+    }
+
     // --- Phase 2: Convert Mastodon favourite notifications to reactions ---
     if (!isNotification) return;
 
@@ -1332,6 +1430,28 @@ export const DataLoadingMixin = {
   },
 
   // Detect whether a remote instance is Misskey-compatible (cached, unauthenticated)
+  // Extract the local status ID from a Mastodon-compat post URL.
+  // URL patterns vary by software:
+  //   Mastodon / glitch-soc / Hometown:  /@user/{id}  or  /users/X/statuses/{id}
+  //   Hollo / Fedibird:                  /@user/{uuid}
+  //   Pleroma / Akkoma:                  /notice/{id}  or  /objects/{id}
+  // Returns the ID or null if the URL doesn't match a known pattern.
+  _extractStatusIdFromUrl(url, software) {
+    let path;
+    try { path = new URL(url).pathname; } catch { return null; }
+    if (software === 'akkoma' || software === 'pleroma') {
+      const m = path.match(/^\/(?:notice|objects)\/([\w-]+)\/?$/);
+      if (m) return m[1];
+    }
+    // Mastodon-style account-prefixed URL
+    let m = path.match(/^\/@[^/]+\/([\w-]+)\/?$/);
+    if (m) return m[1];
+    // Mastodon canonical URL
+    m = path.match(/^\/users\/[^/]+\/statuses\/([\w-]+)\/?$/);
+    if (m) return m[1];
+    return null;
+  },
+
   // Detect Mastodon-compatible software that supports the emoji_reactions API
   // (Hollo / glitch-soc / Akkoma / Pleroma / Fedibird). Uses NodeInfo.
   // Returns the software name (lowercased) or null.
