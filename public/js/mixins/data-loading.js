@@ -1079,7 +1079,71 @@ export const DataLoadingMixin = {
         favByUri.delete(uri);
       }
     }
-    if (favByUri.size === 0) return;
+
+    // --- Phase 2b: Use the receiving Mastodon account's own reactions API ---
+    // When the user's own Mastodon-compat server supports emoji_reactions
+    // (Hollo / glitch-soc / Akkoma / Pleroma / Fedibird), it already has the
+    // post and per-user reaction data — we don't need to bounce off Misskey or
+    // the actor's instance. Call it directly for each receiving account.
+    {
+      const byAccount = new Map();
+      for (const [uri, groupNotifs] of favByUri.entries()) {
+        for (const n of groupNotifs) {
+          if (!n.accountId) continue;
+          if (!byAccount.has(n.accountId)) byAccount.set(n.accountId, new Map());
+          const uriMap = byAccount.get(n.accountId);
+          if (!uriMap.has(uri)) uriMap.set(uri, []);
+          uriMap.get(uri).push(n);
+        }
+      }
+      for (const [accountId, uriMap] of byAccount) {
+        const acct = this.store.getById(accountId);
+        const acctClient = this.store.getClient(accountId);
+        if (!acct || !acctClient) continue;
+        if (acct.platform !== 'mastodon') continue;
+        if (!acctClient.supportsReactions) continue;
+        (async () => {
+          for (const [uri, groupNotifs] of [...uriMap.entries()].slice(0, 10)) {
+            try {
+              const dp = groupNotifs[0].post.reblog || groupNotifs[0].post;
+              const localId = dp.id;
+              if (!localId) continue;
+              const reactions = await acctClient.getReactions(localId).catch(() => []);
+              if (!Array.isArray(reactions) || reactions.length === 0) continue;
+              const reactionByUser = new Map();
+              const reactionEmojis = {};
+              const localHost = (() => {
+                try { return new URL(acct.instanceUrl).hostname; } catch { return ''; }
+              })();
+              for (const r of reactions) {
+                if (!r.user) continue;
+                const u = r.user;
+                let userAcct = (u.acct || u.username || '').toLowerCase();
+                if (!userAcct) continue;
+                if (!userAcct.includes('@')) userAcct = `${userAcct}@${localHost}`;
+                reactionByUser.set(userAcct, r.type);
+                // Custom emoji URL lookup map: shortcode → url
+                if (r.type && /^:.+:$/.test(r.type)) {
+                  const name = r.type.replace(/^:|:$/g, '');
+                  if (u.emojis && Array.isArray(u.emojis)) {
+                    const found = u.emojis.find(e => e.shortcode === name);
+                    if (found) reactionEmojis[name] = found.url || found.static_url;
+                  }
+                }
+              }
+              if (reactionByUser.size === 0) continue;
+              const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, acct.instanceUrl);
+              if (changed) {
+                rerenderGroup(groupNotifs);
+                favByUri.delete(uri);
+              }
+            } catch (e) {
+              console.warn('[StarShip] mastodon-self fav→reaction error:', e?.message || e);
+            }
+          }
+        })();
+      }
+    }
 
     if (client) {
       // --- Authenticated approach using Misskey account (sequential to avoid rate limits) ---
