@@ -617,9 +617,24 @@ async function handleImageCache(url, env) {
   const bucket = env.STARSHIP_CACHE;
   const key = await cacheKey('img', targetUrl);
 
-  // Check R2 cache
+  // When the proxy can't deliver bytes (origin blocks our UA, returns a CF
+  // challenge page, our datacenter IP is blocklisted, etc.), redirect the
+  // browser to the original URL so it can fetch directly. This is what the
+  // profile modal already does, and it works for Hollo's remote-pass-through
+  // avatar URLs that fail through the worker.
+  const directRedirect = () => new Response(null, {
+    status: 302,
+    headers: {
+      'Location': targetUrl,
+      'Cache-Control': 'no-store',
+      ...corsHeaders(),
+    },
+  });
+
+  // Check R2 cache — but only trust it if the body is non-empty. Earlier bugs
+  // could have stored zero-byte responses that would now serve corrupt data.
   const cached = await r2Get(bucket, key, CACHE_TTL_IMAGE);
-  if (cached) {
+  if (cached && cached.size > 0) {
     const headers = {
       'Content-Type': cached.httpMetadata?.contentType || 'image/png',
       'Cache-Control': `public, max-age=${CACHE_TTL_IMAGE}`,
@@ -632,28 +647,37 @@ async function handleImageCache(url, env) {
   // Fetch from origin
   try {
     const res = await fetch(targetUrl, {
-      headers: { 'User-Agent': 'StarShip/1.0', 'Accept': 'image/*' },
+      headers: {
+        // Browser-like UA: many fediverse instances behind Cloudflare reject
+        // unknown bot UAs with a JS challenge that the worker can't solve.
+        'User-Agent': 'Mozilla/5.0 (compatible; StarShip/1.0; +https://starship.eeruwang.workers.dev)',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      },
       signal: AbortSignal.timeout(10000),
       redirect: 'follow',
     });
 
     if (!res.ok) {
-      return new Response(null, { status: res.status, headers: corsHeaders() });
+      return directRedirect();
     }
 
     const contentType = res.headers.get('Content-Type') || '';
-    if (!contentType.startsWith('image/')) {
-      return jsonResponse({ error: 'Not an image' }, 400);
+    if (!contentType.toLowerCase().startsWith('image/')) {
+      // Likely an HTML challenge page — let the browser retry directly
+      return directRedirect();
     }
 
     const contentLength = parseInt(res.headers.get('Content-Length') || '0');
     if (contentLength > CACHE_MAX_IMAGE_SIZE) {
-      return jsonResponse({ error: 'Image too large' }, 413);
+      return directRedirect();
     }
 
     const imageData = await res.arrayBuffer();
+    if (imageData.byteLength === 0) {
+      return directRedirect();
+    }
     if (imageData.byteLength > CACHE_MAX_IMAGE_SIZE) {
-      return jsonResponse({ error: 'Image too large' }, 413);
+      return directRedirect();
     }
 
     // Store in R2 (non-blocking)
@@ -674,7 +698,7 @@ async function handleImageCache(url, env) {
     };
     return new Response(imageData, { status: 200, headers });
   } catch (err) {
-    return jsonResponse({ error: `Fetch error: ${err.message}` }, 502);
+    return directRedirect();
   }
 }
 
