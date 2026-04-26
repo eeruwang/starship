@@ -1041,6 +1041,46 @@ export const DataLoadingMixin = {
       }
     };
 
+    // --- Phase 2a: Cheap inference from cached post.reactions ---
+    // Hollo/Mastodon-compat actors aren't reachable via the Misskey paths
+    // below (their instances aren't Misskey API-compatible). Before giving
+    // up and leaving such notifications as plain favourites, see if the post
+    // already carries reaction data merged from a Misskey/Iceshrimp account
+    // earlier. If the post has a single non-default reaction emoji and its
+    // count is at least the number of pending favourite notifications for
+    // this post, every such notif must correspond to that emoji.
+    for (const [uri, groupNotifs] of [...favByUri.entries()]) {
+      if (groupNotifs.length === 0) continue;
+      const dp = groupNotifs[0].post.reblog || groupNotifs[0].post;
+      const reactions = dp.reactions;
+      if (!reactions || typeof reactions !== 'object') continue;
+      const customEntries = Object.entries(reactions).filter(([emoji, count]) =>
+        count > 0
+        && emoji !== '❤' && emoji !== '❤️'
+        && emoji !== '⭐' && emoji !== '⭐️'
+      );
+      if (customEntries.length !== 1) continue;
+      const [inferredEmoji, inferredCount] = customEntries[0];
+      if (inferredCount < groupNotifs.length) continue;
+
+      const inferredByUser = new Map();
+      for (const notif of groupNotifs) {
+        const actorAcct = notif.actor?.acct
+          ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl).toLowerCase()
+          : null;
+        if (actorAcct) inferredByUser.set(actorAcct, inferredEmoji);
+      }
+      const reactionEmojis = dp.reactionEmojis || {};
+      const emojiBaseUrl = dp._reactionInstanceUrl || dp.instanceUrl || '';
+      const changed = applyReactions(groupNotifs, inferredByUser, reactionEmojis, emojiBaseUrl);
+      if (changed) {
+        rerenderGroup(groupNotifs);
+        // Skip this group in the lookup paths below — already enriched
+        favByUri.delete(uri);
+      }
+    }
+    if (favByUri.size === 0) return;
+
     if (client) {
       // --- Authenticated approach using Misskey account (sequential to avoid rate limits) ---
       (async () => {
