@@ -799,26 +799,36 @@ export const ComposeMixin = {
 
         // Cross-instance quote resolution
         let resolvedQuoteId = quoteId;
+        let quoteResolveFailed = false;
         if (quoteId && quoteUrl) {
           const qAccount = quoteAccountId ? this.store.getById(quoteAccountId) : null;
           if (qAccount && qAccount.instanceUrl !== account.instanceUrl) {
             try {
               const resolved = await client.resolveUrl(quoteUrl);
-              if (resolved) resolvedQuoteId = resolved.id;
-            } catch { /* fall through, URL will be appended as text */ }
+              if (resolved) {
+                resolvedQuoteId = resolved.id;
+              } else {
+                quoteResolveFailed = true;
+                resolvedQuoteId = null;
+              }
+            } catch {
+              quoteResolveFailed = true;
+              resolvedQuoteId = null;
+            }
           }
         }
 
         // Create post and optimistically inject into timeline
         let rawPost;
         if (account.platform === 'mastodon') {
-          // Only forks that actually accept quote_id at the API level get it.
-          // Vanilla Mastodon and GoToSocial silently drop the parameter, which
-          // would otherwise produce a plain post with no visible quote.
-          const QUOTE_ID_SOFTWARE = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
-          const supportsQuoteId = QUOTE_ID_SOFTWARE.has(account.software);
+          // Always include the URL in body text when quoting. Vanilla Mastodon
+          // and GoToSocial render it as a link card (the de-facto quote
+          // pattern), and forks that natively support quote_id (Hollo,
+          // Fedibird, glitch-soc, Akkoma, Pleroma) additionally get the
+          // relationship — our renderer suppresses the duplicate link card and
+          // the trailing URL <a> on display, so visually there's no clutter.
           let statusText = text;
-          if (quoteUrl && !text.includes(quoteUrl) && (!supportsQuoteId || !resolvedQuoteId)) {
+          if (quoteUrl && !text.includes(quoteUrl)) {
             statusText = text + '\n\n' + quoteUrl;
           }
           const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || 'public';
@@ -828,7 +838,7 @@ export const ComposeMixin = {
             visibility: mastodonVisibility,
             mediaIds: fileIds.length > 0 ? fileIds : undefined,
             inReplyToId: resolvedReplyId || undefined,
-            quoteId: supportsQuoteId && resolvedQuoteId ? resolvedQuoteId : undefined,
+            quoteId: resolvedQuoteId || undefined,
           });
         } else {
           // Misskey: mark uploaded files as sensitive
@@ -837,8 +847,15 @@ export const ComposeMixin = {
               await client.updateFile(fid, { isSensitive: true }).catch(() => {});
             }
           }
+          // Misskey-family: if cross-instance resolve failed, the original
+          // foreign ID would 404 on the local server; fall back to URL append
+          // so the post still includes a link to the quoted source.
+          let noteText = text;
+          if (quoteUrl && quoteResolveFailed && !text.includes(quoteUrl)) {
+            noteText = text + '\n\n' + quoteUrl;
+          }
           const misskeyVisibility = ({ public: 'public', home: 'home', followers: 'followers', direct: 'specified' })[visibility] || 'public';
-          const result = await client.createNote(text, {
+          const result = await client.createNote(noteText, {
             cw: cw || undefined,
             visibility: misskeyVisibility,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
