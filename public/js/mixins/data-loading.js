@@ -200,6 +200,7 @@ export const DataLoadingMixin = {
         }
 
         // Phase 1.5: Update existing cards whose stats/reactions/state have changed
+        // Stats-only changes get a targeted DOM patch so images don't reload.
         {
           const idToCard = new Map();
           for (const card of existingCards) {
@@ -211,11 +212,14 @@ export const DataLoadingMixin = {
             if (!card) continue;
             const cached = this.postCache?.get(key);
             if (!cached) continue;
-            if (this._postDataChanged(cached, p)) {
+            const kind = this._postChangeKind(cached, p);
+            if (kind === 'none') continue;
+            if (kind === 'stats') {
+              this._updateCardStats(card, p);
+            } else {
               const newCard = renderPost(p);
               card.replaceWith(newCard);
               idToCard.set(key, newCard);
-              // Also update uriToCard reference
               const dp = p.reblog || p;
               if (dp.canonicalUri) uriToCard.set(dp.canonicalUri, newCard);
             }
@@ -605,7 +609,12 @@ export const DataLoadingMixin = {
           // Check if the notification's embedded post data changed
           const cachedKey = `${n.post.platform || n.platform}:${n.post.id}`;
           const cached = this.postCache?.get(cachedKey);
-          if (cached && this._postDataChanged(cached, n.post)) {
+          if (!cached) continue;
+          const kind = this._postChangeKind(cached, n.post);
+          if (kind === 'none') continue;
+          if (kind === 'stats') {
+            this._updateCardStats(card, n.post);
+          } else {
             const newCard = renderNotification(n);
             card.replaceWith(newCard);
             dedupToCard.set(n._dedupKey, newCard);
@@ -1703,37 +1712,107 @@ export const DataLoadingMixin = {
    * Returns true if the post should be re-rendered.
    */
   _postDataChanged(cached, fresh) {
+    return this._postChangeKind(cached, fresh) !== 'none';
+  },
+
+  /**
+   * Classify the change between cached and fresh post data.
+   * Returns:
+   *   'none'  — nothing visible changed
+   *   'stats' — only counts/active flags differ; can be patched in place
+   *   'full'  — content/reaction-keys differ; needs a full re-render
+   *
+   * Targeted updates (stats) avoid replacing the whole card, which would
+   * otherwise tear down all <img> elements and cause visible flicker on every
+   * auto-refresh tick.
+   */
+  _postChangeKind(cached, fresh) {
     const cd = cached.reblog || cached;
     const fd = fresh.reblog || fresh;
 
-    // Stats changed
-    if (cd.stats && fd.stats) {
-      if ((cd.stats.replies || 0) !== (fd.stats.replies || 0)) return true;
-      if ((cd.stats.boosts || 0) !== (fd.stats.boosts || 0)) return true;
-      if ((cd.stats.favourites || 0) !== (fd.stats.favourites || 0)) return true;
-    }
+    // Content edited → full re-render
+    if ((cd.content || '') !== (fd.content || '')) return 'full';
+    if ((cd.contentWarning || '') !== (fd.contentWarning || '')) return 'full';
 
-    // Reactions changed
-    const cReactions = cd.reactions ? Object.keys(cd.reactions).length : 0;
-    const fReactions = fd.reactions ? Object.keys(fd.reactions).length : 0;
-    if (cReactions !== fReactions) return true;
-    if (cReactions > 0 && fReactions > 0) {
+    // Reaction key set changed (badges add/remove) → full
+    const cKeys = cd.reactions ? Object.keys(cd.reactions).sort().join('|') : '';
+    const fKeys = fd.reactions ? Object.keys(fd.reactions).sort().join('|') : '';
+    if (cKeys !== fKeys) return 'full';
+
+    let changed = false;
+
+    // Reaction counts only
+    if (cd.reactions && fd.reactions) {
       for (const [k, v] of Object.entries(fd.reactions)) {
-        if ((cd.reactions[k] || 0) !== v) return true;
+        if ((cd.reactions[k] || 0) !== v) { changed = true; break; }
       }
     }
 
-    // Favourite/boost state changed
-    if (!!cached.favourited !== !!fresh.favourited) return true;
-    if (!!cached.boosted !== !!fresh.boosted) return true;
+    // Stats counts
+    if (cd.stats && fd.stats) {
+      if ((cd.stats.replies || 0) !== (fd.stats.replies || 0)) changed = true;
+      if ((cd.stats.reblogs || 0) !== (fd.stats.reblogs || 0)) changed = true;
+      if ((cd.stats.renotes || 0) !== (fd.stats.renotes || 0)) changed = true;
+      if ((cd.stats.favourites || 0) !== (fd.stats.favourites || 0)) changed = true;
+      if ((cd.stats.reactions || 0) !== (fd.stats.reactions || 0)) changed = true;
+    }
 
-    // My reaction changed
-    if ((cd.myReaction || '') !== (fd.myReaction || '')) return true;
+    // Boolean states
+    if (!!cached.favourited !== !!fresh.favourited) changed = true;
+    if (!!cached.reblogged !== !!fresh.reblogged) changed = true;
+    if (!!cached.boosted !== !!fresh.boosted) changed = true;
+    if ((cd.myReaction || '') !== (fd.myReaction || '')) changed = true;
 
-    // Content edited
-    if ((cd.content || '') !== (fd.content || '')) return true;
+    return changed ? 'stats' : 'none';
+  },
 
-    return false;
+  /**
+   * Patch a card's stats/active flags in place — no DOM teardown, no image
+   * reload.
+   */
+  _updateCardStats(card, fresh) {
+    const fd = fresh.reblog || fresh;
+    const actionsEl = card.querySelector('.post-actions');
+    if (actionsEl) {
+      const setActionCount = (selector, count, isActive) => {
+        const btn = actionsEl.querySelector(selector);
+        if (!btn) return;
+        if (isActive !== undefined) btn.classList.toggle('active', !!isActive);
+        let countEl = btn.querySelector('.action-count');
+        const n = count || 0;
+        if (n > 0) {
+          if (!countEl) {
+            countEl = document.createElement('span');
+            countEl.className = 'action-count';
+            btn.appendChild(countEl);
+          }
+          const next = String(n);
+          if (countEl.textContent !== next) countEl.textContent = next;
+        } else if (countEl) {
+          countEl.remove();
+        }
+      };
+      setActionCount('[data-action="reply"]', fd.stats?.replies);
+      setActionCount('[data-action="boost"]', fd.stats?.reblogs ?? fd.stats?.renotes, fresh.reblogged || fresh.boosted);
+      setActionCount('[data-action="fav"]', fd.stats?.favourites ?? fd.stats?.reactions, !!(fresh.favourited || fresh.myReaction));
+    }
+    // Patch existing reaction-badge counts (key set is identical when this is called)
+    if (fd.reactions) {
+      const reactionsEl = card.querySelector('.post-reactions');
+      if (reactionsEl) {
+        for (const badge of reactionsEl.querySelectorAll('.reaction-badge')) {
+          const key = badge.dataset.reaction;
+          if (!key) continue;
+          const next = fd.reactions[key];
+          if (next === undefined) continue;
+          const countSpan = badge.querySelector('.reaction-count');
+          if (countSpan) {
+            const s = String(next);
+            if (countSpan.textContent !== s) countSpan.textContent = s;
+          }
+        }
+      }
+    }
   },
 
   /**
