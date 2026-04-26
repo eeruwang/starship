@@ -812,10 +812,13 @@ export const ComposeMixin = {
         // Create post and optimistically inject into timeline
         let rawPost;
         if (account.platform === 'mastodon') {
-          // For Mastodon 4.3+: use native quote_id parameter
-          // Only append quote URL as text fallback if quote_id couldn't be resolved
+          // Only forks that actually accept quote_id at the API level get it.
+          // Vanilla Mastodon and GoToSocial silently drop the parameter, which
+          // would otherwise produce a plain post with no visible quote.
+          const QUOTE_ID_SOFTWARE = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+          const supportsQuoteId = QUOTE_ID_SOFTWARE.has(account.software);
           let statusText = text;
-          if (quoteUrl && !resolvedQuoteId && !text.includes(quoteUrl)) {
+          if (quoteUrl && !text.includes(quoteUrl) && (!supportsQuoteId || !resolvedQuoteId)) {
             statusText = text + '\n\n' + quoteUrl;
           }
           const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || 'public';
@@ -825,7 +828,7 @@ export const ComposeMixin = {
             visibility: mastodonVisibility,
             mediaIds: fileIds.length > 0 ? fileIds : undefined,
             inReplyToId: resolvedReplyId || undefined,
-            quoteId: resolvedQuoteId || undefined,
+            quoteId: supportsQuoteId && resolvedQuoteId ? resolvedQuoteId : undefined,
           });
         } else {
           // Misskey: mark uploaded files as sensitive

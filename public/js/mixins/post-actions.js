@@ -1084,11 +1084,13 @@ export const PostActionsMixin = {
     // Find the original post URL for the quote
     let quoteUrl = '';
     let quoteAccountId = accountId;
+    let quotedPost = null;
     for (const [key, post] of this.postCache) {
       const dp = post.reblog || post;
       if (post.id === postId || dp.id === postId) {
         quoteUrl = dp.url || dp.canonicalUri || '';
         if (!quoteAccountId) quoteAccountId = post.accountId;
+        quotedPost = dp;
         break;
       }
     }
@@ -1100,6 +1102,25 @@ export const PostActionsMixin = {
     this.composeText.dataset.quoteUrl = quoteUrl;
     if (quoteAccountId) this.composeText.dataset.quoteAccountId = quoteAccountId;
     this.composeText.placeholder = '인용 내용을 작성하세요...';
+
+    // Show quote preview using the existing reply-context container
+    const ctx = document.getElementById('compose-reply-context');
+    if (ctx && quotedPost) {
+      const author = quotedPost.author || {};
+      const authorName = author.displayNameHtml || this.escapeHtml(author.displayName || '');
+      const avatarHtml = author.avatarUrl
+        ? `<img class="compose-reply-context-avatar" src="${this.escapeHtml(author.avatarUrl)}" alt="" width="20" height="20" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+        : '';
+      ctx.innerHTML = `
+        <div class="compose-reply-context-header">
+          ${avatarHtml}
+          <span class="compose-reply-context-name">${authorName}</span>
+          <span class="compose-reply-context-label">의 글을 인용</span>
+        </div>
+        <div class="compose-reply-context-body">${quotedPost.content || ''}</div>
+      `;
+      ctx.style.display = '';
+    }
   },
 
   // Get accounts that received this post (from mergedAccounts or single accountId)
