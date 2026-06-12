@@ -1303,18 +1303,31 @@ export const PostActionsMixin = {
           popup.innerHTML = this._renderReactionUsersHtml(users);
         }
       } else if (platform === 'mastodon' && misskeyNoteId) {
-        // Emoji reaction badge on merged Mastodon+Misskey post: use Misskey API
+        // Emoji reaction badge on a Misskey-enriched Mastodon post: query the
+        // Misskey API for per-user reaction data. Don't trust the server-side
+        // `type` filter — Misskey stores remote custom emojis as
+        // `:name@host:` while our badge carries the clean `:name:`, so an
+        // exact-string filter on the server can either miss matches or, on
+        // some forks, ignore the filter entirely and return ALL reactions
+        // (which is why a click would show every reactor regardless of which
+        // emoji was clicked). Always fetch unfiltered + filter client-side
+        // with a normalisation that strips any `@host` suffix.
         const mkClient = this.store.getClient(misskeyAccountId) ||
           this.store.getClient(this.store.getAll().find(a => a.platform !== 'mastodon')?.id);
         if (mkClient) {
-          let reactions = await mkClient.getReactions(misskeyNoteId, reaction || undefined);
-          if (reactions.length === 0 && reaction) {
-            const allReactions = await mkClient.getReactions(misskeyNoteId);
-            const normalize = (r) => r ? r.replace(/@\.:$/, ':').replace(/@\.$/, '') : '';
+          const normalize = (r) => {
+            if (!r) return '';
+            // Strip @host suffix from inside `:shortcode@host:` and bare
+            // `shortcode@host`. Handles `@.` (local), `@anyhost.example`, etc.
+            return r.replace(/@[^:@]+:$/, ':').replace(/@[^:@]+$/, '');
+          };
+          const allReactions = await mkClient.getReactions(misskeyNoteId, null, { limit: 100 });
+          let reactions = allReactions;
+          if (reaction) {
             const target = normalize(reaction);
             reactions = allReactions.filter(r => {
-              const rType = normalize(r.type || '');
-              return rType === target || r.type === reaction;
+              const rType = r.type || '';
+              return rType === reaction || normalize(rType) === target;
             });
           }
           users = reactions.map(r => {
@@ -1350,35 +1363,64 @@ export const PostActionsMixin = {
           popup.innerHTML = this._renderReactionUsersHtml(users);
         }
       } else if (platform === 'mastodon') {
-        // Standard Mastodon or favourite badge: use getFavouritedBy
-        const favUsers = await client.getFavouritedBy(postId);
-        if (!favUsers || favUsers.length === 0) {
-          popup.innerHTML = '<div class="reaction-users-loading">좋아요한 사용자가 없습니다.</div>';
+        // Vanilla Mastodon. If a specific emoji badge was clicked but we have
+        // no per-emoji data source (no _misskeyNoteId, no fork reactions API),
+        // showing getFavouritedBy here would mix in everyone who pressed
+        // plain heart, not just users who used this emoji. Try to use
+        // dp._reactionByUser (per-user mapping persisted by Phase 3 / 2b /
+        // 4) as a last resort; if even that's missing, show a clear notice
+        // rather than incorrect data.
+        if (!isFavourite) {
+          const rbu = displayPost?._reactionByUser;
+          const normalize = (r) => r ? r.replace(/@[^:@]+:$/, ':').replace(/@[^:@]+$/, '') : '';
+          if (rbu) {
+            const target = normalize(reaction);
+            const matchingAccts = Object.entries(rbu)
+              .filter(([, e]) => e === reaction || normalize(e) === target)
+              .map(([acct]) => acct);
+            if (matchingAccts.length === 0) {
+              popup.innerHTML = '<div class="reaction-users-loading">이 리액션을 누른 사용자가 없습니다.</div>';
+            } else {
+              users = matchingAccts.map(acct => ({
+                displayNameHtml: escapeHtml(acct),
+                username: acct,
+                avatarUrl: '',
+              }));
+              popup.innerHTML = this._renderReactionUsersHtml(users);
+            }
+          } else {
+            popup.innerHTML = '<div class="reaction-users-loading">이 리액션의 상세 정보를 가져올 수 없습니다.</div>';
+          }
         } else {
-          users = favUsers.map(u => {
-            const normalized = client.normalizeUser(u);
-            return {
-              displayNameHtml: normalized.displayNameHtml,
-              username: normalized.acct || normalized.username,
-              avatarUrl: normalized.avatarUrl || '',
-            };
-          });
-          popup.innerHTML = this._renderReactionUsersHtml(users);
+          // Favourite badge: getFavouritedBy is correct
+          const favUsers = await client.getFavouritedBy(postId);
+          if (!favUsers || favUsers.length === 0) {
+            popup.innerHTML = '<div class="reaction-users-loading">좋아요한 사용자가 없습니다.</div>';
+          } else {
+            users = favUsers.map(u => {
+              const normalized = client.normalizeUser(u);
+              return {
+                displayNameHtml: normalized.displayNameHtml,
+                username: normalized.acct || normalized.username,
+                avatarUrl: normalized.avatarUrl || '',
+              };
+            });
+            popup.innerHTML = this._renderReactionUsersHtml(users);
+          }
         }
       } else {
-        // Misskey platform: use notes/reactions
+        // Misskey platform: use notes/reactions. Always fetch unfiltered and
+        // filter client-side — the server-side `type` filter is brittle for
+        // remote custom emojis (`:name@host:` vs `:name:`).
         const reactionType = isFavourite ? '❤' : reaction;
-        let reactions = await client.getReactions(postId, reactionType || undefined);
-
-        // Fallback: if type-filtered query returned empty, retry without filter
-        // and match client-side (handles custom emoji format mismatches like :emoji@.: vs :emoji:)
-        if (reactions.length === 0 && reactionType) {
-          const allReactions = await client.getReactions(postId);
-          const normalize = (r) => r ? r.replace(/@\.:$/, ':').replace(/@\.$/, '') : '';
+        const normalize = (r) => r ? r.replace(/@[^:@]+:$/, ':').replace(/@[^:@]+$/, '') : '';
+        const allReactions = await client.getReactions(postId, null, { limit: 100 });
+        let reactions = allReactions;
+        if (reactionType) {
           const target = normalize(reactionType);
           reactions = allReactions.filter(r => {
-            const rType = normalize(r.type || '');
-            return rType === target || r.type === reactionType;
+            const rType = r.type || '';
+            return rType === reactionType || normalize(rType) === target;
           });
         }
 

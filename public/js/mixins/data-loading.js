@@ -1608,6 +1608,23 @@ export const DataLoadingMixin = {
             }
 
             const reactionEmojis = rdp.reactionEmojis || rdp.emojis || {};
+            // Persist the Misskey note ID + account so showReactionUsers
+            // (badge click) can route through the per-emoji Misskey API
+            // instead of falling back to vanilla getFavouritedBy (which would
+            // show all reactors regardless of which emoji was clicked).
+            {
+              const dp = groupNotifs[0].post.reblog || groupNotifs[0].post;
+              if (dp) {
+                dp._misskeyNoteId = rdp.id;
+                dp._misskeyAccountId = mskAccount.id;
+                if (mskAccount.instanceUrl) {
+                  if (!dp._noteIdsByInstance) dp._noteIdsByInstance = {};
+                  dp._noteIdsByInstance[mskAccount.instanceUrl] = rdp.id;
+                }
+                if (rdp.reactionEmojis) dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...rdp.reactionEmojis };
+                if (this.postCache) this.postCache.set(`${groupNotifs[0].post.platform}:${groupNotifs[0].post.id}`, groupNotifs[0].post);
+              }
+            }
             this._persistReactionByUser(groupNotifs[0].post, reactionByUser);
 
             // Only mark ground=true when we believe the reactor set is complete.
