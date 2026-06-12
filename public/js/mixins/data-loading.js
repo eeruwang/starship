@@ -79,6 +79,12 @@ export const DataLoadingMixin = {
       return;
     }
 
+    // Concurrency guard: auto-refresh, manual refresh, and visibilitychange
+    // refresh can all fire on the same column. Without this two parallel
+    // fetches would race insertBefore + scrollTop preservation.
+    if (container._timelineLoading) return;
+    container._timelineLoading = true;
+
     const isFirstLoad = container.querySelectorAll('.post-card').length === 0;
 
     if (isFirstLoad) {
@@ -285,6 +291,8 @@ export const DataLoadingMixin = {
       if (isFirstLoad) {
         container.innerHTML = `<div class="loading-text">타임라인을 불러오는 중 오류가 발생했습니다: ${escapeHtml(err.message)}</div>`;
       }
+    } finally {
+      container._timelineLoading = false;
     }
   },
 
@@ -2105,23 +2113,26 @@ export const DataLoadingMixin = {
 
     if (needsFetch.length === 0) return;
 
+    // Build id→post indices once instead of doing posts.find + a full postCache
+    // scan per missing parent. Previous O(n × (batch + cache)) was up to
+    // ~15k iterations for 30 posts / 500-entry cache on every refresh.
+    const idIndex = new Map();
+    for (const p of posts) {
+      const pdp = p.reblog || p;
+      if (pdp.id) idIndex.set(pdp.id, p);
+    }
+    if (this.postCache) {
+      for (const [, p] of this.postCache) {
+        const pdp = p.reblog || p;
+        if (pdp.id && !idIndex.has(pdp.id)) idIndex.set(pdp.id, p);
+      }
+    }
+
     // First pass: resolve parents from existing timeline data or cache (no API calls)
     for (const post of needsFetch) {
       const dp = post.reblog || post;
       const parentId = dp.replyToId;
-      // Search in the same batch
-      const found = posts.find(p => {
-        const pdp = p.reblog || p;
-        return pdp.id === parentId;
-      });
-      // Or search in the post cache
-      const cached = found || (this.postCache && (() => {
-        for (const [, p] of this.postCache) {
-          const pdp = p.reblog || p;
-          if (pdp.id === parentId) return p;
-        }
-        return null;
-      })());
+      const cached = idIndex.get(parentId);
       if (cached) {
         const pdp = cached.reblog || cached;
         dp.replyTo = {

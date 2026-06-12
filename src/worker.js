@@ -1085,10 +1085,14 @@ async function handleProxy(request, url) {
       }
     }
 
+    // Bound the upstream wait. Without this a hanging fediverse instance ties
+    // up the worker request until Cloudflare's hard subrequest limit (~30s),
+    // burning request budget and slowing concurrent users of the same worker.
     const proxyRes = await fetch(targetUrl, {
       method: request.method,
       headers: proxyHeaders,
       body,
+      signal: AbortSignal.timeout(15000),
     });
 
     const responseHeaders = new Headers(proxyRes.headers);
