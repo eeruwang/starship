@@ -487,45 +487,7 @@ export const DataLoadingMixin = {
           });
         if (preDedupPosts.length > 0) this._mergeReactionsFromCache(preDedupPosts);
       }
-      for (const n of allNotifs) {
-        if (n.type !== 'favourite' || !n.post) continue;
-        const dp = n.post.reblog || n.post;
-        if (!dp.reactions) continue;
-        // Skip reactions merged from Misskey cache — these are other users' reactions,
-        // not this actor's action. Phase 2 handles per-user matching accurately.
-        if (dp._reactionsFromCache) continue;
-        const entries = Object.entries(dp.reactions);
-        const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
-        if (nonHeart.length === 0) continue;
-        const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
-        n.type = 'reaction';
-        n.label = '리액션';
-        n.reactionEmoji = emoji;
-        n.icon = emoji;
-        const match = emoji.match(/^:(.+):$/);
-        if (match) {
-          const name = match[1];
-          const baseName = name.replace(/@\.$/, '');
-          n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
-                            || dp.emojis?.[name] || dp.emojis?.[name + '@.']
-                            || null;
-          // Fallback URL: prefer the actor's own host (they're the ones who
-          // actually have the emoji file — Misskey-family servers expose
-          // /emoji/{name}.webp publicly), then the post's origin instance, and
-          // finally our own server. The <img>'s onerror cleanly hides the
-          // badge if none of these host the file.
-          if (!n.reactionEmojiUrl && !baseName.includes('@')) {
-            const acct = n.actor?.acct;
-            if (acct && acct.includes('@')) {
-              const host = acct.split('@').pop();
-              n.reactionEmojiUrl = `https://${host}/emoji/${encodeURIComponent(baseName)}.webp`;
-            } else {
-              const baseUrl = dp._reactionInstanceUrl || dp.instanceUrl;
-              if (baseUrl) n.reactionEmojiUrl = `${baseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
-            }
-          }
-        }
-      }
+      for (const n of allNotifs) this._promoteFavouriteToReaction(n);
 
       // Compute normalized dedup keys for all notifications
       // (after favourite→reaction conversion so types are final)
@@ -848,6 +810,57 @@ export const DataLoadingMixin = {
     dp.stats.favourites = Math.max(0, dp.stats.favourites - nonHeartReactions);
   },
 
+  // Routine-path warnings (unauth API rejections, instance-not-misskey, etc.)
+  // run every refresh cycle and flood production console. Gate them behind a
+  // localStorage flag so power users / debugging sessions can opt in.
+  _debugWarn(...args) {
+    if (this._debugEnabledCache === undefined) {
+      try {
+        this._debugEnabledCache = (typeof localStorage !== 'undefined'
+          && localStorage.getItem('starship_debug') === '1');
+      } catch { this._debugEnabledCache = false; }
+    }
+    if (this._debugEnabledCache) console.warn(...args);
+  },
+
+  // Heuristic promotion of a Mastodon favourite notification to a reaction
+  // when the post carries reaction data that wasn't merged from cache (which
+  // would be other users' reactions). Picks the most-counted non-heart emoji
+  // and resolves a usable image URL with multiple fallbacks. Called in two
+  // load paths (fresh notifications + older paginated batch).
+  _promoteFavouriteToReaction(n) {
+    if (!n || n.type !== 'favourite' || !n.post) return;
+    const dp = n.post.reblog || n.post;
+    if (!dp.reactions || dp._reactionsFromCache) return;
+    const nonHeart = Object.entries(dp.reactions)
+      .filter(([k]) => k !== '❤' && k !== '❤️');
+    if (nonHeart.length === 0) return;
+    const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
+    n.type = 'reaction';
+    n.label = '리액션';
+    n.reactionEmoji = emoji;
+    n.icon = emoji;
+    const match = emoji.match(/^:(.+):$/);
+    if (!match) return;
+    const name = match[1];
+    const baseName = name.replace(/@\.$/, '');
+    n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
+                      || dp.emojis?.[name] || dp.emojis?.[name + '@.']
+                      || null;
+    // Fallback: actor's host first (they hold the emoji file), then post's
+    // origin instance. <img> onerror cleanly hides if neither serves it.
+    if (!n.reactionEmojiUrl && !baseName.includes('@')) {
+      const acct = n.actor?.acct;
+      if (acct && acct.includes('@')) {
+        const host = acct.split('@').pop();
+        n.reactionEmojiUrl = `https://${host}/emoji/${encodeURIComponent(baseName)}.webp`;
+      } else {
+        const baseUrl = dp._reactionInstanceUrl || dp.instanceUrl;
+        if (baseUrl) n.reactionEmojiUrl = `${baseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+      }
+    }
+  },
+
   _mergeReactionsFromCache(posts) {
     if (!this.postCache || this.postCache.size === 0) return;
     // Build a canonicalUri → cached post index for fast lookup
@@ -1073,7 +1086,7 @@ export const DataLoadingMixin = {
                 }
                 applyAndRender(item, post, dp, reactions, reactionEmojis);
               } catch (e) {
-                console.warn('[StarShip] mastodon-compat origin enrichment error:', e?.message || e);
+                this._debugWarn('[StarShip] mastodon-compat origin enrichment error:', e?.message || e);
               }
             }
           } else if (MISSKEY_FAMILY.has(software)) {
@@ -1105,7 +1118,7 @@ export const DataLoadingMixin = {
                 const reactionEmojis = note.reactionEmojis || {};
                 applyAndRender(item, post, dp, reactions, reactionEmojis);
               } catch (e) {
-                console.warn('[StarShip] misskey origin enrichment error:', e?.message || e);
+                this._debugWarn('[StarShip] misskey origin enrichment error:', e?.message || e);
               }
             }
           }
@@ -1302,51 +1315,39 @@ export const DataLoadingMixin = {
                 favByUri.delete(uri);
               }
             } catch (e) {
-              console.warn('[StarShip] mastodon-self fav→reaction error:', e?.message || e);
+              this._debugWarn('[StarShip] mastodon-self fav→reaction error:', e?.message || e);
             }
           }
         })();
       }
     }
 
-    // --- Phase 2c: Best-effort unauthenticated Mastodon-compat reactions ---
-    // For pure-vanilla-Mastodon receivers with no Misskey accounts, the only
-    // way to learn what an actor on a Mastodon-compat fork (Hollo / glitch-soc
-    // / Akkoma / Pleroma / Fedibird) reacted with is to query the actor's
-    // instance directly. This requires unauth access to /api/v2/search and
-    // the reactions endpoint, which Pleroma/Akkoma typically allow but other
-    // instances may not. Fail gracefully on auth errors.
+    // --- Phase 2c: Best-effort unauthenticated reactions on actor's instance ---
+    // Only fires when the post's URI host matches the actor's host, i.e. the
+    // post was originally written on the same server the actor is on. In that
+    // case we can derive the local status ID by parsing the URL — no auth-
+    // gated /api/v2/search needed. For cross-instance posts (actor reacted to
+    // a remote post) this phase skips; those rely on Phase 2a/2d.
     (async () => {
       for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 5)) {
         try {
-          // Find an actor on a Mastodon-compat instance with reactions support
-          let actorInstance = null;
-          let actorSoftware = null;
-          for (const notif of groupNotifs) {
-            const acct = notif.actor?.acct;
-            if (!acct || !acct.includes('@')) continue;
-            const host = acct.split('@').pop();
-            const instanceUrl = `https://${host}`;
-            const sw = await this._detectMastodonReactionsSoftware(instanceUrl);
-            if (sw) { actorInstance = instanceUrl; actorSoftware = sw; break; }
-          }
-          if (!actorInstance) continue;
+          // The URI we have is the post's canonical URI. If the actor's host
+          // matches that URI's host, the actor's instance is the post's origin.
+          let postHost;
+          try { postHost = new URL(uri).host; } catch { continue; }
+          const matchingActor = groupNotifs.find(n => {
+            const acct = n.actor?.acct;
+            return acct && acct.includes('@') && acct.split('@').pop() === postHost;
+          });
+          if (!matchingActor) continue;
 
-          // Resolve the post URI on actor's instance to obtain its local ID.
-          // resolve=false avoids triggering a remote fetch storm; the actor
-          // already federated this post (they reacted to it), so the local
-          // copy should exist.
-          let localId = null;
-          try {
-            const search = await this._unauthMastodonGet(
-              actorInstance,
-              `/api/v2/search?q=${encodeURIComponent(uri)}&type=statuses&resolve=false&limit=1`
-            );
-            if (search?.statuses?.length) localId = search.statuses[0].id;
-          } catch { /* search may require auth on this instance */ }
+          const actorInstance = `https://${postHost}`;
+          const actorSoftware = await this._detectMastodonReactionsSoftware(actorInstance);
+          if (!actorSoftware) continue;
+
+          const localId = this._extractStatusIdFromUrl(uri, actorSoftware);
           if (!localId) continue;
 
-          // Get per-user reactions
           const reactionsPath = (actorSoftware === 'akkoma' || actorSoftware === 'pleroma')
             ? `/api/v1/pleroma/statuses/${encodeURIComponent(localId)}/reactions`
             : `/api/v1/statuses/${encodeURIComponent(localId)}/emoji_reactions`;
@@ -1358,7 +1359,6 @@ export const DataLoadingMixin = {
 
           const reactionByUser = new Map();
           const reactionEmojis = {};
-          const actorHost = new URL(actorInstance).hostname;
           for (const r of reactionsArr) {
             const emoji = r.name;
             if (emoji && /^:.+:$/.test(emoji) && r.url) {
@@ -1367,7 +1367,7 @@ export const DataLoadingMixin = {
             for (const u of (r.accounts || [])) {
               let userAcct = (u.acct || u.username || '').toLowerCase();
               if (!userAcct) continue;
-              if (!userAcct.includes('@')) userAcct = `${userAcct}@${actorHost}`;
+              if (!userAcct.includes('@')) userAcct = `${userAcct}@${postHost}`;
               reactionByUser.set(userAcct, emoji);
             }
           }
@@ -1379,7 +1379,7 @@ export const DataLoadingMixin = {
             favByUri.delete(uri);
           }
         } catch (e) {
-          console.warn('[StarShip] mastodon-compat unauth fav→reaction error:', e?.message || e);
+          this._debugWarn('[StarShip] mastodon-compat unauth fav→reaction error:', e?.message || e);
         }
       }
     })();
@@ -1393,7 +1393,7 @@ export const DataLoadingMixin = {
             try {
               resolved = await this._cachedResolveUrl(client, uri);
             } catch (e) {
-              console.warn('[StarShip] fav→reaction: resolveUrl failed for', uri, e.message || e);
+              this._debugWarn('[StarShip] fav→reaction: resolveUrl failed for', uri, e.message || e);
               continue;
             }
             if (!resolved) continue;
@@ -1410,7 +1410,7 @@ export const DataLoadingMixin = {
                 reactionByUser.set(acct, r.type);
               }
             } catch (e) {
-              console.warn('[StarShip] fav→reaction: getReactions failed for note', rdp.id, e.message || e);
+              this._debugWarn('[StarShip] fav→reaction: getReactions failed for note', rdp.id, e.message || e);
             }
 
             const reactionEmojis = rdp.reactionEmojis || rdp.emojis || {};
@@ -1419,7 +1419,7 @@ export const DataLoadingMixin = {
             const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, misskeyAccount.instanceUrl);
             if (changed) rerenderGroup(groupNotifs);
           } catch (e) {
-            console.warn('[StarShip] fav→reaction error:', e);
+            this._debugWarn('[StarShip] fav→reaction error:', e);
           }
         }
       })();
@@ -1450,7 +1450,7 @@ export const DataLoadingMixin = {
               if (!resolved || resolved.type !== 'Note' || !resolved.object) continue;
               noteId = resolved.object.id;
             } catch (e) {
-              console.warn('[StarShip] unauth fav→reaction: ap/show failed for', uri, e.message || e);
+              this._debugWarn('[StarShip] unauth fav→reaction: ap/show failed for', uri, e.message || e);
               continue;
             }
 
@@ -1468,7 +1468,7 @@ export const DataLoadingMixin = {
                 reactionByUser.set(acct, r.type);
               }
             } catch (e) {
-              console.warn('[StarShip] unauth fav→reaction: notes/reactions failed for', noteId, e.message || e);
+              this._debugWarn('[StarShip] unauth fav→reaction: notes/reactions failed for', noteId, e.message || e);
               continue;
             }
 
@@ -1485,7 +1485,7 @@ export const DataLoadingMixin = {
             const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, actorInstanceUrl);
             if (changed) rerenderGroup(groupNotifs);
           } catch (e) {
-            console.warn('[StarShip] unauth fav→reaction error:', e);
+            this._debugWarn('[StarShip] unauth fav→reaction error:', e);
           }
         }
       })();
@@ -1513,7 +1513,15 @@ export const DataLoadingMixin = {
           if (!byActorInstance.has(instanceUrl)) byActorInstance.set(instanceUrl, []);
           byActorInstance.get(instanceUrl).push(notif);
         }
+        // Cap fan-out: on first load a notification page can carry dozens of
+        // distinct actor hosts. Fetch /api/v1/custom_emojis for at most this
+        // many on a single run; subsequent refreshes pick up the rest as
+        // notifications cycle. _getInstanceEmojiMap caches per host so repeat
+        // visits are cheap.
+        const PHASE_2D_INSTANCE_CAP = 8;
+        let instancesProbed = 0;
         for (const [instanceUrl, notifGroup] of byActorInstance) {
+          if (instancesProbed++ >= PHASE_2D_INSTANCE_CAP) break;
           (async () => {
             const emojiMap = await this._getInstanceEmojiMap(instanceUrl);
             if (!emojiMap || emojiMap.size === 0) return;
@@ -1805,45 +1813,7 @@ export const DataLoadingMixin = {
           });
         if (preDedupPosts.length > 0) this._mergeReactionsFromCache(preDedupPosts);
       }
-      for (const n of allNotifs) {
-        if (n.type !== 'favourite' || !n.post) continue;
-        const dp = n.post.reblog || n.post;
-        if (!dp.reactions) continue;
-        // Skip reactions merged from Misskey cache — these are other users' reactions,
-        // not this actor's action. Phase 2 handles per-user matching accurately.
-        if (dp._reactionsFromCache) continue;
-        const entries = Object.entries(dp.reactions);
-        const nonHeart = entries.filter(([k]) => k !== '❤' && k !== '❤️');
-        if (nonHeart.length === 0) continue;
-        const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
-        n.type = 'reaction';
-        n.label = '리액션';
-        n.reactionEmoji = emoji;
-        n.icon = emoji;
-        const match = emoji.match(/^:(.+):$/);
-        if (match) {
-          const name = match[1];
-          const baseName = name.replace(/@\.$/, '');
-          n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
-                            || dp.emojis?.[name] || dp.emojis?.[name + '@.']
-                            || null;
-          // Fallback URL: prefer the actor's own host (they're the ones who
-          // actually have the emoji file — Misskey-family servers expose
-          // /emoji/{name}.webp publicly), then the post's origin instance, and
-          // finally our own server. The <img>'s onerror cleanly hides the
-          // badge if none of these host the file.
-          if (!n.reactionEmojiUrl && !baseName.includes('@')) {
-            const acct = n.actor?.acct;
-            if (acct && acct.includes('@')) {
-              const host = acct.split('@').pop();
-              n.reactionEmojiUrl = `https://${host}/emoji/${encodeURIComponent(baseName)}.webp`;
-            } else {
-              const baseUrl = dp._reactionInstanceUrl || dp.instanceUrl;
-              if (baseUrl) n.reactionEmojiUrl = `${baseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
-            }
-          }
-        }
-      }
+      for (const n of allNotifs) this._promoteFavouriteToReaction(n);
 
       // Compute dedup keys (after favourite→reaction conversion so types are final)
       for (const notif of allNotifs) {

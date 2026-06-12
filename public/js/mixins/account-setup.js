@@ -183,16 +183,40 @@ export const AccountSetupMixin = {
         }
       }
 
-      // Fallback: Try Mastodon API (GET /api/v1/instance)
+      // Fallback: Try Mastodon API (GET /api/v1/instance). Any server that
+      // responds OK here is Mastodon-API compatible — Fedify-based custom
+      // forks, future Mastodon-compat servers without a known software name,
+      // etc. If NodeInfo gave us a specific identity (e.g. "film-review"),
+      // keep it as the software label so account.software stays accurate.
       const mastodonRes = await fetch(buildUrl(`${instanceUrl}/api/v1/instance`), {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
       }).catch(() => null);
 
       if (mastodonRes && mastodonRes.ok) {
+        // Optionally peek at the body for a version string that names a known
+        // fork (e.g. "Hometown 1.x" inside a stock Mastodon-shaped response).
+        let detectedSoftware = nodeInfoSw || 'mastodon';
+        let displayLabel = nodeInfoSw
+          ? `${nodeInfoSw.charAt(0).toUpperCase()}${nodeInfoSw.slice(1)} 감지됨 (Mastodon 호환)`
+          : 'Mastodon 감지됨';
+        try {
+          const meta = await mastodonRes.clone().json();
+          const versionStr = (meta.version || '').toLowerCase();
+          if (!nodeInfoSw && versionStr) {
+            // Substring match against known forks first
+            const forkMatch = ['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma', 'hometown', 'gotosocial']
+              .find(s => versionStr.includes(s));
+            if (forkMatch) {
+              detectedSoftware = forkMatch;
+              displayLabel = `${forkMatch.charAt(0).toUpperCase()}${forkMatch.slice(1)} 감지됨 (Mastodon 호환)`;
+            }
+          }
+        } catch { /* body wasn't parseable — proceed with defaults */ }
+
         this.platformSelect.value = 'mastodon';
-        this._detectedSoftware = 'mastodon';
-        detectedEl.textContent = 'Mastodon 감지됨';
+        this._detectedSoftware = detectedSoftware;
+        detectedEl.textContent = displayLabel;
         detectedEl.className = 'detected-platform detected platform-mastodon';
         this.updateOAuthButton();
         return;

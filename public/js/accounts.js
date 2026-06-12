@@ -67,6 +67,34 @@ export class AccountStore {
     }
   }
 
+  // Look up an account's actual fediverse software via NodeInfo. Used to
+  // backfill account.software for entries that pre-date NodeInfo detection
+  // (or arrived via cloud sync without it).
+  async _detectAccountSoftware(account) {
+    if (!account?.instanceUrl) return null;
+    const useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    const buildUrl = (target) => useProxy ? `/proxy?url=${encodeURIComponent(target)}` : target;
+    try {
+      const discRes = await fetch(buildUrl(`${account.instanceUrl}/.well-known/nodeinfo`), {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!discRes.ok) return null;
+      const disc = await discRes.json();
+      const link = (disc.links || []).find(l => (l.rel || '').includes('nodeinfo'));
+      if (!link?.href) return null;
+      let niUrl;
+      try { niUrl = new URL(link.href); } catch { return null; }
+      if (niUrl.host !== new URL(account.instanceUrl).host) return null;
+      const niRes = await fetch(buildUrl(link.href), { headers: { 'Accept': 'application/json' } });
+      if (!niRes.ok) return null;
+      const ni = await niRes.json();
+      const sw = (ni.software?.name || '').toLowerCase();
+      return sw || null;
+    } catch {
+      return null;
+    }
+  }
+
   getClient(accountId) {
     return this.clients.get(accountId);
   }
@@ -150,6 +178,21 @@ export class AccountStore {
         updates.push(
           client.fetchThemeColor().then(color => {
             if (color) account.themeColor = color;
+          }).catch(() => {})
+        );
+      }
+      // Re-detect software when the stored value is missing or generic
+      // (account was added before NodeInfo detection / arrived via cloud sync
+      // with stale platform-as-software default). Newer enrichment paths gate
+      // on software identity, so accuracy here pays off downstream.
+      if (!account.software || account.software === account.platform) {
+        updates.push(
+          this._detectAccountSoftware(account).then(sw => {
+            if (sw && sw !== account.software) {
+              account.software = sw;
+              // Replace the client so MastodonClient.software stays consistent
+              this.clients.set(account.id, this.createClient(account));
+            }
           }).catch(() => {})
         );
       }

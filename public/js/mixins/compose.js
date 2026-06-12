@@ -23,7 +23,7 @@ export const ComposeMixin = {
       const dotColor = this._accountColor(account);
       const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       btn.innerHTML = `
-        <img class="compose-account-avatar" src="${p.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+        <img class="compose-account-avatar" src="${escapeHtml(cachedImageUrl(p.avatarUrl || ''))}" alt="" width="20" height="20" referrerpolicy="no-referrer" onerror="this.style.display='none'">
         <span class="compose-account-name">${escapeHtml(p.displayName)}</span>
         <span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>
       `;

@@ -1064,7 +1064,10 @@ async function handleProxy(request, url) {
 
   try {
     const proxyHeaders = new Headers();
-    proxyHeaders.set('User-Agent', 'StarShip/1.0');
+    // Browser-like UA: avoids Cloudflare bot challenges on protected fediverse
+    // instances (Hollo, Mastodon-compat behind CF). Matches the /cache/image
+    // proxy's UA so all fediverse-bound subrequests look consistent.
+    proxyHeaders.set('User-Agent', 'Mozilla/5.0 (compatible; StarShip/1.0; +https://starship.eeruwang.workers.dev)');
     proxyHeaders.set('Accept', 'application/json');
 
     const authHeader = request.headers.get('Authorization');

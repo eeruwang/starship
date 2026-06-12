@@ -674,12 +674,10 @@ export const ProfileModalMixin = {
       badges.id = 'profile-follow-badges';
       badges.className = 'profile-follow-badges';
 
-      if (isFollowedBy) {
-        badges.innerHTML += `<span class="follow-badge follow-badge-follower">나를 팔로우 중</span>`;
-      }
-      if (isFollowing) {
-        badges.innerHTML += `<span class="follow-badge follow-badge-following">팔로우 중</span>`;
-      }
+      const badgeParts = [];
+      if (isFollowedBy) badgeParts.push('<span class="follow-badge follow-badge-follower">나를 팔로우 중</span>');
+      if (isFollowing) badgeParts.push('<span class="follow-badge follow-badge-following">팔로우 중</span>');
+      if (badgeParts.length > 0) badges.innerHTML = badgeParts.join('');
 
       // Insert badges into banner area
       const bannerWrap = document.querySelector('#modal-profile .profile-banner-wrap');
