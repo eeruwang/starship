@@ -77,14 +77,31 @@ class StarShipApp {
   }
 
   saveSettings() {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch {}
     this.debouncedSaveToCloud();
   }
 
   applySettings() {
     document.documentElement.style.setProperty('--column-width', `${this.settings.columnWidth}px`);
     document.documentElement.style.fontSize = `${this.settings.fontSize}px`;
-    document.documentElement.setAttribute('data-theme', this.settings.theme || 'dark');
+    // theme === 'system' → follow OS preference, hooked up below so future
+    // changes (toggling dark/light at OS level) propagate live.
+    const requested = this.settings.theme || 'dark';
+    const resolved = requested === 'system'
+      ? (window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+      : requested;
+    document.documentElement.setAttribute('data-theme', resolved);
+    if (requested === 'system' && !this._systemThemeMql) {
+      this._systemThemeMql = window.matchMedia?.('(prefers-color-scheme: light)');
+      if (this._systemThemeMql) {
+        const handler = (e) => {
+          if (this.settings.theme === 'system') {
+            document.documentElement.setAttribute('data-theme', e.matches ? 'light' : 'dark');
+          }
+        };
+        this._systemThemeMql.addEventListener?.('change', handler);
+      }
+    }
     this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
   }
 
@@ -111,7 +128,7 @@ class StarShipApp {
   }
 
   saveColumnState() {
-    localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(this.columnState));
+    try { localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(this.columnState)); } catch {}
     this.debouncedSaveToCloud();
   }
 

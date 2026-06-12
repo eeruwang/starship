@@ -1098,20 +1098,30 @@ export const DataLoadingMixin = {
         const AP_SHOW_LIMIT = 3;
         for (const { item, post, dp } of toFetch.slice(0, 10)) {
           try {
-            // Use notes/show (high rate limit) when note ID is cached, fallback to ap/show
-            let resolved;
-            const cachedNoteId = dp._misskeyNoteId
-              || (dp._noteIdsByInstance && dp._noteIdsByInstance[misskeyAccount.instanceUrl]);
-            if (cachedNoteId) {
-              const rawNote = await client.getNote(cachedNoteId);
-              if (rawNote) resolved = client.normalizePost(rawNote);
-            } else if (apShowCount < AP_SHOW_LIMIT) {
-              resolved = await this._cachedResolveUrl(client, dp.canonicalUri);
-              apShowCount++;
-            } else {
-              continue; // Skip to preserve rate limit for user actions
+            // Walk every Misskey account in the store: a post one instance
+            // can't federate may live on another. Stop at the first success.
+            // Cached note IDs (per instance) bypass the strict ap/show limit.
+            let resolved = null;
+            let usedAccount = null;
+            let usedClient = null;
+            for (const ma of allMisskeyAccounts) {
+              const mc = this.store.getClient(ma.id);
+              if (!mc) continue;
+              const cachedNoteId = (dp._noteIdsByInstance && dp._noteIdsByInstance[ma.instanceUrl])
+                || (ma.instanceUrl === misskeyAccount.instanceUrl ? dp._misskeyNoteId : null);
+              if (cachedNoteId) {
+                try {
+                  const rawNote = await mc.getNote(cachedNoteId);
+                  if (rawNote) { resolved = mc.normalizePost(rawNote); usedAccount = ma; usedClient = mc; break; }
+                } catch { /* try next account */ }
+              } else if (apShowCount < AP_SHOW_LIMIT) {
+                try {
+                  const r = await this._cachedResolveUrl(mc, dp.canonicalUri);
+                  if (r) { resolved = r; usedAccount = ma; usedClient = mc; apShowCount++; break; }
+                } catch { /* try next account */ }
+              }
             }
-            if (!resolved) continue;
+            if (!resolved || !usedAccount) continue;
             const rdp = resolved.reblog || resolved;
             if (!rdp.reactions || Object.keys(rdp.reactions).length === 0) continue;
             dp.reactions = rdp.reactions;
@@ -1123,10 +1133,10 @@ export const DataLoadingMixin = {
             }
             if (rdp.myReaction && !dp.myReaction) dp.myReaction = rdp.myReaction;
             dp._misskeyNoteId = rdp.id;
-            dp._misskeyAccountId = misskeyAccount.id;
-            if (misskeyAccount.instanceUrl) {
+            dp._misskeyAccountId = usedAccount.id;
+            if (usedAccount.instanceUrl) {
               if (!dp._noteIdsByInstance) dp._noteIdsByInstance = {};
-              dp._noteIdsByInstance[misskeyAccount.instanceUrl] = rdp.id;
+              dp._noteIdsByInstance[usedAccount.instanceUrl] = rdp.id;
             }
             this._adjustFavouritesForReactions(dp);
             this.postCache.set(`${post.platform}:${post.id}`, post);

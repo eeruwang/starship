@@ -171,10 +171,14 @@ export function openAuthPopup(url) {
   const left = window.screenX + (window.outerWidth - width) / 2;
   const top = window.screenY + (window.outerHeight - height) / 2;
 
+  // Use a unique target name per call so two concurrent OAuth attempts (e.g.
+  // user clicks "로그인으로 연결" again while the first popup is open) don't
+  // collide and replace each other's URL.
+  const targetName = `starship_auth_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const popup = window.open(
     url,
-    'starship_auth',
-    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    targetName,
+    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,noopener=no`
   );
 
   if (!popup) {
@@ -187,7 +191,7 @@ export function openAuthPopup(url) {
 }
 
 export function savePendingAuth(data) {
-  localStorage.setItem(PENDING_AUTH_KEY, JSON.stringify(data));
+  try { localStorage.setItem(PENDING_AUTH_KEY, JSON.stringify(data)); } catch {}
 }
 
 export function loadPendingAuth() {

@@ -44,7 +44,7 @@ export class StreamManager {
     this._relayWs = null;
     this._relayConnecting = false;
     this._relayReconnectTimer = null;
-    this._relayReconnectDelay = 2000;
+    this._relayReconnectDelay = 800;
     this._relayPingInterval = null;
     this._relayConnectedAccounts = new Set();
     this._lastEventTimestamp = 0;
@@ -210,7 +210,7 @@ export class StreamManager {
         clearTimeout(timeout);
         this._relayConnecting = false;
         this._mode = 'relay';
-        this._relayReconnectDelay = 2000;
+        this._relayReconnectDelay = 800;
         console.log('[Stream] Relay connected');
 
         // Subscribe all registered accounts (excluding those without streaming)
@@ -402,7 +402,7 @@ export class StreamManager {
       client,
       ws: null,
       reconnectTimer: null,
-      reconnectDelay: 2000,
+      reconnectDelay: 800,
       intentionalClose: false,
     };
     this._directConnections.set(account.id, state);
@@ -428,7 +428,7 @@ export class StreamManager {
 
       ws.onopen = () => {
         console.log(`[Stream] Connected: ${account.label}`);
-        state.reconnectDelay = 2000;
+        state.reconnectDelay = 800;
         state.lastActivity = Date.now();
         state.awaitingPong = false;
         state._pongSupported = false;
@@ -540,7 +540,7 @@ export class StreamManager {
     state._pongSupported = false;
     state._lastBuffered = null;
     this._emit('disconnected', { accountId: state.account.id });
-    state.reconnectDelay = 2000;
+    state.reconnectDelay = 800;
     this._scheduleDirectReconnect(state);
   }
 
@@ -706,7 +706,7 @@ export class StreamManager {
         this._relayWs = null;
         this._clearRelayPing();
         if (!this._relayReconnectTimer && !this._intentionalClose) {
-          this._relayReconnectDelay = 2000;
+          this._relayReconnectDelay = 800;
           this._scheduleRelayReconnect();
         }
         return;
@@ -728,7 +728,7 @@ export class StreamManager {
       if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
         state.ws = null;
         if (!state.reconnectTimer) {
-          state.reconnectDelay = 2000;
+          state.reconnectDelay = 800;
           this._scheduleDirectReconnect(state);
         }
         continue;
@@ -757,7 +757,7 @@ export class StreamManager {
   _reconnectAll() {
     if (this._mode === 'relay') {
       this._closeRelay();
-      this._relayReconnectDelay = 2000;
+      this._relayReconnectDelay = 800;
       this._ensureRelay();
       return;
     }

@@ -41,7 +41,7 @@ export class AccountStore {
   }
 
   save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.accounts));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.accounts)); } catch {}
   }
 
   initClients() {

@@ -63,8 +63,35 @@ export default {
       return handleApi(request, url, env);
     }
 
-    // Static files
-    return env.ASSETS.fetch(request);
+    // Static files — wrap with security headers. CSP is REPORT-ONLY because
+    // the current UI uses inline `onerror=` attributes on dozens of <img>
+    // elements (avatar/media fallback) which a strict script-src would block.
+    // Report-only lets us see violations in dev console without breaking the
+    // app; once those inline handlers are migrated to delegated listeners we
+    // can flip this to enforcing mode. X-Content-Type-Options and
+    // Referrer-Policy are safe to enforce immediately.
+    const assetRes = await env.ASSETS.fetch(request);
+    const ct = assetRes.headers.get('Content-Type') || '';
+    if (ct.includes('text/html')) {
+      const headers = new Headers(assetRes.headers);
+      headers.set('Content-Security-Policy-Report-Only', [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src * data: blob:",
+        "media-src *",
+        "connect-src *",
+        "font-src 'self' data:",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+      ].join('; '));
+      headers.set('X-Content-Type-Options', 'nosniff');
+      headers.set('Referrer-Policy', 'no-referrer');
+      headers.set('X-Frame-Options', 'DENY');
+      return new Response(assetRes.body, { status: assetRes.status, headers });
+    }
+    return assetRes;
   },
 };
 

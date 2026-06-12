@@ -1102,6 +1102,11 @@ export const PostActionsMixin = {
     this.composeText.dataset.quoteUrl = quoteUrl;
     if (quoteAccountId) this.composeText.dataset.quoteAccountId = quoteAccountId;
     this.composeText.placeholder = '인용 내용을 작성하세요...';
+    // Inherit the quoted post's CW so the quote post stays under the same
+    // hiding context. User can clear/edit before posting.
+    if (quotedPost?.contentWarning && !this.composeCw.value) {
+      this.composeCw.value = quotedPost.contentWarning;
+    }
 
     // Show quote preview using the existing reply-context container
     const ctx = document.getElementById('compose-reply-context');

@@ -275,6 +275,19 @@ h4.mfm-heading { font-size: 1em; }
 .mfm-jelly { display: inline-block; animation: mfmJelly 1s ease infinite; transform-origin: center bottom; }
 .mfm-rainbow { background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); background-size: 200%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: mfmRainbow 2s linear infinite; }
 
+/* Honour OS / browser "reduce motion" preference. Users with vestibular
+   sensitivity get their content rendered without the dizzying loops; MFM
+   text colour effects (rainbow) are preserved since they don't move. */
+@media (prefers-reduced-motion: reduce) {
+  .mfm-sparkle, .mfm-spin, .mfm-spin-x, .mfm-spin-y,
+  .mfm-shake, .mfm-bounce, .mfm-jump, .mfm-tada,
+  .mfm-twitch, .mfm-jelly, .mfm-rainbow {
+    animation: none !important;
+  }
+  /* Allow rainbow's gradient to stay (it's the static text-fill that
+     matters), but freeze its animation. */
+}
+
 @keyframes mfmSparkle {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.6; transform: scale(0.95); }

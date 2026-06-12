@@ -341,3 +341,14 @@ body {
   font-size: 1rem;
 }
 
+
+/* Global reduced-motion override: lightbox zoom/slide, new-post slideDown,
+   spinner, transitions etc. Loaders still appear but without spin. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
