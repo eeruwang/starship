@@ -818,6 +818,113 @@ export const DataLoadingMixin = {
     dp.stats.favourites = Math.max(0, dp.stats.favourites - nonHeartReactions);
   },
 
+  // === Reaction enrichment confidence model ===
+  // Higher number = higher confidence. Lower-confidence sources can't overwrite
+  // a higher-confidence assignment, and a "resolved-negative" (we know the
+  // actor did NOT make an emoji reaction) is absolute — no later path may
+  // upgrade it to a reaction.
+  _REACTION_CONFIDENCE: {
+    none: 0,
+    low: 1,         // _promoteFavouriteToReaction — aggregate guess
+    inferred: 2,    // Phase 2a single-emoji inference, Phase 4 unauth per-user
+    authoritative: 3, // Phase 3 authenticated Misskey per-user, Phase 2b own server
+  },
+
+  // Assign a reaction emoji/url to a notification, respecting confidence rank.
+  // Returns true when a (possibly identical) update was applied, false when
+  // skipped due to a higher-confidence existing assignment or a negative lock.
+  _assignReaction(notif, { emoji, emojiUrl = null, source = 'inferred', emojiBaseUrl = '' }) {
+    if (!notif) return false;
+    if (notif._reactionResolvedNegative) return false; // absolute lock
+    const cur = this._REACTION_CONFIDENCE[notif._reactionSource || 'none'];
+    const next = this._REACTION_CONFIDENCE[source] ?? 0;
+    if (next < cur) return false;
+    // Compute URL with fallbacks (only when not provided)
+    let url = emojiUrl;
+    const customMatch = emoji.match(/^:(.+):$/);
+    if (customMatch && !url) {
+      const name = customMatch[1];
+      const baseName = name.replace(/@\.$/, '');
+      if (emojiBaseUrl && !baseName.includes('@')) {
+        url = `${emojiBaseUrl.replace(/\/+$/, '')}/emoji/${encodeURIComponent(baseName)}.webp`;
+      }
+    }
+    notif.type = 'reaction';
+    notif.label = '리액션';
+    notif.reactionEmoji = emoji;
+    notif.icon = emoji;
+    notif.reactionEmojiUrl = url || notif.reactionEmojiUrl || null;
+    notif._reactionSource = source;
+    const actorKey = notif.actor?.acct || notif.actor?.id || '';
+    const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+    notif._dedupKey = `reaction:${actorKey}:${postKey}:${emoji}`;
+    return true;
+  },
+
+  // Mark that an authoritative source confirmed the actor did NOT emoji-react
+  // (per-user fetch succeeded but actor not in result). Locks the notification
+  // as plain favourite forever — no subsequent phase may promote it.
+  _markReactionResolvedNegative(notif) {
+    if (!notif) return;
+    notif._reactionResolvedNegative = true;
+    // Demote any prior low/inferred assignment back to favourite
+    if (notif.type === 'reaction' && (notif._reactionSource === 'low' || notif._reactionSource === 'inferred')) {
+      notif.type = 'favourite';
+      notif.label = '좋아요';
+      notif.reactionEmoji = null;
+      notif.reactionEmojiUrl = null;
+      notif.icon = null;
+      notif._reactionSource = null;
+      const actorKey = notif.actor?.acct || notif.actor?.id || '';
+      const postKey = notif.post?.canonicalUri || notif.post?.id || '';
+      notif._dedupKey = `favourite:${actorKey}:${postKey}`;
+    }
+  },
+
+  // === Retry queue for un-resolved notifications ===
+  // After all enrichment phases finish, notifications that should plausibly
+  // have a reaction (post had favourites_count > 0) but ended up with no
+  // resolution get scheduled for retry on subsequent refresh cycles. Backoff:
+  // attempt 1 → next refresh, then 2 → +60s, 3 → +5m, 4+ → drop.
+  _scheduleRetry(notif, container) {
+    if (!this._enrichmentRetry) this._enrichmentRetry = new Map();
+    const key = notif.id + '@' + (notif.platform || 'mastodon');
+    const prev = this._enrichmentRetry.get(key);
+    const attempts = (prev?.attempts || 0) + 1;
+    if (attempts > 3) {
+      this._enrichmentRetry.delete(key);
+      return;
+    }
+    const delays = [0, 60_000, 300_000];
+    this._enrichmentRetry.set(key, {
+      notif, container,
+      attempts,
+      nextAt: Date.now() + delays[Math.min(attempts - 1, delays.length - 1)],
+    });
+  },
+
+  // Called by auto-refresh tick. Picks notifs whose nextAt has elapsed and
+  // routes them through _fetchMissingReactions again.
+  _processEnrichmentRetries() {
+    if (!this._enrichmentRetry || this._enrichmentRetry.size === 0) return;
+    const now = Date.now();
+    const byContainer = new Map();
+    for (const [key, entry] of this._enrichmentRetry) {
+      if (entry.nextAt > now) continue;
+      if (!entry.container.isConnected) { this._enrichmentRetry.delete(key); continue; }
+      if (entry.notif._reactionSource === 'authoritative' || entry.notif._reactionResolvedNegative) {
+        this._enrichmentRetry.delete(key);
+        continue;
+      }
+      if (!byContainer.has(entry.container)) byContainer.set(entry.container, []);
+      byContainer.get(entry.container).push(entry.notif);
+      // Don't delete entry yet — _scheduleRetry will bump attempts if still unresolved
+    }
+    for (const [container, notifs] of byContainer) {
+      this._fetchMissingReactions(notifs, container, { isNotification: true });
+    }
+  },
+
   // Routine-path warnings (unauth API rejections, instance-not-misskey, etc.)
   // run every refresh cycle and flood production console. Gate them behind a
   // localStorage flag so power users / debugging sessions can opt in.
@@ -838,35 +945,74 @@ export const DataLoadingMixin = {
   // load paths (fresh notifications + older paginated batch).
   _promoteFavouriteToReaction(n) {
     if (!n || n.type !== 'favourite' || !n.post) return;
+    // First, prefer per-user data persisted on the post (set by an authoritative
+    // Phase 3 lookup in an earlier session/refresh and round-tripped through
+    // postCache). This is the only path with confidence='authoritative' at
+    // promote time.
     const dp = n.post.reblog || n.post;
+    if (dp._reactionByUser) {
+      const acctKey = this._normalizeAcct(n.actor?.acct || '', n.instanceUrl).toLowerCase();
+      const emoji = acctKey ? dp._reactionByUser[acctKey] : null;
+      if (emoji && emoji !== '❤' && emoji !== '❤️' && emoji !== '⭐' && emoji !== '⭐️') {
+        const url = this._lookupEmojiUrl(emoji, dp, n.actor?.acct);
+        this._assignReaction(n, {
+          emoji, emojiUrl: url, source: 'authoritative',
+          emojiBaseUrl: dp._reactionInstanceUrl || dp.instanceUrl || '',
+        });
+        return;
+      }
+      if (emoji === '❤' || emoji === '❤️' || emoji === '⭐' || emoji === '⭐️') {
+        this._markReactionResolvedNegative(n);
+        return;
+      }
+      // We have per-user data but the actor isn't in it → they really did
+      // press plain favourite (or our previous fetch was paginated and missed
+      // them — Phase 3 will refresh).
+    }
     if (!dp.reactions || dp._reactionsFromCache) return;
     const nonHeart = Object.entries(dp.reactions)
       .filter(([k]) => k !== '❤' && k !== '❤️');
     if (nonHeart.length === 0) return;
     const [emoji] = nonHeart.sort((a, b) => b[1] - a[1])[0];
-    n.type = 'reaction';
-    n.label = '리액션';
-    n.reactionEmoji = emoji;
-    n.icon = emoji;
-    const match = emoji.match(/^:(.+):$/);
-    if (!match) return;
+    const url = this._lookupEmojiUrl(emoji, dp, n.actor?.acct);
+    this._assignReaction(n, {
+      emoji, emojiUrl: url, source: 'low',
+      emojiBaseUrl: dp._reactionInstanceUrl || dp.instanceUrl || '',
+    });
+  },
+
+  // Persist per-user reaction mapping on the post object so subsequent
+  // refreshes can answer "what did this actor react with" without re-querying
+  // the Misskey API. Survives via postCache → _mergeReactionsFromCache.
+  _persistReactionByUser(post, reactionByUser) {
+    if (!post || !reactionByUser || reactionByUser.size === 0) return;
+    const dp = post.reblog || post;
+    if (!dp._reactionByUser) dp._reactionByUser = {};
+    for (const [acct, emoji] of reactionByUser) {
+      dp._reactionByUser[acct] = emoji;
+    }
+    if (this.postCache) this.postCache.set(`${post.platform}:${post.id}`, post);
+  },
+
+  // Resolve a custom emoji shortcode to a URL using post emoji maps, actor's
+  // own host, or the post's origin instance as fallbacks. Used by both promote
+  // and applyReactions paths.
+  _lookupEmojiUrl(emoji, dp, actorAcct) {
+    const match = (emoji || '').match(/^:(.+):$/);
+    if (!match) return null;
     const name = match[1];
     const baseName = name.replace(/@\.$/, '');
-    n.reactionEmojiUrl = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
-                      || dp.emojis?.[name] || dp.emojis?.[name + '@.']
-                      || null;
-    // Fallback: actor's host first (they hold the emoji file), then post's
-    // origin instance. <img> onerror cleanly hides if neither serves it.
-    if (!n.reactionEmojiUrl && !baseName.includes('@')) {
-      const acct = n.actor?.acct;
-      if (acct && acct.includes('@')) {
-        const host = acct.split('@').pop();
-        n.reactionEmojiUrl = `https://${host}/emoji/${encodeURIComponent(baseName)}.webp`;
-      } else {
-        const baseUrl = dp._reactionInstanceUrl || dp.instanceUrl;
-        if (baseUrl) n.reactionEmojiUrl = `${baseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
-      }
+    let url = dp.reactionEmojis?.[name] || dp.reactionEmojis?.[name + '@.']
+           || dp.emojis?.[name] || dp.emojis?.[name + '@.']
+           || null;
+    if (url || baseName.includes('@')) return url;
+    if (actorAcct && actorAcct.includes('@')) {
+      const host = actorAcct.split('@').pop();
+      return `https://${host}/emoji/${encodeURIComponent(baseName)}.webp`;
     }
+    const baseUrl = dp._reactionInstanceUrl || dp.instanceUrl;
+    if (baseUrl) return `${baseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+    return null;
   },
 
   _mergeReactionsFromCache(posts) {
@@ -893,6 +1039,10 @@ export const DataLoadingMixin = {
         dp.reactionEmojis = cached.reactionEmojis || dp.reactionEmojis;
         dp.emojis = cached.emojis || dp.emojis;
         if (cached.myReaction && !dp.myReaction) dp.myReaction = cached.myReaction;
+        if (cached._reactionByUser) {
+          // Per-user reaction mapping: merge in, prefer existing entries on dp
+          dp._reactionByUser = { ...cached._reactionByUser, ...(dp._reactionByUser || {}) };
+        }
         if (cached._misskeyNoteId) dp._misskeyNoteId = cached._misskeyNoteId;
         if (cached._misskeyAccountId) dp._misskeyAccountId = cached._misskeyAccountId;
         if (cached._reactionInstanceUrl) dp._reactionInstanceUrl = cached._reactionInstanceUrl;
@@ -911,7 +1061,12 @@ export const DataLoadingMixin = {
   // favourites but no detailed reactions. Uses ap/show to look up the post on Misskey.
   // Fire-and-forget: cards are re-rendered in-place as results arrive.
   _fetchMissingReactions(items, container, { isNotification = false } = {}) {
-    const misskeyAccount = this.store.getAll().find(a => a.platform !== 'mastodon');
+    // Use ALL Misskey-family accounts (not just the first). Different
+    // instances have different federation graphs — a post one instance can't
+    // resolve may be present on another. Phase 1 / Phase 3 walks the list in
+    // order until one succeeds.
+    const allMisskeyAccounts = this.store.getAll().filter(a => a.platform !== 'mastodon');
+    const misskeyAccount = allMisskeyAccounts[0] || null;
     const client = misskeyAccount ? this.store.getClient(misskeyAccount.id) : null;
 
     const misskeyHost = (() => {
@@ -1157,60 +1312,67 @@ export const DataLoadingMixin = {
       favByUri.get(uri).push(notif);
     }
 
-    // Shared helper: apply resolved reaction data to notification group
-    const applyReactions = (groupNotifs, reactionByUser, reactionEmojis, emojiBaseUrl) => {
+    // Shared helper: apply resolved reaction data to notification group.
+    // `source` indicates the confidence: 'authoritative' (Phase 3 / Phase 2b
+    // per-user from real API), 'inferred' (Phase 2a single-emoji guess,
+    // Phase 4 unauth per-user), or 'low' (used by promote only). When the
+    // lookup ran successfully AND the actor wasn't in the result, we mark the
+    // notif as resolved-negative so it stays as a plain favourite for good.
+    const applyReactions = (groupNotifs, reactionByUser, reactionEmojis, emojiBaseUrl, source = 'authoritative', { ground = false } = {}) => {
       let changed = false;
       for (const notif of groupNotifs) {
+        if (notif._reactionResolvedNegative) continue;
         const actorAcct = notif.actor?.acct
           ? this._normalizeAcct(notif.actor.acct, notif.instanceUrl).toLowerCase()
           : null;
         if (!actorAcct) continue;
 
-        // Exact match only — use per-user reaction data from notes/reactions.
-        // No aggregate fallback: if the actor isn't in reactionByUser, they
-        // likely just pressed favourite on Mastodon (recorded as ❤ on Misskey).
         const emoji = reactionByUser.get(actorAcct);
-        if (!emoji) continue;
+        if (!emoji) {
+          // Ground-truth fetches (Phase 3 per-user) know the full reactor set.
+          // Actor not in it = they didn't react with an emoji. Lock so no later
+          // inference may flip them to the wrong emoji.
+          if (ground && source === 'authoritative') this._markReactionResolvedNegative(notif);
+          continue;
+        }
         // Default-favourite reactions are federated Mastodon favourites — don't
-        // convert. Misskey instances vary on what their default favourite is:
-        // newer ones use ❤, but misskey.io and many older deployments record
-        // it as ⭐. Treating both as "this was just a Like activity" keeps
-        // those notifications looking like proper Mastodon favourites instead
-        // of mass-appearing as star reactions.
-        if (emoji === '❤' || emoji === '❤️' || emoji === '⭐' || emoji === '⭐️') continue;
+        // convert. misskey.io and older Misskey deployments record default
+        // favourites as ⭐, newer ones as ❤. Both signal "just a Like".
+        if (emoji === '❤' || emoji === '❤️' || emoji === '⭐' || emoji === '⭐️') {
+          if (ground && source === 'authoritative') this._markReactionResolvedNegative(notif);
+          continue;
+        }
 
-        notif.type = 'reaction';
-        notif.label = '리액션';
-        notif.reactionEmoji = emoji;
-        notif.icon = emoji;
-
+        // Resolve custom emoji URL through the shared lookup (post emoji maps,
+        // actor host, post origin) — keeps fallbacks consistent across phases.
+        let url = null;
         const customMatch = emoji.match(/^:(.+):$/);
         if (customMatch) {
           const name = customMatch[1];
-          const url = reactionEmojis[name] || reactionEmojis[name + '@.'] || null;
-          if (url) {
-            notif.reactionEmojiUrl = url;
-          } else {
-            const baseName = name.replace(/@\.$/, '');
-            notif.reactionEmojiUrl = `${emojiBaseUrl}/emoji/${encodeURIComponent(baseName)}.webp`;
+          url = reactionEmojis?.[name] || reactionEmojis?.[name + '@.'] || null;
+        }
+        if (!url) {
+          const dp = notif.post?.reblog || notif.post;
+          if (dp) url = this._lookupEmojiUrl(emoji, dp, notif.actor?.acct);
+          if (!url && customMatch) {
+            const baseName = customMatch[1].replace(/@\.$/, '');
+            if (emojiBaseUrl) url = `${emojiBaseUrl.replace(/\/+$/, '')}/emoji/${encodeURIComponent(baseName)}.webp`;
           }
         }
-
-        const actorKey = notif.actor?.acct || notif.actor?.id || '';
-        const postKey = notif.post?.canonicalUri || notif.post?.id || '';
-        notif._dedupKey = `reaction:${actorKey}:${postKey}:${emoji}`;
-        changed = true;
+        const applied = this._assignReaction(notif, { emoji, emojiUrl: url, source, emojiBaseUrl });
+        if (applied) changed = true;
       }
       return changed;
     };
 
     const rerenderGroup = (groupNotifs) => {
       for (const notif of groupNotifs) {
-        if (notif.type !== 'reaction') continue;
+        // Re-render reactions AND notifs demoted back to favourite by a
+        // ground-truth negative resolution, so the badge stays in sync.
+        if (notif.type !== 'reaction' && !notif._reactionResolvedNegative) continue;
         const cards = container.querySelectorAll(`.notif-card[data-notif-id="${notif.id}"]`);
         for (const card of cards) {
           if (!card.isConnected) continue;
-          // After async conversion, check if a native reaction card with same dedupKey already exists
           if (notif._dedupKey) {
             const dupCard = container.querySelector(`.notif-card[data-dedup-key="${CSS.escape(notif._dedupKey)}"]`);
             if (dupCard && dupCard !== card && dupCard.isConnected) {
@@ -1254,12 +1416,10 @@ export const DataLoadingMixin = {
       }
       const reactionEmojis = dp.reactionEmojis || {};
       const emojiBaseUrl = dp._reactionInstanceUrl || dp.instanceUrl || '';
-      const changed = applyReactions(groupNotifs, inferredByUser, reactionEmojis, emojiBaseUrl);
-      if (changed) {
-        rerenderGroup(groupNotifs);
-        // Skip this group in the lookup paths below — already enriched
-        favByUri.delete(uri);
-      }
+      const changed = applyReactions(groupNotifs, inferredByUser, reactionEmojis, emojiBaseUrl, 'inferred');
+      if (changed) rerenderGroup(groupNotifs);
+      // Don't delete favByUri — Phase 3/2b may have authoritative data that
+      // overrides this guess (and may demote to favourite via ground-truth).
     }
 
     // --- Phase 2b: Use the receiving Mastodon account's own reactions API ---
@@ -1316,12 +1476,11 @@ export const DataLoadingMixin = {
                   }
                 }
               }
-              if (reactionByUser.size === 0) continue;
-              const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, acct.instanceUrl);
-              if (changed) {
-                rerenderGroup(groupNotifs);
-                favByUri.delete(uri);
-              }
+              // Persist on the post for subsequent refreshes — survives via postCache
+              this._persistReactionByUser(groupNotifs[0].post, reactionByUser);
+              const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, acct.instanceUrl, 'authoritative', { ground: true });
+              if (changed) rerenderGroup(groupNotifs);
+              favByUri.delete(uri);
             } catch (e) {
               this._debugWarn('[StarShip] mastodon-self fav→reaction error:', e?.message || e);
             }
@@ -1381,51 +1540,82 @@ export const DataLoadingMixin = {
           }
           if (reactionByUser.size === 0) continue;
 
-          const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, actorInstance);
-          if (changed) {
-            rerenderGroup(groupNotifs);
-            favByUri.delete(uri);
-          }
+          this._persistReactionByUser(groupNotifs[0].post, reactionByUser);
+          const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, actorInstance, 'inferred');
+          if (changed) rerenderGroup(groupNotifs);
         } catch (e) {
           this._debugWarn('[StarShip] mastodon-compat unauth fav→reaction error:', e?.message || e);
         }
       }
     })();
 
-    if (client) {
-      // --- Authenticated approach using Misskey account (sequential to avoid rate limits) ---
+    if (allMisskeyAccounts.length > 0) {
+      // --- Phase 3: Authenticated Misskey lookup (per-user, authoritative) ---
+      // Walk ALL Misskey-family accounts the user has (not just the first):
+      // different instances see different federation graphs, and a post that
+      // misskey.io can't resolve may be present on sharkey.somewhere etc.
+      //   • Resolve URI sequentially per account, stop at first success.
+      //   • Fetch up to 100 reactions per note in one call (Misskey allows it).
+      //   • If response is paginated (size === limit), pull next page via
+      //     offset until we cover ≤ 300 reactions or hit the actor.
+      //   • Pass ground=true so applyReactions can demote actors not in the
+      //     fully-fetched reactor set to a locked-favourite.
       (async () => {
-        for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 10)) {
+        for (const [uri, groupNotifs] of [...favByUri.entries()].slice(0, 12)) {
           try {
-            let resolved;
-            try {
-              resolved = await this._cachedResolveUrl(client, uri);
-            } catch (e) {
-              this._debugWarn('[StarShip] fav→reaction: resolveUrl failed for', uri, e.message || e);
-              continue;
+            let resolved = null;
+            let mskClient = null;
+            let mskAccount = null;
+            for (const ma of allMisskeyAccounts) {
+              const mc = this.store.getClient(ma.id);
+              if (!mc) continue;
+              try {
+                const r = await this._cachedResolveUrl(mc, uri);
+                if (r) { resolved = r; mskClient = mc; mskAccount = ma; break; }
+              } catch (e) {
+                this._debugWarn('[StarShip] fav→reaction resolveUrl failed on', ma.label, e?.message || e);
+              }
             }
-            if (!resolved) continue;
+            if (!resolved || !mskClient) continue;
             const rdp = resolved.reblog || resolved;
             if (!rdp.id) continue;
+            const mskHost = (() => {
+              try { return new URL(mskAccount.instanceUrl).hostname; } catch { return ''; }
+            })();
 
             const reactionByUser = new Map();
+            let fetchedFully = false;
             try {
-              const userReactions = await client.getReactions(rdp.id) || [];
-              for (const r of userReactions) {
-                if (!r.user) continue;
-                const host = r.user.host || misskeyHost;
-                const acct = `${r.user.username}@${host}`.toLowerCase();
-                reactionByUser.set(acct, r.type);
+              const LIMIT = 100;
+              let collected = 0;
+              const MAX_TOTAL = 300;
+              let lastBatchSize = LIMIT;
+              while (lastBatchSize === LIMIT && collected < MAX_TOTAL) {
+                const batch = await mskClient.getReactions(rdp.id, null, { limit: LIMIT, offset: collected });
+                if (!Array.isArray(batch) || batch.length === 0) { fetchedFully = true; break; }
+                for (const r of batch) {
+                  if (!r.user) continue;
+                  const host = r.user.host || mskHost;
+                  const acct = `${r.user.username}@${host}`.toLowerCase();
+                  reactionByUser.set(acct, r.type);
+                }
+                collected += batch.length;
+                lastBatchSize = batch.length;
               }
+              if (lastBatchSize < LIMIT) fetchedFully = true;
             } catch (e) {
-              this._debugWarn('[StarShip] fav→reaction: getReactions failed for note', rdp.id, e.message || e);
+              this._debugWarn('[StarShip] fav→reaction: getReactions failed for note', rdp.id, e?.message || e);
             }
 
             const reactionEmojis = rdp.reactionEmojis || rdp.emojis || {};
-            if (reactionByUser.size === 0) continue;
+            this._persistReactionByUser(groupNotifs[0].post, reactionByUser);
 
-            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, misskeyAccount.instanceUrl);
+            // Only mark ground=true when we believe the reactor set is complete.
+            // Otherwise unmatched actors might just be on a later page we didn't
+            // fetch, and we shouldn't demote them.
+            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, mskAccount.instanceUrl, 'authoritative', { ground: fetchedFully });
             if (changed) rerenderGroup(groupNotifs);
+            if (fetchedFully) favByUri.delete(uri);
           } catch (e) {
             this._debugWarn('[StarShip] fav→reaction error:', e);
           }
@@ -1490,7 +1680,8 @@ export const DataLoadingMixin = {
 
             if (reactionByUser.size === 0) continue;
 
-            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, actorInstanceUrl);
+            this._persistReactionByUser(groupNotifs[0].post, reactionByUser);
+            const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, actorInstanceUrl, 'inferred');
             if (changed) rerenderGroup(groupNotifs);
           } catch (e) {
             this._debugWarn('[StarShip] unauth fav→reaction error:', e);
@@ -1547,6 +1738,23 @@ export const DataLoadingMixin = {
             }
           })();
         }
+      }
+    }
+
+    // Schedule retries for notifications still un-resolved after all phases
+    // dispatched. Async paths may resolve them in the next few hundred ms; the
+    // retry tick will skip those (checks _reactionSource === 'authoritative').
+    // What remains is the rate-limited / federation-lag cases that benefit
+    // from later attempts.
+    if (isNotification) {
+      for (const notif of items) {
+        if (notif._reactionResolvedNegative) continue;
+        if (notif._reactionSource === 'authoritative') continue;
+        if (notif.type !== 'favourite' && !(notif.type === 'reaction' && notif._reactionSource !== 'authoritative')) continue;
+        const dp = notif.post?.reblog || notif.post;
+        if (!dp) continue;
+        if (!dp.stats?.favourites || dp.stats.favourites <= 0) continue;
+        this._scheduleRetry(notif, container);
       }
     }
   },

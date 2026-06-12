@@ -512,6 +512,9 @@ export const ColumnsMixin = {
     this.autoRefreshTimer = setInterval(() => {
       if (!this.store.isEmpty()) {
         this.refreshAll(false, { skipColumnTypes: ['thread'] });
+        // Drive the reaction-enrichment retry queue on the same tick — picks
+        // up notifs whose previous fetch was rate-limited or federation-lagged.
+        this._processEnrichmentRetries?.();
       }
     }, this.AUTO_REFRESH_INTERVAL);
 

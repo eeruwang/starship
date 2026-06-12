@@ -125,8 +125,9 @@ export class MisskeyClient {
     return this.request('notes/reactions/delete', { noteId });
   }
 
-  async getReactions(noteId, type = null) {
-    const body = { noteId, limit: 20 };
+  async getReactions(noteId, type = null, { limit = 20, offset = 0 } = {}) {
+    const body = { noteId, limit: Math.min(Math.max(1, limit), 100) };
+    if (offset) body.offset = offset;
     if (type) body.type = type;
     return this.request('notes/reactions', body);
   }
