@@ -131,6 +131,12 @@ export const ComposeMixin = {
             this.btnComposeVisibility.title = `공개 범위: ${opt.label}`;
           }
         }
+        // Inherit the original post's content warning so the reply is hidden
+        // under the same context (e.g. spoilers, sensitive topics). User can
+        // still edit or clear the CW field before posting.
+        if (dp.contentWarning && !this.composeCw.value) {
+          this.composeCw.value = dp.contentWarning;
+        }
       } else {
         replyCtx.style.display = 'none';
       }
