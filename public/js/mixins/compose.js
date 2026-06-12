@@ -23,7 +23,7 @@ export const ComposeMixin = {
       const dotColor = this._accountColor(account);
       const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       btn.innerHTML = `
-        <img class="compose-account-avatar" src="${escapeHtml(cachedImageUrl(p.avatarUrl || ''))}" alt="" width="20" height="20" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+        <img class="compose-account-avatar" src="${escapeHtml(cachedImageUrl(p.avatarUrl || ''))}" alt="" width="20" height="20" referrerpolicy="no-referrer" data-fb="hide">
         <span class="compose-account-name">${escapeHtml(p.displayName)}</span>
         <span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>
       `;
@@ -110,7 +110,7 @@ export const ComposeMixin = {
         const dp = origPost.reblog || origPost;
         const authorName = dp.author?.displayNameHtml || escapeHtml(dp.author?.displayName || '');
         const avatarHtml = dp.author?.avatarUrl
-          ? `<img class="compose-reply-context-avatar" src="${escapeHtml(cachedImageUrl(dp.author.avatarUrl))}" alt="" width="20" height="20" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+          ? `<img class="compose-reply-context-avatar" src="${escapeHtml(cachedImageUrl(dp.author.avatarUrl))}" alt="" width="20" height="20" referrerpolicy="no-referrer" data-fb="hide">`
           : '';
         replyCtx.innerHTML = `
           <div class="compose-reply-context-header">

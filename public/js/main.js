@@ -22,6 +22,44 @@ import { PagesMixin } from './mixins/pages.js';
 const COLUMN_STATE_KEY = 'starship_column_state';
 const SETTINGS_KEY = 'starship_settings';
 
+// Delegated <img> error fallback handler. Replaces dozens of inline
+// `onerror=` attributes that a strict CSP would block. Each <img> declares
+// the fallback policy via `data-fb`, this listener applies it. `error`
+// events don't bubble, so we use capture phase to catch them globally.
+const FB_SVG_PLACEHOLDER = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>';
+document.addEventListener('error', (e) => {
+  const t = e.target;
+  if (!t || t.tagName !== 'IMG') return;
+  const fb = t.dataset.fb;
+  if (!fb || t.dataset.fbApplied === '1') return;
+  t.dataset.fbApplied = '1';
+  switch (fb) {
+    case 'hide':
+      t.style.display = 'none';
+      break;
+    case 'hide-parent':
+      if (t.parentElement) t.parentElement.style.display = 'none';
+      break;
+    case 'link-card':
+      if (t.parentElement) t.parentElement.classList.remove('link-card-has-image');
+      t.style.display = 'none';
+      break;
+    case 'dim':
+      t.style.opacity = '0.3';
+      break;
+    case 'reveal-next':
+      t.style.display = 'none';
+      if (t.nextElementSibling) t.nextElementSibling.style.display = '';
+      break;
+    case 'alt-text':
+      t.replaceWith(document.createTextNode(t.alt || ''));
+      break;
+    case 'svg-placeholder':
+      t.src = FB_SVG_PLACEHOLDER;
+      break;
+  }
+}, true);
+
 class StarShipApp {
   constructor() {
     this.store = new AccountStore();

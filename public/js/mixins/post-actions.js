@@ -1114,7 +1114,7 @@ export const PostActionsMixin = {
       const author = quotedPost.author || {};
       const authorName = author.displayNameHtml || this.escapeHtml(author.displayName || '');
       const avatarHtml = author.avatarUrl
-        ? `<img class="compose-reply-context-avatar" src="${this.escapeHtml(author.avatarUrl)}" alt="" width="20" height="20" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+        ? `<img class="compose-reply-context-avatar" src="${this.escapeHtml(author.avatarUrl)}" alt="" width="20" height="20" referrerpolicy="no-referrer" data-fb="hide">`
         : '';
       ctx.innerHTML = `
         <div class="compose-reply-context-header">
@@ -1175,7 +1175,7 @@ export const PostActionsMixin = {
       const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       html += `
         <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}"${isPreferred && dotColor ? ` style="border-left-color:${dotColor}"` : ''}>
-          <img src="${p.avatarUrl || ''}" alt="" onerror="this.style.display='none'">
+          <img src="${p.avatarUrl || ''}" alt="" data-fb="hide">
           <span class="picker-name">${escapeHtml(p.displayName)}</span>
           <span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>
         </button>
@@ -1468,7 +1468,7 @@ export const PostActionsMixin = {
     for (const user of users) {
       html += `
         <div class="reaction-user-item">
-          <img class="reaction-user-avatar" src="${escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <img class="reaction-user-avatar" src="${escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide">
           <span class="reaction-user-name">${user.displayNameHtml}</span>
           <span class="reaction-user-handle">@${escapeHtml(user.username)}</span>
         </div>

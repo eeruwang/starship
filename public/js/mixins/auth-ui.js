@@ -527,7 +527,7 @@ export const AuthUIMixin = {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
               </span>
               <button class="reauth-picker-item" data-account-id="${a.id}">
-                <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+                <img class="reauth-picker-avatar" src="${a.profile?.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" data-fb="hide">
                 <div class="reauth-picker-info">
                   <span class="reauth-picker-name">${escapeHtml(a.profile?.displayName || a.label || '')}${orderLabel}</span>
                   <span class="reauth-picker-instance">${escapeHtml(a.instanceUrl.replace('https://', ''))}</span>

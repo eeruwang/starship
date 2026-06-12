@@ -63,18 +63,17 @@ export default {
       return handleApi(request, url, env);
     }
 
-    // Static files — wrap with security headers. CSP is REPORT-ONLY because
-    // the current UI uses inline `onerror=` attributes on dozens of <img>
-    // elements (avatar/media fallback) which a strict script-src would block.
-    // Report-only lets us see violations in dev console without breaking the
-    // app; once those inline handlers are migrated to delegated listeners we
-    // can flip this to enforcing mode. X-Content-Type-Options and
-    // Referrer-Policy are safe to enforce immediately.
+    // Static files — wrap with a strict CSP and security headers. Inline
+    // `onerror=` attributes were migrated to a delegated handler in main.js,
+    // so `script-src 'self'` is now safe to enforce. frame-src allows
+    // YouTube embeds (the only third-party iframe we render). connect-src is
+    // wide because the app talks to arbitrary fediverse instances over the
+    // worker proxy.
     const assetRes = await env.ASSETS.fetch(request);
     const ct = assetRes.headers.get('Content-Type') || '';
     if (ct.includes('text/html')) {
       const headers = new Headers(assetRes.headers);
-      headers.set('Content-Security-Policy-Report-Only', [
+      headers.set('Content-Security-Policy', [
         "default-src 'self'",
         "script-src 'self'",
         "style-src 'self' 'unsafe-inline'",
@@ -82,9 +81,11 @@ export default {
         "media-src *",
         "connect-src *",
         "font-src 'self' data:",
+        "frame-src https://www.youtube-nocookie.com https://www.youtube.com https://challenges.cloudflare.com",
         "frame-ancestors 'none'",
         "base-uri 'self'",
         "form-action 'self'",
+        "object-src 'none'",
       ].join('; '));
       headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Referrer-Policy', 'no-referrer');
@@ -202,10 +203,10 @@ async function handleApi(request, url, env) {
     return handleMe(request, db);
   }
   if (path === '/api/sync/save' && request.method === 'POST') {
-    return handleSyncSave(request, db);
+    return handleSyncSave(request, db, env);
   }
   if (path === '/api/sync/load' && request.method === 'GET') {
-    return handleSyncLoad(request, db);
+    return handleSyncLoad(request, db, env);
   }
   // Admin endpoints
   if (path === '/api/admin/settings' && request.method === 'GET') {
@@ -375,7 +376,7 @@ async function handleMe(request, db) {
 
 // ===== Sync Endpoints =====
 
-async function handleSyncSave(request, db) {
+async function handleSyncSave(request, db, env) {
   const user = await getSessionUser(request, db);
   if (!user) return jsonResponse({ error: '로그인이 필요합니다' }, 401);
 
@@ -387,6 +388,17 @@ async function handleSyncSave(request, db) {
 
   const body = await parseJsonBody(request);
   if (!body) return jsonResponse({ error: '잘못된 요청입니다' }, 400);
+
+  // Encrypt OAuth accessTokens server-side before storing. Reduces blast
+  // radius if D1 is exfiltrated alone (without the worker key). Skips
+  // already-encrypted strings on the off chance the client sends them.
+  if (Array.isArray(body.accounts)) {
+    for (const a of body.accounts) {
+      if (a && typeof a.accessToken === 'string' && !a.accessToken.startsWith('enc:v1:')) {
+        a.accessToken = await encryptToken(a.accessToken, env);
+      }
+    }
+  }
 
   // Validate data size after parsing
   const bodyStr = JSON.stringify(body);
@@ -409,7 +421,7 @@ async function handleSyncSave(request, db) {
   return jsonResponse({ ok: true });
 }
 
-async function handleSyncLoad(request, db) {
+async function handleSyncLoad(request, db, env) {
   const user = await getSessionUser(request, db);
   if (!user) return jsonResponse({ error: '로그인이 필요합니다' }, 401);
 
@@ -418,7 +430,64 @@ async function handleSyncLoad(request, db) {
   for (const row of rows.results) {
     try { data[row.key] = JSON.parse(row.value); } catch { data[row.key] = row.value; }
   }
+  // Decrypt accessTokens before returning to client. Old plaintext tokens
+  // pass through untouched (decryptToken returns input verbatim if it
+  // doesn't have the enc:v1: prefix). On decrypt failure (key rotated or
+  // ciphertext corrupted) the token becomes null and the client treats the
+  // account as needing re-auth — better than handing back garbage.
+  if (Array.isArray(data.accounts)) {
+    for (const a of data.accounts) {
+      if (a && typeof a.accessToken === 'string') {
+        a.accessToken = await decryptToken(a.accessToken, env);
+      }
+    }
+  }
   return jsonResponse(data);
+}
+
+// ===== Token encryption helpers =====
+// Server-side AES-GCM with a key derived from env.TOKEN_ENCRYPTION_KEY. This
+// is NOT zero-knowledge — the worker holds the key — but it isolates the
+// blast radius of a pure D1 leak. Set the secret with:
+//   wrangler secret put TOKEN_ENCRYPTION_KEY
+async function _deriveTokenKey(secret) {
+  const material = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
+  return crypto.subtle.importKey('raw', material, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+async function encryptToken(plaintext, env) {
+  if (!env?.TOKEN_ENCRYPTION_KEY) return plaintext; // no secret configured → store as-is
+  try {
+    const key = await _deriveTokenKey(env.TOKEN_ENCRYPTION_KEY);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
+    const combined = new Uint8Array(iv.length + ct.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ct), iv.length);
+    let bin = '';
+    for (const b of combined) bin += String.fromCharCode(b);
+    return `enc:v1:${btoa(bin)}`;
+  } catch {
+    return plaintext;
+  }
+}
+
+async function decryptToken(value, env) {
+  if (typeof value !== 'string') return value;
+  if (!value.startsWith('enc:v1:')) return value; // pre-encryption plaintext
+  if (!env?.TOKEN_ENCRYPTION_KEY) return null;
+  try {
+    const bin = atob(value.slice('enc:v1:'.length));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const iv = bytes.slice(0, 12);
+    const ct = bytes.slice(12);
+    const key = await _deriveTokenKey(env.TOKEN_ENCRYPTION_KEY);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    return new TextDecoder().decode(plain);
+  } catch {
+    return null;
+  }
 }
 
 // ===== WebSocket Stream Relay =====

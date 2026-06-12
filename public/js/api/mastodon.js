@@ -3,7 +3,7 @@
  * Handles communication with Mastodon instances.
  * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
-import { escapeHtml, cachedImageUrl } from '../ui/utils.js';
+import { escapeHtml, cachedImageUrl, sanitizeHtml } from '../ui/utils.js';
 
 // Mastodon-compatible software that supports emoji reactions
 const REACTION_SOFTWARE = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
@@ -607,7 +607,7 @@ export class MastodonClient {
         nestedQuote = {
           id: nqs.id,
           platform: 'mastodon',
-          content: nqContent,
+          content: sanitizeHtml(nqContent),
           contentWarning: nqs.spoiler_text || null,
           author: this.normalizeUser(nqs.account),
           media: (nqs.media_attachments || []).map(m => ({
@@ -622,7 +622,7 @@ export class MastodonClient {
       quotePost = {
         id: quoteSource.id,
         platform: 'mastodon',
-        content: qContent,
+        content: sanitizeHtml(qContent),
         contentWarning: quoteSource.spoiler_text || null,
         author: qAuthor,
         media: (quoteSource.media_attachments || []).map(m => ({
@@ -703,7 +703,7 @@ export class MastodonClient {
       id: status.id,
       platform: 'mastodon',
       createdAt: new Date(status.created_at),
-      content: content,
+      content: sanitizeHtml(content),
       contentWarning: status.spoiler_text || null,
       author: this.normalizeUser(acct),
       sensitive: !!status.sensitive,

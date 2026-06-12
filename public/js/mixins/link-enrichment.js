@@ -72,7 +72,7 @@ export const LinkEnrichmentMixin = {
         <div class="quote-post-body">
           <div class="quote-post-text-area">
             <div class="quote-post-header">
-              <img class="quote-post-avatar" src="${avatarUrl}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+              <img class="quote-post-avatar" src="${avatarUrl}" alt="" referrerpolicy="no-referrer" data-fb="hide">
               <span class="quote-post-author">${displayName}</span>
               <span class="quote-post-handle">@${acct}</span>
             </div>`;
@@ -86,12 +86,12 @@ export const LinkEnrichmentMixin = {
     html += `</div>`;
 
     if (images.length === 1) {
-      html += `<div class="quote-post-thumb"><img src="${images[0].previewUrl || images[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></div>`;
+      html += `<div class="quote-post-thumb"><img src="${images[0].previewUrl || images[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb="hide-parent"></div>`;
     }
     html += `</div>`;
 
     if (images.length > 1) {
-      html += `<div class="quote-post-media media-${images.length}">${images.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`).join('')}</div>`;
+      html += `<div class="quote-post-media media-${images.length}">${images.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb="hide">`).join('')}</div>`;
     }
 
     html += `</div>`;

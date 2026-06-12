@@ -287,7 +287,7 @@ export const ThreadViewMixin = {
         const author = targetPost.author;
         const name = escapeHtml(author.displayName || author.username);
         const avatarHtml = author.avatarUrl
-          ? `<img class="column-header-avatar" src="${escapeHtml(author.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+          ? `<img class="column-header-avatar" src="${escapeHtml(author.avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide">`
           : '';
         h2.innerHTML = `${avatarHtml}${name}의 스레드`;
       }
@@ -785,7 +785,7 @@ export const ThreadViewMixin = {
     const name = replyAuthor.displayName || replyAuthor.username || '';
     badge.innerHTML =
       `<span class="reply-badge-icon">${iconReplyArrow}</span>`
-      + `${avatarUrl ? `<img class="reply-badge-avatar" src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}`
+      + `${avatarUrl ? `<img class="reply-badge-avatar" src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide">` : ''}`
       + `<span class="reply-badge-name">${escapeHtml(name)}</span>`
       + `<span>에게 답글</span>`;
 

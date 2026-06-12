@@ -2,7 +2,7 @@
  * Profile Modal Mixin
  * Handles the profile modal: opening, profile editing, notes tabs, follow relations
  */
-import { escapeHtml, compressImage } from '../ui/utils.js';
+import { escapeHtml, compressImage, sanitizeHtml } from '../ui/utils.js';
 import { renderPost } from '../ui/dashboard.js';
 
 export const ProfileModalMixin = {
@@ -261,12 +261,15 @@ export const ProfileModalMixin = {
     stickyName.innerHTML = nameEl.innerHTML;
     stickyHandle.textContent = handleEl.textContent;
 
-    // Bio
+    // Bio — always sanitise the HTML before assigning to innerHTML so a
+    // malicious fediverse instance can't slip executable content through the
+    // bio field. Mastodon's own sanitiser is usually sufficient but glitch
+    // forks / self-hosted variants can lag.
     if (isMisskey) {
       const bio = user.description || '';
       if (bio) {
         const userEmojis = this._extractUserEmojis(user);
-        bioEl.innerHTML = client.mfmToHtml(bio, userEmojis);
+        bioEl.innerHTML = sanitizeHtml(client.mfmToHtml(bio, userEmojis));
       }
     } else {
       let bio = user.note || '';
@@ -277,7 +280,7 @@ export const ProfileModalMixin = {
               `<img class="inline-emoji" src="${escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
           }
         }
-        bioEl.innerHTML = bio;
+        bioEl.innerHTML = sanitizeHtml(bio);
       }
     }
 
@@ -1004,7 +1007,7 @@ export const ProfileModalMixin = {
         const card = document.createElement('div');
         card.className = 'user-list-item';
         card.innerHTML = `
-          <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" data-fb="hide">
           <div class="user-list-info">
             <div class="user-list-name">${user.displayNameHtml || ''}</div>
             <div class="user-list-acct">@${user.acct || user.username || ''}</div>
@@ -1040,7 +1043,7 @@ export const ProfileModalMixin = {
         const card = document.createElement('div');
         card.className = 'user-list-item';
         card.innerHTML = `
-          <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" data-fb="hide">
           <div class="user-list-info">
             <div class="user-list-name">${user.displayNameHtml || ''}</div>
             <div class="user-list-acct">@${user.acct || user.username || ''}</div>
@@ -1063,7 +1066,7 @@ export const ProfileModalMixin = {
     const infoArea = document.createElement('div');
     infoArea.className = 'user-list-item-left';
     infoArea.innerHTML = `
-      <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+      <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" data-fb="hide">
       <div class="user-list-info">
         <div class="user-list-name">${user.displayNameHtml || ''}</div>
         <div class="user-list-acct">@${user.acct || user.username || ''}</div>

@@ -389,7 +389,7 @@ export const ColumnsMixin = {
       if (account?.profile?.avatarUrl) {
         const acColor = this._accountColor(account);
         const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
-        avatarHtml = `<img class="column-header-avatar" width="22" height="22" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
+        avatarHtml = `<img class="column-header-avatar" width="22" height="22" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
       }
     } else if (type === 'all' || type === 'notifications') {
       // Show visible account avatars stacked horizontally
@@ -399,7 +399,7 @@ export const ColumnsMixin = {
           if (!a.profile?.avatarUrl) return '';
           const acColor = this._accountColor(a);
           const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
-          return `<img class="column-header-avatar stacked" width="22" height="22" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
+          return `<img class="column-header-avatar stacked" width="22" height="22" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
         }).filter(Boolean).join('');
         avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
       }
@@ -443,7 +443,7 @@ export const ColumnsMixin = {
           if (account.profile?.avatarUrl) {
             const acColor = this._accountColor(account);
             const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
-            avatarHtml = `<img class="column-header-avatar" width="22" height="22" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
+            avatarHtml = `<img class="column-header-avatar" width="22" height="22" ${borderStyle} src="${escapeHtml(account.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide" data-profile-account-id="${accountId}" data-profile-user-id="${account.profile.id}" data-platform="${account.platform}">`;
           }
           h2.innerHTML = `${avatarHtml}${name}`;
         }
@@ -456,7 +456,7 @@ export const ColumnsMixin = {
             if (!a.profile?.avatarUrl) return '';
             const acColor = this._accountColor(a);
             const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
-            return `<img class="column-header-avatar stacked" width="22" height="22" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
+            return `<img class="column-header-avatar stacked" width="22" height="22" ${borderStyle} src="${escapeHtml(a.profile.avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide" data-profile-account-id="${a.id}" data-profile-user-id="${a.profile.id}" data-platform="${a.platform}">`;
           }).filter(Boolean).join('');
           avatarHtml = `<span class="column-header-avatars">${avatars}</span>`;
         }
@@ -588,14 +588,38 @@ export const ColumnsMixin = {
     }
     // Increment generation to invalidate any pending closeModal transitionend handlers
     overlay._modalGen = (overlay._modalGen || 0) + 1;
+    // Accessibility: mark the overlay as a modal dialog and remember the
+    // previously-focused element so we can restore focus on close.
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay._previouslyFocused = document.activeElement;
     overlay.style.display = 'flex';
-    // Force synchronous reflow so display change commits before adding 'visible',
-    // ensuring the CSS transition triggers and 'visible' is present before any
-    // stale transitionend handler from a previous closeModal can check for it.
     void overlay.offsetHeight;
     overlay.classList.add('visible');
-    // Prevent background scroll while modal is open (especially iOS)
     this._updateBodyScroll();
+    // Focus the first focusable child so keyboard / screen-reader users land
+    // inside the modal. Defer one frame so layout / autofocus settles first.
+    requestAnimationFrame(() => {
+      if (!overlay.classList.contains('visible')) return;
+      if (overlay.contains(document.activeElement)) return;
+      const target = this._firstFocusableInside(overlay);
+      if (target) target.focus({ preventScroll: true });
+    });
+    // Install focus trap (capture phase, scoped to this overlay)
+    if (!overlay._focusTrap) {
+      overlay._focusTrap = (e) => {
+        if (e.key !== 'Tab') return;
+        if (!overlay.classList.contains('visible')) return;
+        const focusables = this._focusableInside(overlay);
+        if (focusables.length === 0) { e.preventDefault(); return; }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && active === first) { last.focus(); e.preventDefault(); }
+        else if (!e.shiftKey && active === last) { first.focus(); e.preventDefault(); }
+      };
+      overlay.addEventListener('keydown', overlay._focusTrap);
+    }
   },
 
   closeModal(overlay) {
@@ -603,14 +627,34 @@ export const ColumnsMixin = {
     const gen = overlay._modalGen || 0;
     overlay.classList.remove('visible');
     overlay.addEventListener('transitionend', () => {
-      // Skip if a new openModal was called after this closeModal (stale handler)
       if ((overlay._modalGen || 0) !== gen) return;
       if (!overlay.classList.contains('visible')) {
         overlay.style.display = 'none';
         overlay.style.zIndex = '';
+        // Restore focus to whatever was focused before opening, if it's still
+        // attached and focusable.
+        const prev = overlay._previouslyFocused;
+        if (prev && prev.isConnected && typeof prev.focus === 'function') {
+          try { prev.focus({ preventScroll: true }); } catch {}
+        }
+        overlay._previouslyFocused = null;
       }
       this._updateBodyScroll();
     }, { once: true });
+  },
+
+  _focusableInside(root) {
+    const sel = 'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return [...root.querySelectorAll(sel)].filter(el => {
+      if (el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+      const style = getComputedStyle(el);
+      return style.visibility !== 'hidden' && style.display !== 'none';
+    });
+  },
+
+  _firstFocusableInside(root) {
+    const list = this._focusableInside(root);
+    return list[0] || null;
   },
 
   /** Prevent/restore body scroll depending on whether any modal is open. */

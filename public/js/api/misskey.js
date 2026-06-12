@@ -4,7 +4,7 @@
  * All use the same base API (Misskey API) with minor variations.
  * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
-import { escapeHtml, cachedImageUrl } from '../ui/utils.js';
+import { escapeHtml, cachedImageUrl, sanitizeHtml } from '../ui/utils.js';
 
 export class MisskeyClient {
   constructor(instanceUrl, accessToken, platformType = 'misskey') {
@@ -509,7 +509,7 @@ export class MisskeyClient {
       }
       // Fallback: try instance emoji URL for local emojis
       if (!emojiName.includes('@')) {
-        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(`${this.instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp`))}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(`${this.instanceUrl}/emoji/${encodeURIComponent(emojiName)}.webp`))}" alt=":${emojiName}:" title=":${emojiName}:" referrerpolicy="no-referrer" data-fb="alt-text">`;
       }
       return match;
     });
@@ -541,7 +541,7 @@ export class MisskeyClient {
         nestedQuote = {
           id: nqn.id,
           platform: this.platformType,
-          content: this.mfmToHtml(nqn.text || '', nqEmojiMap),
+          content: sanitizeHtml(this.mfmToHtml(nqn.text || '', nqEmojiMap)),
           contentWarning: nqn.cw || null,
           author: nqAuthor,
           media: (nqn.files || []).map(f => ({
@@ -559,7 +559,7 @@ export class MisskeyClient {
       quotePost = {
         id: qn.id,
         platform: this.platformType,
-        content: this.mfmToHtml(qn.text || '', qEmojiMap),
+        content: sanitizeHtml(this.mfmToHtml(qn.text || '', qEmojiMap)),
         contentWarning: qn.cw || null,
         author: qAuthor,
         media: (qn.files || []).map(f => ({
@@ -615,7 +615,7 @@ export class MisskeyClient {
       id: note.id,
       platform: this.platformType,
       createdAt: new Date(note.createdAt),
-      content: this.mfmToHtml(actualNote.text || '', emojiMap),
+      content: sanitizeHtml(this.mfmToHtml(actualNote.text || '', emojiMap)),
       contentWarning: actualNote.cw || null,
       author: actualAuthor,
       sensitive: (actualNote.files || []).some(f => f.isSensitive),
@@ -646,7 +646,7 @@ export class MisskeyClient {
       canonicalUri: actualNote.uri || `${this.instanceUrl}/notes/${actualNote.id}`,
       replyTo: actualNote.reply ? {
         id: actualNote.reply.id,
-        content: this.mfmToHtml(actualNote.reply.text || '', this.buildEmojiMap(actualNote.reply)),
+        content: sanitizeHtml(this.mfmToHtml(actualNote.reply.text || '', this.buildEmojiMap(actualNote.reply))),
         author: this.normalizeUser(actualNote.reply.user),
         contentWarning: actualNote.reply.cw || null,
       } : null,
@@ -911,7 +911,7 @@ export class MisskeyClient {
         return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(url))}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer">`;
       }
       if (!name.includes('@')) {
-        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(`${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp`))}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" onerror="this.replaceWith(this.alt)">`;
+        return `<img class="inline-emoji" src="${escapeHtml(cachedImageUrl(`${this.instanceUrl}/emoji/${encodeURIComponent(name)}.webp`))}" alt=":${name}:" title=":${name}:" referrerpolicy="no-referrer" data-fb="alt-text">`;
       }
       return match;
     });
