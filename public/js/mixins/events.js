@@ -47,21 +47,49 @@ export const EventsMixin = {
         case 'pages': this.openPagesDashboard?.(); break;
         case 'settings': this.openSettingsModal(); break;
         case 'user': {
-          // 데스크톱 헤더의 사용자 메뉴를 토글 — 모바일에서는 헤더가 숨겨져 있어
-          // 직접 보일 위치로 이동해야 한다.
-          const wrap = document.getElementById('user-menu-wrap');
+          // 로그인 안 한 상태면 auth 모달, 로그인 상태면 사용자 메뉴를 하단 시트처럼 띄움.
+          if (!this._currentUser) {
+            this.handleAuthButtonClick();
+            break;
+          }
           const menu = document.getElementById('user-menu');
-          if (menu) {
-            // 메뉴를 body 자식으로 옮겨 fixed 로 띄움 (헤더가 display:none 인 모바일 대응)
-            if (menu.parentElement !== document.body) document.body.appendChild(menu);
-            menu.style.position = 'fixed';
-            menu.style.bottom = 'calc(env(safe-area-inset-bottom) + 76px)';
-            menu.style.right = '12px';
-            menu.style.left = 'auto';
-            menu.style.top = 'auto';
-            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-          } else if (wrap) {
-            wrap.querySelector('#btn-auth')?.click();
+          if (!menu) break;
+          // 모바일 한정으로 메뉴를 body 로 옮기고 하단 고정 시트로 표시.
+          // 데스크톱 .user-menu-wrap 자손 위치는 이 세션 동안 유지되지 않을 수 있으나
+          // 모바일에선 헤더가 display:none 이라 어차피 wrap 안에서는 보이지 않는다.
+          if (menu.parentElement !== document.body) {
+            menu._originalParent = menu.parentElement;
+            document.body.appendChild(menu);
+          }
+          // 시트 스타일 (display:none 인 .user-menu 기본값 덮어쓰기)
+          menu.style.position = 'fixed';
+          menu.style.left = '12px';
+          menu.style.right = '12px';
+          menu.style.bottom = 'calc(env(safe-area-inset-bottom) + 72px)';
+          menu.style.top = 'auto';
+          menu.style.minWidth = '0';
+          const isOpen = menu.classList.contains('open');
+          if (isOpen) {
+            menu.classList.remove('open');
+            setTimeout(() => { if (!menu.classList.contains('open')) menu.style.display = 'none'; }, 200);
+            if (this._userMenuOutsideClick) {
+              document.removeEventListener('click', this._userMenuOutsideClick, true);
+              this._userMenuOutsideClick = null;
+            }
+          } else {
+            menu.style.display = 'block';
+            requestAnimationFrame(() => menu.classList.add('open'));
+            // 바깥 클릭으로 닫기
+            const handler = (ev) => {
+              if (menu.contains(ev.target)) return;
+              if (ev.target.closest?.('[data-mobile-tab="user"]')) return;
+              menu.classList.remove('open');
+              setTimeout(() => { if (!menu.classList.contains('open')) menu.style.display = 'none'; }, 200);
+              document.removeEventListener('click', handler, true);
+              this._userMenuOutsideClick = null;
+            };
+            this._userMenuOutsideClick = handler;
+            setTimeout(() => document.addEventListener('click', handler, true), 0);
           }
           break;
         }
