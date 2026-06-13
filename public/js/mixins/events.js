@@ -31,6 +31,38 @@ export const EventsMixin = {
     this.btnRefreshAll.addEventListener('click', () => this.refreshAll(true));
     this.btnSettings.addEventListener('click', () => this.openSettingsModal());
 
+    // 모바일 FAB → compose 모달 열기
+    document.getElementById('mobile-compose-fab')?.addEventListener('click', () => {
+      const accountId = this.getFocusedColumnAccountId();
+      this.openComposeModal(null, accountId || null);
+    });
+
+    // 모바일 탭바 → 해당 컬럼으로 스크롤 (없으면 토글로 열고 이동)
+    document.getElementById('mobile-tabbar')?.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-mobile-tab]');
+      if (!tab) return;
+      const type = tab.dataset.mobileTab;
+      if (type === 'settings') {
+        this.openSettingsModal();
+        return;
+      }
+      let col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
+      if (!col) {
+        // 토글로 열기
+        if (type === 'all' && !this.columnState.all) this.columnState.all = true;
+        else if (type === 'notifications' && !this.columnState.notifications) this.columnState.notifications = true;
+        else if (type === 'bookmarks' && !this.columnState.bookmarks) this.columnState.bookmarks = true;
+        this.updateColumnOrder(type, true);
+        this.saveColumnState();
+        this.renderToggleBar();
+        this.renderColumns();
+        col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
+      }
+      if (col) col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      document.querySelectorAll('.mobile-tabbar .tab.active').forEach(b => b.classList.remove('active'));
+      tab.classList.add('active');
+    });
+
     // Double-tap / double-click app header: scroll ALL columns to top
     const appHeader = document.querySelector('.app-header');
     if (appHeader) {
@@ -950,6 +982,7 @@ export const EventsMixin = {
     // Update index
     this.focusedColumnIndex = [...columns].indexOf(col);
     col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (typeof this._renderPagerDots === 'function') this._renderPagerDots();
   },
 
   // Get the account ID of the currently focused column (null if 'all' or 'notifications')

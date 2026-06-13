@@ -107,7 +107,48 @@
       </div>
 
       <div class="columns-container" id="columns-container" style="display:none;"></div>
+      <div class="column-pager-dots" id="column-pager-dots" aria-hidden="true"></div>
     </main>
+
+    <!-- 모바일 하단 탭바 (≤600px, CSS 미디어 쿼리로 노출 제어) -->
+    <nav class="mobile-tabbar" id="mobile-tabbar" aria-label="모바일 탐색">
+      <button class="tab" data-mobile-tab="all" aria-label="전체 타임라인">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        <span>전체</span>
+      </button>
+      <button class="tab" data-mobile-tab="notifications" aria-label="알림">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span>알림</span>
+      </button>
+      <span class="tab-spacer" aria-hidden="true"></span>
+      <button class="tab" data-mobile-tab="bookmarks" aria-label="북마크">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        <span>북마크</span>
+      </button>
+      <button class="tab" data-mobile-tab="settings" aria-label="설정">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>설정</span>
+      </button>
+    </nav>
+    <button class="compose-fab" id="mobile-compose-fab" aria-label="새 글 작성">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+
+    <!-- 키보드 단축키 도움말 (? 키) -->
+    <div class="shortcut-overlay" id="shortcut-overlay" role="dialog" aria-modal="true" aria-label="키보드 단축키">
+      <div class="sheet">
+        <h2 style="margin:0 0 var(--space-3);font-size:var(--text-lg);">키보드 단축키</h2>
+        <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:var(--space-2);">
+          <li><kbd>J</kbd> / <kbd>K</kbd> — 다음 / 이전 글</li>
+          <li><kbd>R</kbd> — 답글</li>
+          <li><kbd>B</kbd> — 부스트 / 리노트</li>
+          <li><kbd>F</kbd> — 좋아요</li>
+          <li><kbd>Q</kbd> — 인용</li>
+          <li><kbd>N</kbd> — 새 글</li>
+          <li><kbd>?</kbd> — 이 화면 / <kbd>Esc</kbd> — 닫기</li>
+        </ul>
+      </div>
+    </div>
   </div>
 
   <!-- 계정 추가 모달 -->

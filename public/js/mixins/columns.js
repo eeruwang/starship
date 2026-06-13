@@ -365,6 +365,17 @@ export const ColumnsMixin = {
         }
       }
     }
+    this._renderPagerDots();
+  },
+
+  _renderPagerDots() {
+    const dots = document.getElementById('column-pager-dots');
+    if (!dots) return;
+    const cols = this.columnsContainer?.querySelectorAll('.column') || [];
+    if (cols.length <= 1) { dots.innerHTML = ''; return; }
+    dots.innerHTML = Array.from(cols).map((_, i) =>
+      `<span class="dot${i === this.focusedColumnIndex ? ' active' : ''}"></span>`
+    ).join('');
   },
 
   createColumn(title, type, accountId) {

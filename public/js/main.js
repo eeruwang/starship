@@ -18,6 +18,8 @@ import { ColumnsMixin } from './mixins/columns.js';
 import { LinkEnrichmentMixin } from './mixins/link-enrichment.js';
 import { StreamingMixin } from './mixins/streaming.js';
 import { PagesMixin } from './mixins/pages.js';
+import { initKeyboardNav } from './ui/keyboard-nav.js';
+import { initMfmMotion } from './ui/mfm-motion.js';
 
 const COLUMN_STATE_KEY = 'starship_column_state';
 const SETTINGS_KEY = 'starship_settings';
@@ -94,6 +96,25 @@ class StarShipApp {
     this._turnstileWidgetId = null;
     this._turnstileToken = null;
     this.fetchSiteInfo();
+
+    // 디자인 핸드오프 6단계: MFM 모션 정책 + 키보드 단축키
+    initMfmMotion();
+    initKeyboardNav({
+      onCompose: () => this.openComposeModal(),
+      onHelp: () => document.getElementById('shortcut-overlay')?.classList.add('open'),
+    });
+    // ? 도움말 닫기 (Esc / 바깥 클릭)
+    const overlay = document.getElementById('shortcut-overlay');
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.classList.remove('open');
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay.classList.contains('open')) {
+          overlay.classList.remove('open');
+        }
+      });
+    }
     // checkAuth() is called in DOMContentLoaded after pending OAuth results are processed
   }
 
@@ -123,6 +144,11 @@ class StarShipApp {
     document.documentElement.style.setProperty('--column-width', `${this.settings.columnWidth}px`);
     document.documentElement.style.fontSize = `${this.settings.fontSize}px`;
     document.documentElement.setAttribute('data-density', this.settings.density || 'comfortable');
+    // MFM 모션 정책 동기화 (reduced-motion 시 initMfmMotion 이 off 로 덮어씀)
+    if (this.settings.mfm) {
+      document.documentElement.setAttribute('data-mfm', this.settings.mfm);
+      try { localStorage.setItem('starship:mfm', this.settings.mfm); } catch (_) {}
+    }
     // theme: 5종 팔레트 (indigo-night/arctic/moss/daylight/linen) 또는 system / 레거시 dark·light
     const requested = this.settings.theme || 'indigo-night';
     const isLegacy = (requested === 'dark' || requested === 'light' || requested === 'system');

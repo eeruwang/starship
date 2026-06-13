@@ -9,8 +9,10 @@
 .mobile-tabbar, .compose-fab, .column-pager-dots { display: none; }
 
 @media (max-width: 600px) {
-  /* 헤더 액션 축소: 글쓰기는 FAB 로, 나머지는 ⋯ 메뉴로 */
-  .app-header .header-right .btn:not(.btn-icon-menu) { display: none; }
+  /* 헤더 액션 축소: 글쓰기·새로고침은 FAB/풀투리프레시 로,
+     아이콘 전용 버튼(설정·페이지·로그인)은 유지 */
+  .app-header .header-right .btn:not(.btn-icon):not(#btn-auth) { display: none; }
+  .app-header .header-right .btn .btn-label { display: none; }
 
   /* 컬럼: 가로 스크롤 → 한 번에 한 컬럼(페이지) */
   .columns-container {

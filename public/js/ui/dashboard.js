@@ -975,17 +975,53 @@ export function renderAccountCard(account, onRemove) {
   return card;
 }
 
-export function renderLoading() {
-  const div = document.createElement('div');
-  div.className = 'loading-spinner';
-  div.innerHTML = '<div class="spinner"></div>';
-  return div;
+// 컬럼 초기 로드용 스켈레톤 카드 묶음 (spinner 대체)
+export function renderLoading(count = 4) {
+  const wrap = document.createElement('div');
+  wrap.className = 'skeleton-stack';
+  wrap.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement('div');
+    card.className = 'skeleton-card';
+    card.innerHTML = `
+      <div class="skeleton-header">
+        <div class="skeleton-avatar"></div>
+        <div class="skeleton-meta">
+          <div class="skeleton-line w-50"></div>
+          <div class="skeleton-line w-70" style="margin-top:6px"></div>
+        </div>
+      </div>
+      <div class="skeleton-body">
+        <div class="skeleton-line w-90" style="margin-top:10px"></div>
+        <div class="skeleton-line w-70" style="margin-top:6px"></div>
+      </div>
+    `;
+    wrap.appendChild(card);
+  }
+  return wrap;
 }
 
 export function renderLoadingText(message = '불러오는 중...') {
   const div = document.createElement('div');
-  div.className = 'loading-text';
-  div.textContent = message;
+  div.className = 'state-block empty';
+  div.innerHTML = `
+    <div class="state-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="state-title">${escapeHtml(message)}</div>
+  `;
+  return div;
+}
+
+export function renderErrorState(message = '문제가 발생했어요') {
+  const div = document.createElement('div');
+  div.className = 'state-block error';
+  div.innerHTML = `
+    <div class="state-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="state-title">${escapeHtml(message)}</div>
+  `;
   return div;
 }
 

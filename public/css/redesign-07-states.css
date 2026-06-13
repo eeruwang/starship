@@ -6,12 +6,19 @@
 
 /* ── 스켈레톤 [markup] ──────────────────────────────────────────────
    초기 로드/새 컬럼에서 spinner 대신 카드 형태 스켈레톤 N개 노출. */
+.skeleton-stack { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2); }
 .skeleton-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-left: 3px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
+}
+.skeleton-header { display: flex; align-items: flex-start; gap: var(--space-3); }
+.skeleton-meta { flex: 1; min-width: 0; }
+.skeleton-body { margin-top: var(--space-2); }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line::after, .skeleton-avatar::after { animation: none; }
 }
 .skeleton-line, .skeleton-avatar {
   background: var(--bg-hover);
