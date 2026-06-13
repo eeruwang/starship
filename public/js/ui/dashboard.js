@@ -416,11 +416,13 @@ function renderReplyContextHtml(displayPost, ctxId) {
 }
 
 export function renderPost(post) {
-  const card = document.createElement('div');
+  const card = document.createElement('article');
   card.className = `post-card platform-${post.platform}`;
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
   if (post.accountId) card.dataset.accountId = post.accountId;
+  const _dispAuthor = (post.reblog || post).author?.displayName || '';
+  if (_dispAuthor) card.setAttribute('aria-label', `${_dispAuthor}의 글`);
   const displayPostForUri = post.reblog || post;
   if (displayPostForUri.canonicalUri) card.dataset.canonicalUri = displayPostForUri.canonicalUri;
   if (post._dedupKey) card.dataset.dedupKey = post._dedupKey;

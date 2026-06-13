@@ -383,6 +383,8 @@ export const ColumnsMixin = {
     col.className = 'column';
     col.dataset.columnType = type;
     if (accountId) col.dataset.accountId = accountId;
+    col.setAttribute('role', 'region');
+    col.setAttribute('aria-label', title);
 
     let avatarHtml = '';
     if (type === 'account' && accountId) {
@@ -419,7 +421,7 @@ export const ColumnsMixin = {
           <button class="btn btn-icon btn-small" data-action="close-column" data-column-type="${type}" ${accountId ? `data-account-id="${accountId}"` : ''} title="닫기">${iconClose}</button>
         </div>
       </div>
-      <div class="column-content"></div>
+      <div class="column-content" role="feed"></div>
     `;
 
     // Same-author grouping (renders .post-grouped on consecutive cards)
