@@ -1096,13 +1096,18 @@ export { iconRefresh, iconClose, iconImage, renderPollHtml };
 export function buildReactionsHtml(displayPost, wrapperPost) {
   const hasReactions = displayPost.reactions && Object.keys(displayPost.reactions).length > 0;
 
-  // Merge ❤ reactions into favourites count (Misskey ❤ reactions = Mastodon favourites)
+  // ❤ 리액션은 favourite 와 동일한 행위(같은 사용자 집합).
+  // 둘을 합산(+=)하면 1명이 2로 보이는 중복 카운트가 발생하므로 max 로 통합.
+  // - 바닐라 Mastodon: stats.favourites=N, reactions={} → max(N, 0)=N
+  // - Misskey: stats.favourites=0, reactions={'❤':H} → max(0, H)=H
+  // - Mastodon-fork(Hollo/Akkoma/Pleroma): stats.favourites=H(정규화에서 nonHeart 차감됨),
+  //   reactions={'❤':H, ...} → max(H, H)=H
   let favCount = displayPost.stats?.favourites || 0;
-  let nonHeartReactions = [];
+  const nonHeartReactions = [];
   if (hasReactions) {
     for (const [reaction, count] of Object.entries(displayPost.reactions)) {
       if (reaction === '❤' || reaction === '❤️') {
-        favCount += count;
+        favCount = Math.max(favCount, count);
       } else {
         nonHeartReactions.push([reaction, count]);
       }
