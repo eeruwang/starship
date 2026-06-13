@@ -59,84 +59,73 @@ export const ColumnsMixin = {
     this.toggleBar.innerHTML = '';
     const accounts = this.store.getAll();
 
-    // "전체" toggle
-    const allToggle = document.createElement('button');
-    allToggle.className = `col-toggle fixed ${this.columnState.all ? 'active' : ''}`;
-    allToggle.dataset.toggleType = 'all';
-    allToggle.textContent = '전체';
-    this.toggleBar.appendChild(allToggle);
+    const makeFilterBtn = (type, label, active) => {
+      const b = document.createElement('button');
+      b.className = active ? 'active' : '';
+      b.dataset.toggleType = type;
+      b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      b.textContent = label;
+      return b;
+    };
 
-    // "알림" toggle
-    const notifToggle = document.createElement('button');
-    notifToggle.className = `col-toggle fixed ${this.columnState.notifications ? 'active' : ''}`;
-    notifToggle.dataset.toggleType = 'notifications';
-    notifToggle.textContent = '알림';
-    this.toggleBar.appendChild(notifToggle);
-
-    // "북마크" toggle
-    const bmToggle = document.createElement('button');
-    bmToggle.className = `col-toggle fixed ${this.columnState.bookmarks ? 'active' : ''}`;
-    bmToggle.dataset.toggleType = 'bookmarks';
-    bmToggle.textContent = '북마크';
-    this.toggleBar.appendChild(bmToggle);
-
-    // "DM" toggle
-    const dmToggle = document.createElement('button');
-    dmToggle.className = `col-toggle fixed ${this.columnState.dm ? 'active' : ''}`;
-    dmToggle.dataset.toggleType = 'dm';
-    dmToggle.textContent = 'DM';
-    this.toggleBar.appendChild(dmToggle);
-
-    // "페이지" toggle (only if there are Pages-capable accounts)
+    // 필터 세그먼트 (전체/알림/북마크/DM/페이지)
+    const filterSeg = document.createElement('div');
+    filterSeg.className = 'filter-segment';
+    filterSeg.setAttribute('role', 'group');
+    filterSeg.setAttribute('aria-label', '필터');
+    filterSeg.appendChild(makeFilterBtn('all', '전체', this.columnState.all));
+    filterSeg.appendChild(makeFilterBtn('notifications', '알림', this.columnState.notifications));
+    filterSeg.appendChild(makeFilterBtn('bookmarks', '북마크', this.columnState.bookmarks));
+    filterSeg.appendChild(makeFilterBtn('dm', 'DM', this.columnState.dm));
     if (this.store.getPagesAccounts().length > 0) {
-      const pagesToggle = document.createElement('button');
-      pagesToggle.className = `col-toggle fixed ${this.columnState.pages ? 'active' : ''}`;
-      pagesToggle.dataset.toggleType = 'pages';
-      pagesToggle.textContent = '페이지';
-      this.toggleBar.appendChild(pagesToggle);
+      filterSeg.appendChild(makeFilterBtn('pages', '페이지', this.columnState.pages));
     }
+    this.toggleBar.appendChild(filterSeg);
 
     if (accounts.length > 0) {
-      // Separator
       const sep = document.createElement('div');
-      sep.className = 'col-toggle-separator';
+      sep.className = 'toggle-group-sep';
       this.toggleBar.appendChild(sep);
 
-      // Account toggles
+      // 계정 칩
       for (const account of accounts) {
         const toggle = document.createElement('button');
         const isActive = this.columnState.accounts[account.id] === true;
         const isHidden = !!account.hidden;
-        toggle.className = `col-toggle ${isActive ? 'active' : ''}${isHidden ? ' account-hidden' : ''}`;
+        toggle.className = `account-chip${isActive ? ' active' : ''}${isHidden ? ' account-hidden' : ''}`;
         toggle.dataset.toggleType = 'account';
         toggle.dataset.accountId = account.id;
-        const dotColor = this._accountColor(account);
-        const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
-        toggle.innerHTML = `<span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>${escapeHtml(account.label || account.profile.displayName)}`;
+        toggle.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        const avatarUrl = account.profile?.avatarUrl;
+        const acColor = this._accountColor(account);
+        const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
+        const avatarHtml = avatarUrl
+          ? `<img class="account-chip-avatar" ${borderStyle} src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide">`
+          : `<span class="account-chip-dot" style="background:${acColor || 'var(--text-muted)'}"></span>`;
+        toggle.innerHTML = `${avatarHtml}${escapeHtml(account.label || account.profile.displayName)}`;
         this.toggleBar.appendChild(toggle);
       }
     }
 
-    // Thread column toggles
+    // 스레드 칩
     const threads = this.columnState.threads;
     if (threads && Object.keys(threads).length > 0) {
       const sep2 = document.createElement('div');
-      sep2.className = 'col-toggle-separator';
+      sep2.className = 'toggle-group-sep';
       this.toggleBar.appendChild(sep2);
 
       for (const [threadKey, info] of Object.entries(threads)) {
         const toggle = document.createElement('button');
-        toggle.className = 'col-toggle active thread-toggle';
+        toggle.className = 'account-chip active thread-toggle';
         toggle.dataset.toggleType = 'thread';
         toggle.dataset.threadKey = threadKey;
-        // Show a short label from cached post
+        toggle.setAttribute('aria-pressed', 'true');
         const cached = this.postCache.get(`${info.platform}:${info.postId}`);
         const label = cached?.author?.displayName || '스레드';
-        toggle.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6;margin-right:4px"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>${escapeHtml(label)}`;
+        toggle.innerHTML = `<span class="account-chip-dot" style="background:var(--accent-primary)"></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>${escapeHtml(label)}`;
         this.toggleBar.appendChild(toggle);
       }
     }
-
   },
 
   handleToggleClick(toggle) {

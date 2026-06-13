@@ -181,7 +181,7 @@ export const EventsMixin = {
       if (!wasDrag && e.changedTouches && e.changedTouches.length) {
         const touch = e.changedTouches[0];
         const el = document.elementFromPoint(touch.clientX, touch.clientY);
-        const toggle = el && el.closest('.col-toggle');
+        const toggle = el && el.closest('[data-toggle-type]');
         if (toggle && this.toggleBar.contains(toggle)) {
           touchHandled = true;
           this.handleToggleClick(toggle);
@@ -200,7 +200,7 @@ export const EventsMixin = {
         touchHandled = false;
         return;
       }
-      const toggle = e.target.closest('.col-toggle');
+      const toggle = e.target.closest('[data-toggle-type]');
       if (!toggle) return;
       this.handleToggleClick(toggle);
     }, true);
