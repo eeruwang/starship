@@ -20,6 +20,7 @@ import { StreamingMixin } from './mixins/streaming.js';
 import { PagesMixin } from './mixins/pages.js';
 import { initKeyboardNav } from './ui/keyboard-nav.js';
 import { initMfmMotion } from './ui/mfm-motion.js';
+import { rememberHostPlatform } from './ui/dashboard.js';
 
 const COLUMN_STATE_KEY = 'starship_column_state';
 const SETTINGS_KEY = 'starship_settings';
@@ -99,6 +100,8 @@ class StarShipApp {
 
     // 디자인 핸드오프 6단계: MFM 모션 정책 + 키보드 단축키
     initMfmMotion();
+    // 알려진 계정의 host → software 매핑을 캐시에 시드 (작성자 배지 정확도)
+    this._seedHostPlatformCache();
     initKeyboardNav({
       onCompose: () => this.openComposeModal(),
       onHelp: () => document.getElementById('shortcut-overlay')?.classList.add('open'),
@@ -179,6 +182,14 @@ class StarShipApp {
 
   // Sets data-theme + data-scheme. Schemes are pre-mapped from theme-switcher's
   // THEMES table so changing one place updates the other.
+  _seedHostPlatformCache() {
+    for (const acc of (this.store?.getAll?.() || [])) {
+      if (!acc.instanceUrl || !acc.software) continue;
+      try { rememberHostPlatform(new URL(acc.instanceUrl).host, acc.software); }
+      catch (_) {}
+    }
+  }
+
   _applyThemeId(themeId) {
     const map = {
       'indigo-night': 'dark',
@@ -326,6 +337,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 1. Check auth and load cloud data first (establishes _currentUser)
   await app.checkAuth();
+  // Cloud accounts now loaded — refresh host→software cache.
+  app._seedHostPlatformCache();
 
   // 2. Process any pending OAuth callback result (adds on top of cloud data)
   const authResult = localStorage.getItem('starship_auth_result');

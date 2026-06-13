@@ -75,8 +75,48 @@ const PLATFORM_LABELS = {
   glitchcafe: 'Glitch',
 };
 
+// host(string) → software(string) 캐시. account-setup.js의 NodeInfo 감지로 채워짐.
+const HOST_PLATFORM_CACHE = new Map();
+export function rememberHostPlatform(host, software) {
+  if (!host || !software) return;
+  HOST_PLATFORM_CACHE.set(host.toLowerCase(), software);
+}
+
+// 작성자의 acct(@user 또는 @user@host)와 canonical URL 패턴으로 작성자 서버의
+// 플랫폼 계열을 추정. accountSoftware(보는 계정의 소프트웨어)와 별개.
+function authorPlatform(post) {
+  const display = post.reblog || post;
+  const acct = display.author?.acct || '';
+  const url = display.canonicalUri || display.url || '';
+  let host = '';
+  const at = acct.lastIndexOf('@');
+  if (at > 0) host = acct.slice(at + 1).toLowerCase();
+  if (!host && url) {
+    try { host = new URL(url).host.toLowerCase(); } catch (_) {}
+  }
+  // 1) 호스트가 보는 계정의 인스턴스와 같으면 → 보는 계정 software 사용
+  const accountSw = post.accountSoftware || null;
+  const accountHost = (post.accountInstanceHost || '').toLowerCase();
+  if (host && accountHost && host === accountHost && accountSw) return accountSw;
+  if (!host && accountSw) return accountSw;   // 로컬 계정(acct에 @ 없음)
+  // 2) 호스트 캐시 (NodeInfo 결과 등)
+  if (host && HOST_PLATFORM_CACHE.has(host)) return HOST_PLATFORM_CACHE.get(host);
+  // 3) URL 경로 패턴으로 계열 추정
+  try {
+    if (url) {
+      const path = new URL(url).pathname;
+      if (/^\/notes\/[a-zA-Z0-9]+$/.test(path)) return 'misskey';          // Misskey 계열
+      if (/^\/(notice|objects)\/[a-zA-Z0-9\-]+$/.test(path)) return 'pleroma'; // Pleroma 계열
+      if (/^\/@[^/]+\/statuses\/[a-zA-Z0-9]+$/.test(path)) return 'gotosocial';
+      if (/^\/@[^/]+\/\d+$/.test(path)) return 'mastodon';                 // Mastodon
+      if (/^\/users\/[^/]+\/statuses\/[a-zA-Z0-9]+$/.test(path)) return 'mastodon'; // 일반 AP
+    }
+  } catch (_) {}
+  return null;
+}
+
 function platformBadgeHtml(post) {
-  const sw = post.accountSoftware || post.platform;
+  const sw = authorPlatform(post) || post.platform;
   if (!sw) return '';
   const label = PLATFORM_LABELS[sw] || sw;
   return `<span class="platform-badge ${escapeHtml(sw)} badge-xs">${escapeHtml(label)}</span>`;

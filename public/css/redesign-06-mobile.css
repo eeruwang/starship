@@ -8,21 +8,28 @@
 /* 데스크톱에선 숨김 */
 .mobile-tabbar, .compose-fab, .column-pager-dots { display: none; }
 
+/* 모바일 컬럼 너비 (데스크톱 --column-width 와 독립). 88vw 캡으로 양옆 컬럼이
+   살짝 보이는 페이저 + 데스크톱처럼 좁아지지 않도록 360px 최소값 보장. */
+:root {
+  --column-width-mobile: clamp(320px, 88vw, 420px);
+}
+
 @media (max-width: 600px) {
   /* 헤더 액션 축소: 글쓰기·새로고침은 FAB/풀투리프레시 로,
      아이콘 전용 버튼(설정·페이지·로그인)은 유지 */
   .app-header .header-right .btn:not(.btn-icon):not(#btn-auth) { display: none; }
   .app-header .header-right .btn .btn-label { display: none; }
 
-  /* 컬럼: 가로 스크롤 → 한 번에 한 컬럼(페이지) */
+  /* 컬럼: 데스크톱 --column-width 무시, 모바일 전용 너비로. 페이저는 유지하되
+     양 옆 컬럼이 살짝 peek 되어 다음 컬럼 존재가 보이도록 한다. */
   .columns-container {
     scroll-snap-type: x mandatory;
-    gap: 0; padding: var(--space-2) 0 0;
+    gap: var(--space-2); padding: var(--space-2) calc((100vw - var(--column-width-mobile)) / 2);
   }
   .column {
-    min-width: 100vw; max-width: 100vw;
+    min-width: var(--column-width-mobile); max-width: var(--column-width-mobile);
     scroll-snap-align: center;
-    border-radius: 0; border-left: none; border-right: none;
+    border-radius: var(--radius-md);
   }
 
   /* 페이지 닷 (컬럼 위치 표시) */

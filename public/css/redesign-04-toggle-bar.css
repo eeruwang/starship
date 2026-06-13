@@ -7,8 +7,8 @@
    ===================================================================== */
 
 .column-toggle-bar {
-  display: flex; align-items: center; gap: var(--space-4);
-  padding: var(--space-1) var(--space-4);   /* 세로 컴팩트 (4px) */
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: 3px var(--space-3);              /* 세로 컴팩트: 3px */
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   overflow-x: auto; white-space: nowrap; flex-shrink: 0;
@@ -18,14 +18,14 @@
 /* ── 필터 세그먼트 ── */
 .filter-segment {
   display: inline-flex; background: var(--bg-primary);
-  border-radius: var(--radius-md); padding: 3px; gap: 2px; flex-shrink: 0;
+  border-radius: var(--radius-sm); padding: 2px; gap: 2px; flex-shrink: 0;
 }
 .filter-segment button {
   border: none; background: none; cursor: pointer;
-  font: inherit; font-size: var(--text-sm); color: var(--text-muted);
-  padding: 5px var(--space-3); border-radius: var(--radius-sm);
+  font: inherit; font-size: var(--text-xs); color: var(--text-muted);
+  padding: 3px 9px; border-radius: var(--radius-sm);
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
-  white-space: nowrap;
+  white-space: nowrap; min-height: 22px;
 }
 .filter-segment button[aria-pressed="true"] {
   background: var(--bg-card); color: var(--text-primary);
@@ -33,21 +33,21 @@
 }
 
 /* ── 그룹 구분선 ── */
-.toggle-group-sep { width: 1px; height: 24px; background: var(--border-color); flex-shrink: 0; }
+.toggle-group-sep { width: 1px; height: 18px; background: var(--border-color); flex-shrink: 0; }
 
 /* 숨긴 계정은 토글바에서 제외 */
 .account-chip.account-hidden { display: none; }
 
 /* ── 계정 칩 ── */
 .account-chip {
-  display: inline-flex; align-items: center; gap: var(--space-2);
+  display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid var(--border-color); background: var(--bg-card);
-  color: var(--text-muted); border-radius: 20px;
-  padding: 4px 11px 4px 4px; cursor: pointer; font: inherit; font-size: var(--text-sm);
-  white-space: nowrap; flex-shrink: 0;
+  color: var(--text-muted); border-radius: 14px;
+  padding: 2px 9px 2px 3px; cursor: pointer; font: inherit; font-size: var(--text-xs);
+  white-space: nowrap; flex-shrink: 0; min-height: 22px;
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.account-chip .account-chip-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.account-chip .account-chip-avatar { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .account-chip[aria-pressed="true"] {            /* 열린 컬럼 */
   border: 1.5px solid var(--accent-primary);
   background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-card));

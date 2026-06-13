@@ -430,6 +430,7 @@ export const DataLoadingMixin = {
               notif.themeColor = effectiveColor;
               notif.accountId = account.id;
               notif.accountSoftware = account.software || account.platform;
+              if (account.instanceUrl) { try { notif.accountInstanceHost = new URL(account.instanceUrl).host; } catch (_) {} }
               notif.instanceUrl = account.instanceUrl;
               return notif;
             });
@@ -656,6 +657,10 @@ export const DataLoadingMixin = {
     post.accountId = account.id;
     post.accountPlatform = account.platform;
     post.accountSoftware = account.software || account.platform;
+    // 작성자 서버 추정용 — 보는 계정의 인스턴스 호스트
+    if (account.instanceUrl) {
+      try { post.accountInstanceHost = new URL(account.instanceUrl).host; } catch (_) {}
+    }
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile?.id);
@@ -2012,6 +2017,7 @@ export const DataLoadingMixin = {
               notif.themeColor = effectiveColor;
               notif.accountId = account.id;
               notif.accountSoftware = account.software || account.platform;
+              if (account.instanceUrl) { try { notif.accountInstanceHost = new URL(account.instanceUrl).host; } catch (_) {} }
               notif.instanceUrl = account.instanceUrl;
               return notif;
             });

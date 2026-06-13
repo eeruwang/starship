@@ -399,6 +399,7 @@ export const ThreadViewMixin = {
       post.accountId = accountId;
       post.accountPlatform = account.platform;
       post.accountSoftware = account.software || account.platform;
+      if (account.instanceUrl) { try { post.accountInstanceHost = new URL(account.instanceUrl).host; } catch (_) {} }
       post.themeColor = effectiveColor;
       const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
       post.isOwn = String(ownerId) === String(account.profile?.id);

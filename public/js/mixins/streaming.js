@@ -54,6 +54,7 @@ export const StreamingMixin = {
     post.accountId = account.id;
     post.accountPlatform = account.platform;
     post.accountSoftware = account.software || account.platform;
+    if (account.instanceUrl) { try { post.accountInstanceHost = new URL(account.instanceUrl).host; } catch (_) {} }
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile?.id);
@@ -232,6 +233,7 @@ export const StreamingMixin = {
   _onStreamNotification({ account, notif }) {
     notif.accountId = account.id;
     notif.accountSoftware = account.software || account.platform;
+    if (account.instanceUrl) { try { notif.accountInstanceHost = new URL(account.instanceUrl).host; } catch (_) {} }
     notif.instanceUrl = account.instanceUrl;
     notif.themeColor = this._accountColor(account);
 
@@ -350,6 +352,7 @@ export const StreamingMixin = {
     post.accountId = account.id;
     post.accountPlatform = account.platform;
     post.accountSoftware = account.software || account.platform;
+    if (account.instanceUrl) { try { post.accountInstanceHost = new URL(account.instanceUrl).host; } catch (_) {} }
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile?.id);
