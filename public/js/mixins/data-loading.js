@@ -239,11 +239,12 @@ export const DataLoadingMixin = {
           if (existingKeys.has(`${p.platform}:${p.id}`)) continue;
           // Check dedup key (handles cross-instance renotes/boosts)
           if (p._dedupKey && existingKeys.has(`dedup:${p._dedupKey}`)) continue;
-          // For non-renote posts, also check canonicalUri to avoid duplicates
-          if (!p.rebloggedBy) {
-            const displayPost = p.reblog || p;
-            if (displayPost.canonicalUri && existingKeys.has(`uri:${displayPost.canonicalUri}`)) continue;
-          }
+          // canonicalUri 체크는 부스트도 포함. 부스트 래퍼의 inner uri 가 이미 DOM 에
+          // 원본(또는 다른 부스트)으로 존재하면 "이전 글이 다시 새로 올라오는" 현상이
+          // 발생하므로 가드. 스트리밍 경로(streaming.js _onStreamPost) 도 동일하게
+          // 부스트의 URI 까지 비교한다.
+          const displayPost = p.reblog || p;
+          if (displayPost.canonicalUri && existingKeys.has(`uri:${displayPost.canonicalUri}`)) continue;
           newPosts.push(p);
         }
 
@@ -733,19 +734,21 @@ export const DataLoadingMixin = {
     } catch { return null; }
   },
 
+  _computeDedupKey(post) {
+    const displayPost = post.reblog || post;
+    const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
+    if (post.rebloggedBy) {
+      const acct = this._normalizeAcct(post.rebloggedBy.acct, post.instanceUrl);
+      return `reblog:${acct}:${baseKey}`;
+    }
+    return baseKey;
+  },
+
   _deduplicatePosts(posts) {
     const seen = new Map();
     const deduped = [];
     for (const post of posts) {
-      const displayPost = post.reblog || post;
-      const baseKey = displayPost.canonicalUri || `${displayPost.platform}:${displayPost.id}`;
-      let key;
-      if (post.rebloggedBy) {
-        const acct = this._normalizeAcct(post.rebloggedBy.acct, post.instanceUrl);
-        key = `reblog:${acct}:${baseKey}`;
-      } else {
-        key = baseKey;
-      }
+      const key = this._computeDedupKey(post);
       post._dedupKey = key;
       if (!seen.has(key)) {
         post.mergedAccounts = [{ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor }];

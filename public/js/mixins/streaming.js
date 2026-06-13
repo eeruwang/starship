@@ -58,6 +58,10 @@ export const StreamingMixin = {
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile?.id);
+    // 새로고침 시 Phase 2 dedup 키 인덱스가 이 카드를 잡을 수 있도록 동일 규칙으로 부여
+    if (typeof this._computeDedupKey === 'function') {
+      post._dedupKey = this._computeDedupKey(post);
+    }
 
     // Cache
     this.cachePosts([post]);
