@@ -102,8 +102,6 @@ class StarShipApp {
     initMfmMotion();
     // 알려진 계정의 host → software 매핑을 캐시에 시드 (작성자 배지 정확도)
     this._seedHostPlatformCache();
-    // 모바일: 컬럼을 스크롤 다운 → 헤더 숨김, 스크롤 업 → 표시 (Safari 헤더 압박 완화)
-    this._initMobileHeaderAutoHide();
     // iOS 키보드 높이를 CSS 변수(--keyboard-h)로 노출 → 컴포즈 모달이 본문을 키보드
     // 위로 띄울 수 있게 한다.
     this._initVisualViewportShim();
@@ -187,31 +185,6 @@ class StarShipApp {
 
   // Sets data-theme + data-scheme. Schemes are pre-mapped from theme-switcher's
   // THEMES table so changing one place updates the other.
-  _initMobileHeaderAutoHide() {
-    const header = document.querySelector('.app-header');
-    if (!header) return;
-    const mq = window.matchMedia('(max-width: 600px)');
-    let lastY = 0;
-    let ticking = false;
-    document.addEventListener('scroll', (e) => {
-      if (!mq.matches) { header.classList.remove('header-hidden'); return; }
-      const t = e.target;
-      if (!(t instanceof Element) || !t.classList?.contains('column-content')) return;
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        ticking = false;
-        const y = t.scrollTop;
-        if (y < 48) { header.classList.remove('header-hidden'); lastY = y; return; }
-        const dy = y - lastY;
-        if (Math.abs(dy) < 8) return;       // 지터 방지
-        if (dy > 0) header.classList.add('header-hidden');
-        else header.classList.remove('header-hidden');
-        lastY = y;
-      });
-    }, true);
-  }
-
   _initVisualViewportShim() {
     const vv = window.visualViewport;
     if (!vv) return;

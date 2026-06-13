@@ -376,6 +376,26 @@ export const ColumnsMixin = {
     dots.innerHTML = Array.from(cols).map((_, i) =>
       `<span class="dot${i === this.focusedColumnIndex ? ' active' : ''}"></span>`
     ).join('');
+    // 모바일 스와이프 페이저 추적: scroll 위치로 현재 페이지 판정
+    if (!this._pagerScrollBound && this.columnsContainer) {
+      this._pagerScrollBound = true;
+      let ticking = false;
+      this.columnsContainer.addEventListener('scroll', () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          ticking = false;
+          const c = this.columnsContainer;
+          if (!c) return;
+          const w = c.clientWidth || 1;
+          const idx = Math.round(c.scrollLeft / w);
+          if (idx === this.focusedColumnIndex) return;
+          this.focusedColumnIndex = idx;
+          const list = dots.querySelectorAll('.dot');
+          list.forEach((d, i) => d.classList.toggle('active', i === idx));
+        });
+      }, { passive: true });
+    }
   },
 
   createColumn(title, type, accountId) {

@@ -37,30 +37,35 @@ export const EventsMixin = {
       this.openComposeModal(null, accountId || null);
     });
 
-    // 모바일 탭바 → 해당 컬럼으로 스크롤 (없으면 토글로 열고 이동)
+    // 모바일 하단 탭바 → 앱 액션 디스패치 (새로고침/페이지/설정/사용자)
     document.getElementById('mobile-tabbar')?.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-mobile-tab]');
       if (!tab) return;
       const type = tab.dataset.mobileTab;
-      if (type === 'settings') {
-        this.openSettingsModal();
-        return;
+      switch (type) {
+        case 'refresh': this.refreshAll(true); break;
+        case 'pages': this.openPagesDashboard?.(); break;
+        case 'settings': this.openSettingsModal(); break;
+        case 'user': {
+          // 데스크톱 헤더의 사용자 메뉴를 토글 — 모바일에서는 헤더가 숨겨져 있어
+          // 직접 보일 위치로 이동해야 한다.
+          const wrap = document.getElementById('user-menu-wrap');
+          const menu = document.getElementById('user-menu');
+          if (menu) {
+            // 메뉴를 body 자식으로 옮겨 fixed 로 띄움 (헤더가 display:none 인 모바일 대응)
+            if (menu.parentElement !== document.body) document.body.appendChild(menu);
+            menu.style.position = 'fixed';
+            menu.style.bottom = 'calc(env(safe-area-inset-bottom) + 76px)';
+            menu.style.right = '12px';
+            menu.style.left = 'auto';
+            menu.style.top = 'auto';
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+          } else if (wrap) {
+            wrap.querySelector('#btn-auth')?.click();
+          }
+          break;
+        }
       }
-      let col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
-      if (!col) {
-        // 토글로 열기
-        if (type === 'all' && !this.columnState.all) this.columnState.all = true;
-        else if (type === 'notifications' && !this.columnState.notifications) this.columnState.notifications = true;
-        else if (type === 'bookmarks' && !this.columnState.bookmarks) this.columnState.bookmarks = true;
-        this.updateColumnOrder(type, true);
-        this.saveColumnState();
-        this.renderToggleBar();
-        this.renderColumns();
-        col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
-      }
-      if (col) col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      document.querySelectorAll('.mobile-tabbar .tab.active').forEach(b => b.classList.remove('active'));
-      tab.classList.add('active');
     });
 
     // Double-tap / double-click app header: scroll ALL columns to top

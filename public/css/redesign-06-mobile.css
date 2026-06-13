@@ -1,110 +1,118 @@
 /* =====================================================================
    StarShip — 06. Mobile (≤ 600px)
    ---------------------------------------------------------------------
-   가로 스크롤 컬럼 → 하단 탭바 + 좌우 스와이프 페이지 + 새글 FAB.
-   탭바/FAB 는 신규 마크업. [markup]
+   모바일 레이아웃: 상단 헤더/토글바를 전부 화면 아래로 내리고,
+   컬럼은 100vw 풀스크린 스와이프 페이저로 한다.
+
+     ┌──────────────────────────────┐
+     │                              │
+     │   [Column content (full)]    │
+     │                              │
+     │                          [+] │  ← 컴포즈 FAB
+     │                              │
+     │  • • o •                     │  ← 페이지 닷 (옵션)
+     ├──────────────────────────────┤
+     │ [Filter ▾] [Account chips →] │  ← .column-toggle-bar (fixed bottom)
+     ├──────────────────────────────┤
+     │   ↻       📄       ⚙       👤 │  ← .mobile-tabbar (앱 액션)
+     └──────────────────────────────┘
    ===================================================================== */
 
 /* 데스크톱에선 숨김 */
 .mobile-tabbar, .compose-fab, .column-pager-dots { display: none; }
 
-/* 모바일 컬럼 너비 (데스크톱 --column-width 와 독립). 88vw 캡으로 양옆 컬럼이
-   살짝 보이는 페이저 + 데스크톱처럼 좁아지지 않도록 360px 최소값 보장. */
-:root {
-  --column-width-mobile: clamp(320px, 88vw, 420px);
-}
-
 @media (max-width: 600px) {
-  /* 헤더 액션 축소: 글쓰기·새로고침은 FAB/풀투리프레시 로,
-     아이콘 전용 버튼(설정·페이지·로그인)은 유지 */
-  .app-header .header-right .btn:not(.btn-icon):not(#btn-auth) { display: none; }
-  .app-header .header-right .btn .btn-label { display: none; }
+  /* 상단 헤더 완전 숨김. 새로고침/페이지/설정/사용자는 하단 .mobile-tabbar 가 대신. */
+  .app-header { display: none; }
 
-  /* iPhone Safari 의 URL 바 + 노치 때문에 세로 공간이 빠듯하므로 헤더 자체를 더 압축 +
-     스크롤 다운 시 자동 숨김. JS 가 .header-hidden 을 토글한다. */
-  .app-header {
-    position: sticky; top: 0; z-index: 100;
-    padding: 4px 8px;
-    transition: transform 0.22s ease;
-    will-change: transform;
-    padding-top: max(4px, env(safe-area-inset-top));
-  }
-  .app-header.header-hidden { transform: translateY(-100%); }
-  .app-header .logo { font-size: 14px; }
-  .app-header .logo-icon { width: 18px; height: 18px; }
-  .app-header .header-right .btn-icon {
-    min-width: 32px; min-height: 32px; padding: 4px;
-  }
-  .app-header .header-right .btn-icon svg { width: 15px; height: 15px; }
-
-  /* 토글바도 sticky 로 따라 숨김 */
-  .column-toggle-bar {
-    position: sticky; top: 0; z-index: 99;
-    transition: transform 0.22s ease;
-  }
-  .app-header.header-hidden + .column-toggle-bar { transform: translateY(0); }
-
-  /* 컬럼: 데스크톱 --column-width 무시, 모바일 전용 너비로. 페이저는 유지하되
-     양 옆 컬럼이 살짝 peek 되어 다음 컬럼 존재가 보이도록 한다. */
+  /* 컬럼 컨테이너: 100vw 풀스크린 페이저 */
   .columns-container {
     scroll-snap-type: x mandatory;
-    gap: var(--space-2); padding: var(--space-2) calc((100vw - var(--column-width-mobile)) / 2);
+    gap: 0; padding: 0;
+    flex: 1;
   }
   .column {
-    min-width: var(--column-width-mobile); max-width: var(--column-width-mobile);
+    min-width: 100vw; max-width: 100vw;
     scroll-snap-align: center;
-    border-radius: var(--radius-md);
+    border-radius: 0; border-left: none; border-right: none;
+  }
+  /* 컬럼 헤더는 슬림하게: 닫기 버튼 숨김 (스와이프로 이동, 토글바 칩에서 닫기) */
+  .column .column-header { padding: 6px var(--space-3); flex-shrink: 0; }
+  .column .column-header [data-action="close-column"] { display: none; }
+  .column .column-header h2 { font-size: var(--text-base); }
+
+  /* 컬럼 본문은 페이저 안에서 세로 풀높이. 하단 chrome(토글바+탭바) 만큼 패딩. */
+  .column-content {
+    padding-bottom: calc(
+      env(safe-area-inset-bottom)
+      + 116px                 /* 토글바 ~36 + 탭바 ~56 + 여백 */
+    );
   }
 
-  /* 페이지 닷 (컬럼 위치 표시) */
+  /* 페이지 닷 (현재 컬럼 표시). 토글바 위에 띄움. */
   .column-pager-dots {
     display: flex; justify-content: center; gap: 6px;
-    padding: var(--space-2) 0;
+    position: fixed; left: 0; right: 0;
+    bottom: calc(env(safe-area-inset-bottom) + 120px);
+    z-index: 540; pointer-events: none;
   }
-  .column-pager-dots .dot { width: 6px; height: 6px; border-radius: 3px; background: var(--border-color); }
+  .column-pager-dots .dot {
+    width: 6px; height: 6px; border-radius: 3px;
+    background: color-mix(in srgb, var(--text-muted) 60%, transparent);
+  }
   .column-pager-dots .dot.active { width: 18px; background: var(--accent-primary); }
 
-  /* 하단 탭바 (글래스) */
-  .mobile-tabbar {
-    display: flex; align-items: center; justify-content: space-around;
-    position: fixed; left: var(--space-3); right: var(--space-3);
-    bottom: calc(env(safe-area-inset-bottom) + 8px); z-index: 550;
-    padding: 10px 14px;
-    background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+  /* ── 토글바: 하단 고정 (필터 + 계정 칩) ── */
+  .column-toggle-bar {
+    position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 56px);
+    z-index: 545;
+    padding: 6px var(--space-3);
+    background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
     backdrop-filter: blur(12px) saturate(160%);
     -webkit-backdrop-filter: blur(12px) saturate(160%);
-    border: 1px solid var(--border-color);
-    border-radius: 20px;
-    box-shadow: var(--shadow-md);
+    border-top: 1px solid var(--border-color);
+    border-bottom: none;
+    /* 가로 스크롤은 redesign-04 가 제공 */
   }
-  .mobile-tabbar a, .mobile-tabbar button {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    background: none; border: none; cursor: pointer;
-    color: var(--text-muted); font: inherit; font-size: 9px;
-    min-width: 44px; min-height: 44px; justify-content: center;
-  }
-  .mobile-tabbar .tab.active { color: var(--accent-primary); font-weight: 600; }
-  .mobile-tabbar .tab-spacer { width: 52px; }   /* FAB 자리 */
 
-  /* 새글 FAB (탭바 중앙 위로 띄움) */
+  /* ── 앱 액션 탭바 (헤더 대체): 새로고침 / 페이지 / 설정 / 사용자 ── */
+  .mobile-tabbar {
+    display: flex; align-items: stretch; justify-content: space-around;
+    position: fixed; left: 0; right: 0;
+    bottom: 0; z-index: 550;
+    padding: 6px max(var(--space-3), env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-right));
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+  }
+  .mobile-tabbar button, .mobile-tabbar a {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font: inherit; font-size: 10px;
+    min-width: 44px; min-height: 44px; justify-content: center; flex: 1;
+  }
+  .mobile-tabbar button svg { width: 20px; height: 20px; }
+  .mobile-tabbar button[aria-pressed="true"],
+  .mobile-tabbar .tab.active { color: var(--accent-primary); font-weight: 600; }
+  .mobile-tabbar .tab-spacer { display: none; }
+
+  /* ── 새글 FAB (탭바 위 오른쪽에 띄움) ── */
   .compose-fab {
     display: flex; align-items: center; justify-content: center;
-    position: fixed; left: 50%; transform: translateX(-50%);
-    bottom: calc(env(safe-area-inset-bottom) + 30px); z-index: 560;
-    width: 56px; height: 56px; border-radius: 18px;
+    position: fixed;
+    right: calc(env(safe-area-inset-right) + 16px);
+    bottom: calc(env(safe-area-inset-bottom) + 140px);   /* 토글바 + 탭바 위 */
+    z-index: 560;
+    width: 52px; height: 52px; border-radius: 18px;
     background: linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 70%, #000 8%));
     color: #fff; border: none; cursor: pointer;
     box-shadow: 0 6px 18px color-mix(in srgb, var(--accent-primary) 45%, transparent);
   }
 
-  /* 타임라인 하단 패딩: 탭바/FAB 에 안 가리게 */
-  .column-content { padding-bottom: 96px; }
-
   /* ── 컴포즈 모달 모바일 압축 ──
      iOS 키보드가 올라오면 화면이 빠듯해지므로 계정 칩 영역을 단일 행 가로
      스크롤로 압축하고, 라벨·여백을 줄여 본문 영역을 최대한 확보. */
   .compose-modal .modal-body { padding: var(--space-3) var(--space-4) !important; gap: var(--space-2); }
-  .compose-accounts-section label { display: none; }   /* "게시 계정" 라벨 생략 */
+  .compose-accounts-section label { display: none; }
   .compose-accounts {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -122,11 +130,8 @@
   }
   .compose-account-avatar { width: 18px; height: 18px; }
   .compose-account-name { max-width: 70px; }
-  /* CW 입력은 빈 상태에서 더 컴팩트 */
   .compose-cw-wrap { padding: 6px 8px; }
   .compose-cw-input { font-size: var(--text-sm); }
-  /* textarea 가 키보드 위로 올라올 수 있도록 최소 높이 축소 */
   .compose-text-input { min-height: 90px; }
-  /* 모달 자체: 가능한 100dvh 까지 확장 (Safari 키보드 대응) */
   .modal.compose-modal { max-height: 95dvh; }
 }
