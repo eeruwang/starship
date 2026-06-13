@@ -184,6 +184,8 @@ class StarShipApp {
       'indigo-night': 'dark',
       'arctic': 'dark',
       'moss': 'dark',
+      'arctic-light': 'light',
+      'moss-light': 'light',
       'daylight': 'light',
       'linen': 'light',
     };

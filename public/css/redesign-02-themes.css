@@ -63,6 +63,40 @@
   --shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
 
+/* ── 3b. Moss Light (light · soft green paper) ───────────────────── */
+:root[data-theme="moss-light"] {
+  --bg-primary:   #eaf0ea;
+  --bg-secondary: #fbfdfb;
+  --bg-card:      #ffffff;
+  --bg-hover:     #e0e9e0;
+  --bg-input:     #f1f5f1;
+  --text-primary:   #16241b;
+  --text-secondary: #4a5e50;
+  --text-muted:     #6a7c70;   /* on #fff ≈ 4.6:1 ✓ */
+  --accent-primary: #259160;
+  --accent-danger:  #d6566f;
+  --accent-fav:     #d6566f;
+  --border-color:   #d4e0d6;
+  --shadow: 0 2px 12px rgba(30,60,40,0.08);
+}
+
+/* ── 2b. Arctic Light (light · clear sky + cyan) ─────────────────── */
+:root[data-theme="arctic-light"] {
+  --bg-primary:   #eaeef3;
+  --bg-secondary: #ffffff;
+  --bg-card:      #ffffff;
+  --bg-hover:     #e2e8ef;
+  --bg-input:     #f2f5f8;
+  --text-primary:   #16202b;
+  --text-secondary: #4a5a6a;
+  --text-muted:     #6a7686;   /* on #fff ≈ 4.6:1 ✓ */
+  --accent-primary: #2b8fc4;
+  --accent-danger:  #d6485f;
+  --accent-fav:     #d6485f;
+  --border-color:   #d4dce4;
+  --shadow: 0 2px 12px rgba(30,50,70,0.08);
+}
+
 /* ── 4. Daylight (light · neutral + indigo) ──────────────────────── */
 :root[data-theme="daylight"] {
   --bg-primary:   #eceef4;

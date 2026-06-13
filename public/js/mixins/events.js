@@ -239,33 +239,25 @@ export const EventsMixin = {
   },
 
   _bindDelegatedEvents() {
-    // CW shield toggle (new blur-overlay model)
+    // CW 토글 — 배너 알약 버튼. .cw-content 의 .visible + 부모 .post-card 의 .cw-open 동기화
     document.addEventListener('click', (e) => {
-      const trigger = e.target.closest('.cw-cover-btn, .cw-rehide, .cw-cover');
-      if (!trigger) return;
-      const shield = trigger.closest('.cw-shield');
-      if (shield) shield.classList.toggle('revealed');
-    });
-
-    // CW toggle (legacy display-toggle: notifications / reply-context)
-    document.addEventListener('click', (e) => {
-      if (e.target.matches('.cw-toggle')) {
-        // Support data-cw-target for ID-based lookup (more reliable in flex layouts)
-        const targetId = e.target.dataset.cwTarget;
-        let target;
-        if (targetId) {
-          // Search within the closest container first to avoid ID conflicts
-          // (same post can exist in both column and thread view)
-          const container = e.target.closest('.thread-content, .column-content, .notif-card, .post-card');
-          target = container ? container.querySelector(`#${CSS.escape(targetId)}`) : document.getElementById(targetId);
-        } else {
-          const cwWarning = e.target.closest('.cw-warning, .reply-context-cw, .notif-cw-warning');
-          target = cwWarning?.nextElementSibling;
-        }
-        if (target && (target.classList.contains('cw-content') || target.id?.startsWith('reply-ctx-') || target.id?.startsWith('notif-reply-ctx-'))) {
-          target.classList.toggle('visible');
-          e.target.textContent = target.classList.contains('visible') ? '숨기기' : '내용 보기';
-        }
+      if (!e.target.matches('.cw-toggle')) return;
+      const targetId = e.target.dataset.cwTarget;
+      let target;
+      if (targetId) {
+        const container = e.target.closest('.thread-content, .column-content, .notif-card, .post-card');
+        target = container ? container.querySelector(`#${CSS.escape(targetId)}`) : document.getElementById(targetId);
+      } else {
+        const cwWarning = e.target.closest('.cw-warning, .reply-context-cw, .notif-cw-warning');
+        target = cwWarning?.nextElementSibling;
+      }
+      if (target && (target.classList.contains('cw-content') || target.id?.startsWith('reply-ctx-') || target.id?.startsWith('notif-reply-ctx-'))) {
+        target.classList.toggle('visible');
+        const opened = target.classList.contains('visible');
+        e.target.textContent = opened ? '숨기기' : '내용 보기';
+        // v3 redesign-03 §6 의 .cw-open .cw-content { display: block } 매칭
+        const card = e.target.closest('.post-card');
+        if (card) card.classList.toggle('cw-open', opened);
       }
     });
 
@@ -412,7 +404,7 @@ export const EventsMixin = {
     document.addEventListener('click', (e) => {
       const card = e.target.closest('.notif-clickable');
       if (!card) return;
-      if (e.target.closest('.notif-avatar') || e.target.closest('.post-avatar') || e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn') || e.target.closest('.post-action') || e.target.closest('.cw-toggle') || e.target.closest('.cw-cover') || e.target.closest('.cw-rehide') || e.target.closest('.post-action-overflow') || e.target.closest('.sensitive-reveal') || e.target.closest('.sensitive-hide') || e.target.closest('.link-card') || e.target.closest('.reaction-badge') || e.target.closest('.post-media')) return;
+      if (e.target.closest('.notif-avatar') || e.target.closest('.post-avatar') || e.target.closest('[data-lightbox]') || e.target.closest('.expand-toggle') || e.target.closest('.notif-action-btn') || e.target.closest('.post-action') || e.target.closest('.cw-toggle') || e.target.closest('.post-action-overflow') || e.target.closest('.sensitive-reveal') || e.target.closest('.sensitive-hide') || e.target.closest('.link-card') || e.target.closest('.reaction-badge') || e.target.closest('.post-media')) return;
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
       if (!platform || !accountId) return;
@@ -485,7 +477,7 @@ export const EventsMixin = {
 
     // Post card click: open thread view
     document.addEventListener('click', (e) => {
-      if (e.target.closest('.post-action, .reaction-badge, a, button, [data-lightbox], .expand-toggle, .cw-toggle, .cw-cover, .cw-rehide, .post-action-overflow, .post-media, img')) return;
+      if (e.target.closest('.post-action, .reaction-badge, a, button, [data-lightbox], .expand-toggle, .cw-toggle, .post-action-overflow, .post-media, img')) return;
       const card = e.target.closest('.post-card');
       if (!card) return;
       const inThreadModal = card.closest('.modal .thread-content');

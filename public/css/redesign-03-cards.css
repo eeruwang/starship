@@ -44,8 +44,6 @@
   display: flex; flex-direction: column; gap: 2px;
 }
 .post-action-overflow[hidden] { display: none; }
-.post-action-overflow .action-icon { display: inline-flex; }
-.post-action-overflow .action-icon svg { width: 16px; height: 16px; }
 .post-action-overflow button {
   display: flex; align-items: center; gap: var(--space-2);
   width: 100%; padding: var(--space-2) var(--space-3);
@@ -55,15 +53,53 @@
 }
 .post-action-overflow button:hover { background: var(--bg-hover); }
 .post-action-overflow button.danger:hover { color: var(--accent-danger); }
+.post-action-overflow .action-icon { display: inline-flex; }
+.post-action-overflow .action-icon svg { width: 16px; height: 16px; }
 
-/* ── 3. 카드 플랫폼 글자 배지 [markup] ────────────────────────────────
-   renderPost 헤더: 작성자명 옆에 <span class="platform-badge {sw} badge-xs">{label}</span>.
-   .platform-badge.{sw} 색은 base.css 에 이미 존재. */
-.post-author-row { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+/* ── 3. 카드 헤더 레이아웃 + 플랫폼 글자 배지 [markup] ────────────────
+   renderPost/renderNotification 헤더 구조:
+     <div class="post-header">
+       <img class="post-avatar">
+       <div class="post-meta">
+         <div class="post-author-row">
+           <span class="post-author">{name}</span>             ← 길면 말줄임
+           <span class="platform-badge {sw} badge-xs">{label}</span>
+         </div>
+         <div class="post-handle">@{acct}</div>
+       </div>
+       <span class="post-time">{time}{visibility}</span>       ← 안 줄어듦
+     </div>
+   ⚠ 긴 이름이 배지/시간과 겹치는 문제 해결의 핵심:
+     · post-meta = flex:1 + min-width:0  (자식 truncate 허용)
+     · post-author = 말줄임(ellipsis)으로 폭 양보
+     · 배지 / 시간 = flex-shrink:0 으로 항상 온전히 표시 */
+.post-header { display: flex; align-items: flex-start; gap: var(--space-3); }
+.post-header .post-avatar { flex-shrink: 0; }
+.post-header .post-meta { flex: 1; min-width: 0; }            /* ← 핵심: 줄바꿈·겹침 방지 */
+.post-header .post-time {
+  flex-shrink: 0; margin-left: var(--space-2);
+  white-space: nowrap; color: var(--text-muted);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+
+.post-author-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.post-author-row .post-author {
+  font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;   /* 긴 이름 … 처리 */
+  min-width: 0;
+}
 .platform-badge.badge-xs {
   font-size: 10px; font-weight: 700;
   padding: 1px 6px; border-radius: var(--radius-sm);
-  line-height: 1.5; letter-spacing: 0.02em; flex-shrink: 0;
+  line-height: 1.5; letter-spacing: 0.02em;
+  flex-shrink: 0;                                              /* 배지는 절대 안 줄어듦 */
+}
+.post-handle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 아주 좁은 폭(≤340px 카드)에서는 배지를 핸들 줄로 내려 이름 공간 확보 (선택) */
+@media (max-width: 360px) {
+  .post-author-row .platform-badge.badge-xs { display: none; }
+  .post-handle .platform-badge.badge-xs { display: inline-flex; }  /* 핸들 끝에 복제 노출 시 */
 }
 
 /* ── 4. 같은 작성자 연속 글 그룹핑 [markup] ──────────────────────────
@@ -108,36 +144,50 @@
 }
 .quote-post-label { font-size: 10px; font-weight: 700; color: var(--text-muted); margin-bottom: var(--space-1); }
 
-/* ── 6. CW = 블러 오버레이 [markup] ───────────────────────────────────
-   기존: .cw-warning(텍스트) + .cw-content(display 토글).
-   변경: .cw-content 를 .cw-shield 로 감싸 블러 + 중앙 "내용 보기" 버튼.
-   .revealed 토글 시 블러 해제. (display:none 토글 대신 클래스 토글) */
-.cw-shield { position: relative; border-radius: var(--radius-md); overflow: hidden; }
-/* Override legacy .cw-content { display:none; } when inside shield */
-.cw-shield .cw-content { display: block; }
-.cw-shield .cw-content {
-  filter: blur(8px);
-  user-select: none; pointer-events: none;
-  transition: filter var(--dur) var(--ease);
-  min-height: 80px;
+/* ── 6. CW = 배너 + 알약형 토글 [markup] ──────────────────────────────
+   기존 마크업 그대로 사용: .cw-warning(배너) + .cw-toggle(버튼) + .cw-content.
+   ⚠ 현재 .cw-toggle 에 CSS 가 없어 기본 브라우저 버튼으로 보임 — 아래로 스타일링.
+   가림/노출 두 상태 모두 같은 배너·알약 버튼을 쓰고, 라벨만 "내용 보기"↔"숨기기".
+   토글 시 카드에 .cw-open 클래스(또는 .cw-content display 토글) 적용. */
+.cw-warning {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: color-mix(in srgb, var(--accent-akkoma, #f0a030) 12%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--accent-akkoma, #f0a030) 30%, transparent);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
 }
-.cw-shield.revealed .cw-content { filter: none; user-select: auto; pointer-events: auto; }
-.cw-shield .cw-cover {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--space-2);
-  background: color-mix(in srgb, var(--bg-card) 35%, transparent);
-  cursor: pointer;
+.cw-warning .cw-icon {
+  flex-shrink: 0; display: inline-flex;
+  color: var(--accent-akkoma, #f0a030);
 }
-.cw-shield.revealed .cw-cover { display: none; }
-.cw-shield .cw-cover-label { font-size: var(--text-sm); color: var(--text-secondary); display: inline-flex; align-items: center; gap: var(--space-1); }
-.cw-shield .cw-cover-btn {
-  font-size: var(--text-sm); font-weight: 600; color: #fff;
-  background: color-mix(in srgb, var(--text-primary) 78%, transparent);
-  padding: 7px 16px; border-radius: 18px; border: none; cursor: pointer;
+.cw-warning .cw-text {                 /* CW 사유 텍스트 — 길면 말줄임 */
+  flex: 1; min-width: 0;
+  color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* 가림 해제 후 다시 숨기는 미니 라벨 */
-.cw-rehide { font-size: var(--text-xs); color: var(--text-muted); text-decoration: underline; cursor: pointer; }
+/* 알약형 토글 — 기본 버튼 모양 제거 */
+.cw-toggle {
+  flex-shrink: 0; margin-left: auto;
+  font: inherit; font-size: var(--text-xs); font-weight: 600;
+  color: var(--accent-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 4px 13px; cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.cw-toggle:hover { background: var(--bg-hover); }
+/* 노출 상태: "숨기기"는 중립 톤으로(강조 ↓) */
+.cw-open .cw-toggle { color: var(--text-muted); }
+/* 가림 상태: 본문 숨김 (display 토글 대신 클래스로) */
+.cw-content { display: none; }
+.cw-open .cw-content { display: block; }
+
+/* (선택) 미디어용 블러 변형 — 본문이 아니라 이미지에만 적용하고 싶을 때:
+   .cw-media-shield 로 감싸 filter: blur(20px) + 중앙 "민감한 미디어 · 보기" 버튼.
+   본문 CW 는 위 배너 방식 권장. */
 
 /* ── 7. 이모지 크기 정합 (F) ─────────────────────────────────────────
    토큰: 본문 인라인 1.25em / 리액션·알림 배지 고정 px. */
@@ -173,3 +223,37 @@
 [data-density="compact"] .post-avatar { width: 30px; height: 30px; }
 [data-density="compact"] .post-actions { margin-top: var(--space-2); padding-top: var(--space-2); }
 [data-density="compact"] .post-content { font-size: var(--text-sm); line-height: 1.5; }
+
+/* ── 9. 데스크톱 세로 밀도 압축 (comfortable 기본값) ───────────────────
+   데스크톱에서 카드 세로 여백이 전반적으로 커 가시성이 떨어지는 문제.
+   comfortable 기본 자체를 압축. (모바일 44px 타깃은 §1 max-width:600 override 가 유지)
+   기존 박힌 값 참고 → 압축값:
+     .post-card padding   0.85rem 1rem      → 10px 14px
+     .post-actions m/p-top 0.6rem(약 9.6px)  → 8px
+     .post-content        margin/line-height 축소
+     .column-content gap  0.5rem            → 6px */
+.post-card, .notif-card { padding: 10px 14px; }
+.column-content { gap: 6px; }
+
+.post-header { margin-bottom: 6px; }
+.post-content { margin: 6px 0; line-height: 1.5; }
+
+.post-actions {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.post-action { min-height: 32px; padding: 5px 9px; }     /* 데스크톱: 36→32 */
+.post-action .action-icon svg { width: 17px; height: 17px; }
+
+.post-reactions { margin-top: 6px; padding-top: 4px; gap: 6px; }
+
+/* 답글레일·인용·CW 배너 세로 여백도 한 단계 축소 */
+.reply-context { margin-bottom: 8px; }
+.quote-post { padding: 8px 10px; margin: 6px 0 8px; }
+.cw-warning { padding: 6px 10px; margin: 6px 0; }
+
+/* 터치 기기에서는 다시 넉넉하게 (오조작 방지) */
+@media (max-width: 600px) {
+  .post-card, .notif-card { padding: var(--space-3) var(--space-4); }
+  .column-content { gap: var(--space-2); }
+}

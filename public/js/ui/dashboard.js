@@ -488,14 +488,14 @@ export function renderPost(post) {
     </div>
   `;
 
-  // CW shield (blur overlay; .revealed 토글로 해제, display:none 토글 대체)
+  // CW 배너 + 알약형 토글. .cw-open 클래스 토글로 .cw-content 노출.
   if (displayPost.contentWarning) {
     const cwId = `cw-${post.id}`;
-    html += `<div class="cw-shield" data-cw-id="${cwId}">`;
     html += `
-      <div class="cw-cover">
-        <span class="cw-cover-label"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(displayPost.contentWarning)}</span>
-        <button class="cw-cover-btn" data-cw-target="${cwId}">내용 보기</button>
+      <div class="cw-warning">
+        <span class="cw-icon">${iconWarning}</span>
+        <span class="cw-text">${escapeHtml(displayPost.contentWarning)}</span>
+        <button class="cw-toggle" data-cw-target="${cwId}">내용 보기</button>
       </div>
     `;
     html += `<div class="cw-content" id="${cwId}">`;
@@ -533,10 +533,7 @@ export function renderPost(post) {
   }
 
   if (displayPost.contentWarning) {
-    const cwId = `cw-${post.id}`;
-    html += `<button class="cw-rehide" data-cw-target="${cwId}">숨기기</button>`;
     html += '</div>'; // close cw-content
-    html += '</div>'; // close cw-shield
   }
 
   // Reactions (Misskey) / Favourites badge (Mastodon) — outside CW so always visible

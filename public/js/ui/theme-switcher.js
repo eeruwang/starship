@@ -7,7 +7,9 @@
 export const THEMES = [
   { id: 'indigo-night', label: 'Indigo Night', scheme: 'dark'  },
   { id: 'arctic',       label: 'Arctic',       scheme: 'dark'  },
+  { id: 'arctic-light', label: 'Arctic Light', scheme: 'light' },
   { id: 'moss',         label: 'Moss',         scheme: 'dark'  },
+  { id: 'moss-light',   label: 'Moss Light',   scheme: 'light' },
   { id: 'daylight',     label: 'Daylight',     scheme: 'light' },
   { id: 'linen',        label: 'Linen',        scheme: 'light' },
 ];
