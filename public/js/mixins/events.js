@@ -43,8 +43,11 @@ export const EventsMixin = {
       if (!tab) return;
       const type = tab.dataset.mobileTab;
       switch (type) {
+        case 'all':
         case 'notifications':
-        case 'bookmarks': {
+        case 'bookmarks':
+        case 'dm':
+        case 'pages': {
           // 해당 컬럼으로 이동. 없으면 켜고 추가.
           let col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
           if (!col) {
@@ -58,6 +61,7 @@ export const EventsMixin = {
           if (col) col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
           break;
         }
+        case 'accounts': this._toggleAccountChipSheet(); break;
         case 'settings': this.openSettingsModal(); break;
         case 'user': {
           // 로그인 안 한 상태면 auth 모달, 로그인 상태면 사용자 메뉴를 하단 시트처럼 띄움.
@@ -281,6 +285,18 @@ export const EventsMixin = {
       const toggle = e.target.closest('[data-toggle-type]');
       if (!toggle) return;
       this.handleToggleClick(toggle);
+    }, true);
+
+    // 모바일 햄버거 시트(.account-chip-sheet) 안의 계정 칩 클릭도 동일 핸들러로
+    // 위임. 시트는 #column-toggle-bar 바깥에 있어 위 리스너로 못 잡는다.
+    document.getElementById('account-chip-sheet')?.addEventListener('click', (e) => {
+      const toggle = e.target.closest('[data-toggle-type]');
+      if (!toggle) return;
+      this.handleToggleClick(toggle);
+      // 칩 누르면 시트 자동 닫기
+      const sheet = document.getElementById('account-chip-sheet');
+      sheet?.classList.remove('open');
+      sheet?.setAttribute('aria-hidden', 'true');
     }, true);
   },
 

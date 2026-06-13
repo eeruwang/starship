@@ -41,19 +41,16 @@
   .column .column-header [data-action="close-column"] { display: none; }
   .column .column-header h2 { font-size: var(--text-base); }
 
-  /* 컬럼 본문은 페이저 안에서 세로 풀높이. 하단 chrome(토글바+탭바) 만큼 패딩. */
+  /* 컬럼 본문은 페이저 안에서 세로 풀높이. 하단 탭바만큼 패딩. */
   .column-content {
-    padding-bottom: calc(
-      env(safe-area-inset-bottom)
-      + 116px                 /* 토글바 ~36 + 탭바 ~56 + 여백 */
-    );
+    padding-bottom: calc(env(safe-area-inset-bottom) + 80px);
   }
 
-  /* 페이지 닷 (현재 컬럼 표시). 토글바 위에 띄움. */
+  /* 페이지 닷 (현재 컬럼 표시). 탭바 위에 띄움. */
   .column-pager-dots {
     display: flex; justify-content: center; gap: 6px;
     position: fixed; left: 0; right: 0;
-    bottom: calc(env(safe-area-inset-bottom) + 120px);
+    bottom: calc(env(safe-area-inset-bottom) + 64px);
     z-index: 540; pointer-events: none;
   }
   .column-pager-dots .dot {
@@ -62,21 +59,41 @@
   }
   .column-pager-dots .dot.active { width: 18px; background: var(--accent-primary); }
 
-  /* ── 토글바: 하단 고정 (필터 + 계정 칩) ── */
-  .column-toggle-bar {
-    position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 56px);
-    z-index: 545;
-    padding: 6px var(--space-3);
-    background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
-    backdrop-filter: blur(12px) saturate(160%);
-    -webkit-backdrop-filter: blur(12px) saturate(160%);
+  /* ── 토글바: 모바일에선 완전 숨김 ──
+     필터(전체/알림/북마크/DM/페이지)는 mobile-tabbar 가, 계정 칩은
+     .account-chip-sheet (햄버거 ≡) 가 대체한다. */
+  .column-toggle-bar { display: none; }
+
+  /* ── 계정 칩 시트 (햄버거 ≡ 탭이 토글) ── */
+  .account-chip-sheet {
+    position: fixed; left: 0; right: 0;
+    bottom: calc(env(safe-area-inset-bottom) + 60px);    /* mobile-tabbar 위 */
+    z-index: 555;
+    padding: 12px 12px 10px;
+    background: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
-    border-bottom: none;
-    /* 가로 스크롤은 redesign-04 가 제공 */
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.18);
+    transform: translateY(calc(100% + 60px));
+    transition: transform 0.22s var(--ease, ease);
+    max-height: 60dvh;
+    overflow: hidden;
+    display: flex; flex-direction: column; gap: 8px;
   }
-  /* 알림·북마크 필터는 하단 .mobile-tabbar 로 이동했으므로 토글바에서 제외 */
-  .column-toggle-bar .filter-segment button[data-toggle-type="notifications"],
-  .column-toggle-bar .filter-segment button[data-toggle-type="bookmarks"] { display: none; }
+  .account-chip-sheet.open { transform: translateY(0); }
+  .account-chip-sheet-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: var(--border-color);
+    margin: -4px auto 4px;
+  }
+  .account-chip-sheet-label {
+    font-size: var(--text-xs); color: var(--text-muted); padding: 0 4px;
+  }
+  .account-chip-sheet-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    overflow-y: auto;
+  }
+  .account-chip-sheet-list .account-chip { flex-shrink: 0; }
 
   /* ── 앱 액션 탭바 (헤더 대체): 새로고침 / 페이지 / 설정 / 사용자 ── */
   .mobile-tabbar {
@@ -88,12 +105,13 @@
     border-top: 1px solid var(--border-color);
   }
   .mobile-tabbar button, .mobile-tabbar a {
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
     background: none; border: none; cursor: pointer;
-    color: var(--text-muted); font: inherit; font-size: 10px;
-    min-width: 44px; min-height: 44px; justify-content: center; flex: 1;
+    color: var(--text-muted); font: inherit; font-size: 9px;
+    min-height: 44px; padding: 0 2px; justify-content: center; flex: 1;
+    min-width: 0;
   }
-  .mobile-tabbar button svg { width: 20px; height: 20px; }
+  .mobile-tabbar button svg { width: 18px; height: 18px; }
   .mobile-tabbar button[aria-pressed="true"],
   .mobile-tabbar .tab.active { color: var(--accent-primary); font-weight: 600; }
   .mobile-tabbar .tab-spacer { display: none; }
@@ -103,7 +121,7 @@
     display: flex; align-items: center; justify-content: center;
     position: fixed;
     right: calc(env(safe-area-inset-right) + 16px);
-    bottom: calc(env(safe-area-inset-bottom) + 140px);   /* 토글바 + 탭바 위 */
+    bottom: calc(env(safe-area-inset-bottom) + 80px);    /* 탭바 위 */
     z-index: 560;
     width: 52px; height: 52px; border-radius: 18px;
     background: linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 70%, #000 8%));

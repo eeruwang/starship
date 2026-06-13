@@ -126,6 +126,86 @@ export const ColumnsMixin = {
         this.toggleBar.appendChild(toggle);
       }
     }
+    // 모바일 햄버거 시트의 계정 칩도 동시에 다시 그림 (열려있는 동안 동기화)
+    this._renderAccountChipSheet?.();
+    // 모바일 탭바 필터 active 상태 동기화 (전체/알림/북마크/DM/페이지)
+    this._syncMobileTabbarActive?.();
+  },
+
+  _syncMobileTabbarActive() {
+    const bar = document.getElementById('mobile-tabbar');
+    if (!bar) return;
+    const map = {
+      all: this.columnState.all,
+      notifications: this.columnState.notifications,
+      bookmarks: this.columnState.bookmarks,
+      dm: this.columnState.dm,
+      pages: this.columnState.pages,
+    };
+    bar.querySelectorAll('[data-mobile-tab]').forEach(btn => {
+      const k = btn.dataset.mobileTab;
+      if (!(k in map)) return;
+      const on = !!map[k];
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  },
+
+  // 모바일: 햄버거 ≡ 탭이 토글하는 계정 시트의 칩 목록을 다시 그림.
+  // 칩들은 .account-chip 클래스 + data-toggle-type="account" 를 그대로 쓰므로
+  // 기존 클릭 위임(events.js _bindToggleEvents) 이 그대로 동작한다.
+  _renderAccountChipSheet() {
+    const list = document.getElementById('account-chip-sheet-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const accounts = this.store.getAll();
+    for (const account of accounts) {
+      const isActive = this.columnState.accounts[account.id] === true;
+      const isHidden = !!account.hidden;
+      const toggle = document.createElement('button');
+      toggle.className = `account-chip${isActive ? ' active' : ''}${isHidden ? ' account-hidden' : ''}`;
+      toggle.dataset.toggleType = 'account';
+      toggle.dataset.accountId = account.id;
+      toggle.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      const avatarUrl = account.profile?.avatarUrl;
+      const acColor = this._accountColor(account);
+      const borderStyle = acColor ? `style="border-color:${acColor}"` : '';
+      const avatarHtml = avatarUrl
+        ? `<img class="account-chip-avatar" ${borderStyle} src="${escapeHtml(avatarUrl)}" alt="" referrerpolicy="no-referrer" data-fb="hide">`
+        : `<span class="account-chip-dot" style="background:${acColor || 'var(--text-muted)'}"></span>`;
+      toggle.innerHTML = `${avatarHtml}${escapeHtml(account.label || account.profile.displayName)}`;
+      list.appendChild(toggle);
+    }
+  },
+
+  // 모바일 햄버거 ≡ 탭: 계정 시트 열기/닫기.
+  _toggleAccountChipSheet() {
+    const sheet = document.getElementById('account-chip-sheet');
+    if (!sheet) return;
+    const isOpen = sheet.classList.contains('open');
+    if (isOpen) {
+      sheet.classList.remove('open');
+      sheet.setAttribute('aria-hidden', 'true');
+      if (this._accountSheetOutsideClick) {
+        document.removeEventListener('click', this._accountSheetOutsideClick, true);
+        this._accountSheetOutsideClick = null;
+      }
+      return;
+    }
+    this._renderAccountChipSheet();
+    sheet.classList.add('open');
+    sheet.setAttribute('aria-hidden', 'false');
+    // 바깥 클릭 / 칩 선택 후 자동 닫힘
+    const handler = (e) => {
+      if (sheet.contains(e.target)) return;        // 시트 내부는 무시 (칩 클릭은 위임이 처리)
+      if (e.target.closest?.('[data-mobile-tab="accounts"]')) return;
+      sheet.classList.remove('open');
+      sheet.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('click', handler, true);
+      this._accountSheetOutsideClick = null;
+    };
+    this._accountSheetOutsideClick = handler;
+    setTimeout(() => document.addEventListener('click', handler, true), 0);
   },
 
   handleToggleClick(toggle) {
