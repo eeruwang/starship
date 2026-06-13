@@ -6,7 +6,7 @@ import { escapeHtml, cachedImageUrl } from './utils.js';
 import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
-  iconQuote, iconSmile, iconTrash, iconEdit,
+  iconQuote, iconSmile, iconTrash, iconEdit, iconMore,
   iconHeartSmall, iconStarSmall, iconHeartFill,
   iconReplyNotif, iconBoostNotif, iconMegaphone,
   iconVisPublic, iconVisHome, iconVisFollowers, iconVisDirect,
@@ -39,6 +39,32 @@ export const PLATFORM_COLORS = {
   hometown: '#8b6bff',
   glitchcafe: '#e04db9',
 };
+
+// Software → 짧은 배지 라벨. .platform-badge.{sw} 색은 base.css.
+const PLATFORM_LABELS = {
+  misskey: 'Misskey',
+  sharkey: 'Sharkey',
+  foundkey: 'FoundKey',
+  hajkey: 'Hajkey',
+  iceshrimp: 'Iceshrimp',
+  firefish: 'Firefish',
+  catodon: 'Catodon',
+  cherrypick: 'CherryPick',
+  mastodon: 'Mastodon',
+  hollo: 'Hollo',
+  akkoma: 'Akkoma',
+  pleroma: 'Pleroma',
+  gotosocial: 'GoToSocial',
+  hometown: 'Hometown',
+  glitchcafe: 'Glitch',
+};
+
+function platformBadgeHtml(post) {
+  const sw = post.accountSoftware || post.platform;
+  if (!sw) return '';
+  const label = PLATFORM_LABELS[sw] || sw;
+  return `<span class="platform-badge ${escapeHtml(sw)} badge-xs">${escapeHtml(label)}</span>`;
+}
 
 // Mastodon-fork software that supports emoji reactions
 const REACTION_SOFTWARE = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
@@ -446,7 +472,10 @@ export function renderPost(post) {
            referrerpolicy="no-referrer"
            data-fb="svg-placeholder">
       <div class="post-meta">
-        <div class="post-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName)}</div>
+        <div class="post-author-row">
+          <div class="post-author">${displayPost.author.displayNameHtml || escapeHtml(displayPost.author.displayName)}</div>
+          ${platformBadgeHtml(post)}
+        </div>
         <div class="post-handle">@${escapeHtml(displayPost.author.acct)}</div>
       </div>
       <span class="post-time" data-time="${displayPost.createdAt.toISOString()}" title="${displayPost.createdAt.toLocaleString()}"><span class="time-text">${timeAgo(displayPost.createdAt)}</span>${displayPost.visibility && VISIBILITY_ICONS[displayPost.visibility] ? `<span class="visibility-icon" title="${VISIBILITY_ICONS[displayPost.visibility].title}">${VISIBILITY_ICONS[displayPost.visibility].icon}</span>` : ''}</span>
@@ -517,37 +546,40 @@ export function renderPost(post) {
 
   const hasReactionSupport = supportsReactions(post);
 
+  const overflowItems = [];
+  if (post.isOwn && !post.rebloggedBy) {
+    overflowItems.push(`<button data-action="edit"><span class="action-icon">${iconEdit}</span>수정</button>`);
+  }
+  if (post.isOwn) {
+    overflowItems.push(`<button class="danger" data-action="delete"><span class="action-icon">${iconTrash}</span>삭제</button>`);
+  }
+  overflowItems.push(`<button data-action="bookmark"><span class="action-icon">${post.bookmarked ? iconBookmarkFill : iconBookmark}</span>${post.bookmarked ? '북마크 해제' : '북마크'}</button>`);
+  overflowItems.push(`<button data-action="open"><span class="action-icon">${iconLink}</span>원본 열기</button>`);
+
   html += `
     <div class="post-actions">
-      <button class="post-action" data-action="reply" title="답글">
+      <button class="post-action" data-action="reply" title="답글" aria-label="답글">
         <span class="action-icon">${iconReply}</span>
         ${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}
       </button>
-      <button class="post-action${post.reblogged ? ' active' : ''}" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}">
+      <button class="post-action${post.reblogged ? ' active' : ''}" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}" aria-label="${post.platform === 'mastodon' ? '부스트' : '리노트'}">
         <span class="action-icon">${iconBoost}</span>
         ${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}
       </button>
-      <button class="post-action" data-action="quote" title="인용">
+      <button class="post-action" data-action="quote" title="인용" aria-label="인용">
         <span class="action-icon">${iconQuote}</span>
       </button>
-      <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요">
+      <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요" aria-label="좋아요">
         <span class="action-icon">${favIcon}</span>
         ${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}
       </button>
-      ${hasReactionSupport ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션">
+      ${hasReactionSupport ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션" aria-label="리액션">
         <span class="action-icon">${iconSmile}</span>
       </button>` : ''}
-      ${post.isOwn && !post.rebloggedBy ? `<button class="post-action action-edit" data-action="edit" title="수정">
-        <span class="action-icon">${iconEdit}</span>
-      </button>` : ''}${post.isOwn ? `<button class="post-action action-delete" data-action="delete" title="삭제">
-        <span class="action-icon">${iconTrash}</span>
-      </button>` : ''}
-      <button class="post-action${post.bookmarked ? ' active' : ''}" data-action="bookmark" title="북마크">
-        <span class="action-icon">${post.bookmarked ? iconBookmarkFill : iconBookmark}</span>
+      <button class="post-action" data-action="more" title="더보기" aria-label="더보기" aria-haspopup="true" aria-expanded="false">
+        <span class="action-icon">${iconMore}</span>
       </button>
-      <button class="post-action action-end" data-action="open" title="원본 열기">
-        <span class="action-icon">${iconLink}</span>
-      </button>
+      <div class="post-action-overflow" hidden role="menu">${overflowItems.join('')}</div>
     </div>
   `;
 

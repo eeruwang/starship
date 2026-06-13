@@ -242,7 +242,8 @@ export const EventsMixin = {
 
     // Post actions (works for post-card and mention-style notif-card)
     document.addEventListener('click', (e) => {
-      const btn = e.target.closest('.post-action');
+      const overflowBtn = e.target.closest('.post-action-overflow > button');
+      const btn = overflowBtn || e.target.closest('.post-action');
       if (!btn) return;
       const card = btn.closest('.post-card') || btn.closest('.notif-card');
       if (!card) return;
@@ -251,6 +252,35 @@ export const EventsMixin = {
       const postId = card.dataset.postId;
       const platform = card.dataset.platform;
       const accountId = card.dataset.accountId;
+
+      // Overflow menu toggle (no per-action handling)
+      if (action === 'more') {
+        const actions = btn.closest('.post-actions');
+        const menu = actions?.querySelector('.post-action-overflow');
+        if (!menu) return;
+        const willOpen = menu.hasAttribute('hidden');
+        // Close any other open overflow menus first
+        document.querySelectorAll('.post-action-overflow:not([hidden])').forEach(m => {
+          m.setAttribute('hidden', '');
+          const trig = m.parentElement?.querySelector('[data-action="more"]');
+          if (trig) trig.setAttribute('aria-expanded', 'false');
+        });
+        if (willOpen) {
+          menu.removeAttribute('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+        }
+        return;
+      }
+
+      // Close overflow menu after selecting an item
+      if (overflowBtn) {
+        const menu = overflowBtn.closest('.post-action-overflow');
+        if (menu) {
+          menu.setAttribute('hidden', '');
+          const trig = menu.parentElement?.querySelector('[data-action="more"]');
+          if (trig) trig.setAttribute('aria-expanded', 'false');
+        }
+      }
 
       if (action === 'open') {
         const postUrl = this.findPostUrl(postId, platform) || card.dataset.postUrl;
@@ -274,6 +304,26 @@ export const EventsMixin = {
       } else if (action === 'delete') {
         this.handleDeletePost(postId, platform, accountId, btn);
       }
+    });
+
+    // Close overflow menu on outside click / Esc
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.post-action-overflow') || e.target.closest('[data-action="more"]')) return;
+      document.querySelectorAll('.post-action-overflow:not([hidden])').forEach(m => {
+        m.setAttribute('hidden', '');
+        const trig = m.parentElement?.querySelector('[data-action="more"]');
+        if (trig) trig.setAttribute('aria-expanded', 'false');
+      });
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const open = document.querySelectorAll('.post-action-overflow:not([hidden])');
+      if (!open.length) return;
+      open.forEach(m => {
+        m.setAttribute('hidden', '');
+        const trig = m.parentElement?.querySelector('[data-action="more"]');
+        if (trig) trig.setAttribute('aria-expanded', 'false');
+      });
     });
 
     // Poll vote button
