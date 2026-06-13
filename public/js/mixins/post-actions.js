@@ -1376,24 +1376,79 @@ export const PostActionsMixin = {
         // 4) as a last resort; if even that's missing, show a clear notice
         // rather than incorrect data.
         if (!isFavourite) {
-          const rbu = displayPost?._reactionByUser;
           const normalize = (r) => r ? r.replace(/@[^:@]+:$/, ':').replace(/@[^:@]+$/, '') : '';
-          if (rbu) {
-            const target = normalize(reaction);
-            const matchingAccts = Object.entries(rbu)
-              .filter(([, e]) => e === reaction || normalize(e) === target)
-              .map(([acct]) => acct);
-            if (matchingAccts.length === 0) {
-              popup.innerHTML = '<div class="reaction-users-loading">이 리액션을 누른 사용자가 없습니다.</div>';
-            } else {
-              users = matchingAccts.map(acct => ({
-                displayNameHtml: escapeHtml(acct),
-                username: acct,
-                avatarUrl: '',
-              }));
-              popup.innerHTML = this._renderReactionUsersHtml(users);
+          let resolved = false;
+
+          // 1) Try unauthenticated emoji_reactions on the post's origin
+          //    instance. Works when the origin is a Mastodon-fork that
+          //    federated the reactions (Hollo, Akkoma, Pleroma, Fedibird).
+          //    This is the main reason the user sees "상세 정보를 가져올 수 없습니다"
+          //    while reactions are clearly visible — the viewer is vanilla
+          //    Mastodon and never persisted _reactionByUser.
+          const originUrl = displayPost?.canonicalUri || displayPost?.url
+            || cachedPost?.canonicalUri || cachedPost?.url;
+          if (originUrl) {
+            try {
+              const u = new URL(originUrl);
+              const originHost = u.host;
+              const originInstance = `${u.protocol}//${originHost}`;
+              const originSoftware = await this._detectMastodonReactionsSoftware(originInstance);
+              if (originSoftware) {
+                const localId = this._extractStatusIdFromUrl(originUrl, originSoftware);
+                if (localId) {
+                  const reactionsPath = (originSoftware === 'akkoma' || originSoftware === 'pleroma')
+                    ? `/api/v1/pleroma/statuses/${encodeURIComponent(localId)}/reactions`
+                    : `/api/v1/statuses/${encodeURIComponent(localId)}/emoji_reactions`;
+                  const reactionsArr = await this._unauthMastodonGet(originInstance, reactionsPath);
+                  if (Array.isArray(reactionsArr)) {
+                    const target = normalize(reaction);
+                    const matching = reactionsArr.filter(r => {
+                      const n = r.name || '';
+                      return n === reaction || normalize(n) === target;
+                    });
+                    const fetched = matching.flatMap(r => (r.accounts || []).map(u2 => {
+                      let userAcct = (u2.acct || u2.username || '').toLowerCase();
+                      if (userAcct && !userAcct.includes('@')) userAcct = `${userAcct}@${originHost}`;
+                      return {
+                        displayNameHtml: escapeHtml(u2.display_name || u2.username || userAcct || '?'),
+                        username: userAcct || u2.username || '?',
+                        avatarUrl: u2.avatar || u2.avatar_static || '',
+                        reaction: r.name,
+                      };
+                    }));
+                    if (fetched.length > 0) {
+                      popup.innerHTML = this._renderReactionUsersHtml(fetched);
+                      resolved = true;
+                    }
+                  }
+                }
+              }
+            } catch (_) { /* fall through to _reactionByUser / notice */ }
+          }
+
+          // 2) Per-user mapping cached by Phase 2b/2c/3/4
+          if (!resolved) {
+            const rbu = displayPost?._reactionByUser;
+            if (rbu) {
+              const target = normalize(reaction);
+              const matchingAccts = Object.entries(rbu)
+                .filter(([, e]) => e === reaction || normalize(e) === target)
+                .map(([acct]) => acct);
+              if (matchingAccts.length === 0) {
+                popup.innerHTML = '<div class="reaction-users-loading">이 리액션을 누른 사용자가 없습니다.</div>';
+              } else {
+                users = matchingAccts.map(acct => ({
+                  displayNameHtml: escapeHtml(acct),
+                  username: acct,
+                  avatarUrl: '',
+                }));
+                popup.innerHTML = this._renderReactionUsersHtml(users);
+              }
+              resolved = true;
             }
-          } else {
+          }
+
+          if (!resolved) {
             popup.innerHTML = '<div class="reaction-users-loading">이 리액션의 상세 정보를 가져올 수 없습니다.</div>';
           }
         } else {
