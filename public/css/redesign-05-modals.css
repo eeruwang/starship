@@ -63,10 +63,15 @@
 
 /* 모바일: 바텀시트화 */
 @media (max-width: 600px) {
-  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal-overlay {
+    align-items: flex-end; padding: 0;
+    /* iOS 키보드(visualViewport)를 회피해 모달이 키보드 위로 떠오르도록 */
+    padding-bottom: var(--keyboard-h, 0px);
+    transition: padding-bottom 0.18s ease;
+  }
   .modal, .modal.modal-sm, .modal.modal-lg {
     max-width: 100%;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    max-height: 92dvh;
+    max-height: calc(95dvh - var(--keyboard-h, 0px));
   }
 }

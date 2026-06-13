@@ -20,6 +20,30 @@
   .app-header .header-right .btn:not(.btn-icon):not(#btn-auth) { display: none; }
   .app-header .header-right .btn .btn-label { display: none; }
 
+  /* iPhone Safari 의 URL 바 + 노치 때문에 세로 공간이 빠듯하므로 헤더 자체를 더 압축 +
+     스크롤 다운 시 자동 숨김. JS 가 .header-hidden 을 토글한다. */
+  .app-header {
+    position: sticky; top: 0; z-index: 100;
+    padding: 4px 8px;
+    transition: transform 0.22s ease;
+    will-change: transform;
+    padding-top: max(4px, env(safe-area-inset-top));
+  }
+  .app-header.header-hidden { transform: translateY(-100%); }
+  .app-header .logo { font-size: 14px; }
+  .app-header .logo-icon { width: 18px; height: 18px; }
+  .app-header .header-right .btn-icon {
+    min-width: 32px; min-height: 32px; padding: 4px;
+  }
+  .app-header .header-right .btn-icon svg { width: 15px; height: 15px; }
+
+  /* 토글바도 sticky 로 따라 숨김 */
+  .column-toggle-bar {
+    position: sticky; top: 0; z-index: 99;
+    transition: transform 0.22s ease;
+  }
+  .app-header.header-hidden + .column-toggle-bar { transform: translateY(0); }
+
   /* 컬럼: 데스크톱 --column-width 무시, 모바일 전용 너비로. 페이저는 유지하되
      양 옆 컬럼이 살짝 peek 되어 다음 컬럼 존재가 보이도록 한다. */
   .columns-container {
@@ -75,4 +99,34 @@
 
   /* 타임라인 하단 패딩: 탭바/FAB 에 안 가리게 */
   .column-content { padding-bottom: 96px; }
+
+  /* ── 컴포즈 모달 모바일 압축 ──
+     iOS 키보드가 올라오면 화면이 빠듯해지므로 계정 칩 영역을 단일 행 가로
+     스크롤로 압축하고, 라벨·여백을 줄여 본문 영역을 최대한 확보. */
+  .compose-modal .modal-body { padding: var(--space-3) var(--space-4) !important; gap: var(--space-2); }
+  .compose-accounts-section label { display: none; }   /* "게시 계정" 라벨 생략 */
+  .compose-accounts {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 2px;
+    scroll-snap-type: x proximity;
+  }
+  .compose-accounts::-webkit-scrollbar { height: 0; }
+  .compose-account-toggle {
+    padding: 3px 9px 3px 3px;
+    gap: 5px;
+    font-size: var(--text-xs);
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+  .compose-account-avatar { width: 18px; height: 18px; }
+  .compose-account-name { max-width: 70px; }
+  /* CW 입력은 빈 상태에서 더 컴팩트 */
+  .compose-cw-wrap { padding: 6px 8px; }
+  .compose-cw-input { font-size: var(--text-sm); }
+  /* textarea 가 키보드 위로 올라올 수 있도록 최소 높이 축소 */
+  .compose-text-input { min-height: 90px; }
+  /* 모달 자체: 가능한 100dvh 까지 확장 (Safari 키보드 대응) */
+  .modal.compose-modal { max-height: 95dvh; }
 }
