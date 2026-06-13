@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 *.log
 .env
+
+# Generated design handoff bundle (regenerable from source CSS/HTML/icons)
+starship-design.md
