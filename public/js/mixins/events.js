@@ -43,16 +43,17 @@ export const EventsMixin = {
       if (!tab) return;
       const type = tab.dataset.mobileTab;
       switch (type) {
-        case 'notifications': {
-          // 알림 컬럼으로 이동. 없으면 켜고 추가.
-          let col = this.columnsContainer?.querySelector('.column[data-column-type="notifications"]');
+        case 'notifications':
+        case 'bookmarks': {
+          // 해당 컬럼으로 이동. 없으면 켜고 추가.
+          let col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
           if (!col) {
-            this.columnState.notifications = true;
-            this.updateColumnOrder('notifications', true);
+            this.columnState[type] = true;
+            this.updateColumnOrder(type, true);
             this.saveColumnState();
             this.renderToggleBar();
             this.renderColumns();
-            col = this.columnsContainer?.querySelector('.column[data-column-type="notifications"]');
+            col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
           }
           if (col) col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
           break;
