@@ -74,6 +74,8 @@
     border-bottom: none;
     /* 가로 스크롤은 redesign-04 가 제공 */
   }
+  /* 알림 필터는 하단 .mobile-tabbar 로 이동했으므로 토글바에서 제외 */
+  .column-toggle-bar .filter-segment button[data-toggle-type="notifications"] { display: none; }
 
   /* ── 앱 액션 탭바 (헤더 대체): 새로고침 / 페이지 / 설정 / 사용자 ── */
   .mobile-tabbar {

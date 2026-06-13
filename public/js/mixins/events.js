@@ -37,14 +37,26 @@ export const EventsMixin = {
       this.openComposeModal(null, accountId || null);
     });
 
-    // 모바일 하단 탭바 → 앱 액션 디스패치 (새로고침/페이지/설정/사용자)
+    // 모바일 하단 탭바 → 앱 액션 디스패치 (알림/설정/사용자)
     document.getElementById('mobile-tabbar')?.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-mobile-tab]');
       if (!tab) return;
       const type = tab.dataset.mobileTab;
       switch (type) {
-        case 'refresh': this.refreshAll(true); break;
-        case 'pages': this.openPagesDashboard?.(); break;
+        case 'notifications': {
+          // 알림 컬럼으로 이동. 없으면 켜고 추가.
+          let col = this.columnsContainer?.querySelector('.column[data-column-type="notifications"]');
+          if (!col) {
+            this.columnState.notifications = true;
+            this.updateColumnOrder('notifications', true);
+            this.saveColumnState();
+            this.renderToggleBar();
+            this.renderColumns();
+            col = this.columnsContainer?.querySelector('.column[data-column-type="notifications"]');
+          }
+          if (col) col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          break;
+        }
         case 'settings': this.openSettingsModal(); break;
         case 'user': {
           // 로그인 안 한 상태면 auth 모달, 로그인 상태면 사용자 메뉴를 하단 시트처럼 띄움.
