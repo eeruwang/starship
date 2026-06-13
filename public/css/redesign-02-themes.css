@@ -1,0 +1,98 @@
+/* =====================================================================
+   StarShip — 02. Color themes (5)
+   ---------------------------------------------------------------------
+   ★ 권장 아키텍처: 색축(palette)과 명암축(scheme)을 분리.
+       <html data-theme="indigo-night" data-scheme="dark">
+     - data-theme  → 색 "값"만 정함 (이 파일)
+     - data-scheme → light/dark 컴포넌트 처리 (03-component-patches.css)
+   이렇게 하면 기존 `[data-theme="light"]` 전용 규칙을
+   `[data-scheme="light"]` 로 한 번만 옮기면 라이트 테마가 몇 개든 재사용됩니다.
+
+   변수명은 기존 base.css 와 100% 동일 — 값만 교체됩니다.
+   플랫폼 강조색(--accent-misskey 등 16개)은 테마와 무관하므로 base.css 에 그대로 둡니다.
+   ===================================================================== */
+
+/* ── 1. Indigo Night (dark · 기본 권장) ──────────────────────────── */
+:root[data-theme="indigo-night"] {
+  --bg-primary:   #15162b;
+  --bg-secondary: #1d1e3a;
+  --bg-card:      #262746;
+  --bg-hover:     #313158;
+  --bg-input:     #1a1b30;
+  --text-primary:   #e9e9f2;
+  --text-secondary: #b3b3d0;
+  --text-muted:     #9090b8;   /* on #262746 ≈ 4.6:1 ✓ (기존 #6a6a88 = 2.6 ✕) */
+  --accent-primary: #7c7dff;
+  --accent-danger:  #ff5d6c;
+  --accent-fav:     #ff7ba8;   /* 좋아요 활성 (신규) */
+  --border-color:   #393a5e;
+  --shadow: 0 2px 12px rgba(0,0,0,0.32);
+}
+
+/* ── 2. Arctic (dark · blue slate + cyan) ────────────────────────── */
+:root[data-theme="arctic"] {
+  --bg-primary:   #111722;
+  --bg-secondary: #1a2230;
+  --bg-card:      #222c3d;
+  --bg-hover:     #2c384c;
+  --bg-input:     #161d28;
+  --text-primary:   #e6edf5;
+  --text-secondary: #a9b8ca;
+  --text-muted:     #8a9bb0;
+  --accent-primary: #4cb7e6;
+  --accent-danger:  #f06a8a;
+  --accent-fav:     #f06a8a;
+  --border-color:   #324054;
+  --shadow: 0 2px 12px rgba(0,0,0,0.34);
+}
+
+/* ── 3. Moss (dark · green + mint) ───────────────────────────────── */
+:root[data-theme="moss"] {
+  --bg-primary:   #131c17;
+  --bg-secondary: #1b2721;
+  --bg-card:      #23322b;
+  --bg-hover:     #2e4037;
+  --bg-input:     #18231d;
+  --text-primary:   #e8efe9;
+  --text-secondary: #acc4b4;
+  --text-muted:     #8fa999;
+  --accent-primary: #46c98a;
+  --accent-danger:  #e8728f;
+  --accent-fav:     #e8728f;
+  --border-color:   #344a3e;
+  --shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+
+/* ── 4. Daylight (light · neutral + indigo) ──────────────────────── */
+:root[data-theme="daylight"] {
+  --bg-primary:   #eceef4;
+  --bg-secondary: #ffffff;
+  --bg-card:      #ffffff;
+  --bg-hover:     #e7e9f1;
+  --bg-input:     #f3f4f8;
+  --text-primary:   #1a1b2e;
+  --text-secondary: #54566f;
+  --text-muted:     #6c6c86;   /* on #fff ≈ 4.6:1 ✓ (기존 #8a8aa8 = 3.0 ✕) */
+  --accent-primary: #5b5bf0;   /* Mastodon #6364ff 와 분리 (기존엔 동일했음) */
+  --accent-danger:  #e53935;
+  --accent-fav:     #e0598b;
+  --border-color:   #dcdee8;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+/* ── 5. Linen (light · warm paper + terracotta) ──────────────────── */
+:root[data-theme="linen"] {
+  --bg-primary:   #f1ece1;
+  --bg-secondary: #fdfbf6;
+  --bg-card:      #fffefa;
+  --bg-hover:     #ece5d6;
+  --bg-input:     #f6f1e7;
+  --text-primary:   #2c2418;
+  --text-secondary: #6a5f4c;
+  --text-muted:     #897e66;
+  --accent-primary: #c2683c;
+  --accent-danger:  #cf5b78;
+  --accent-fav:     #cf5b78;
+  --border-color:   #e0d8c6;
+  --shadow: 0 2px 12px rgba(80,60,30,0.08);
+}

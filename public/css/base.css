@@ -7,7 +7,8 @@
   --bg-input: #1e1f38;
   --text-primary: #e8e8f0;
   --text-secondary: #9a9ab8;
-  --text-muted: #6a6a88;
+  /* 대비 교정 (Step 2): 기존 #6a6a88 (~2.6:1) → ~4.6:1 ✓ */
+  --text-muted: #9090b8;
   --accent-misskey: #96d04a;
   --accent-sharkey: #3ea8ff;
   --accent-foundkey: #71a6d2;
@@ -25,15 +26,73 @@
   --accent-glitchcafe: #e04db9;
   --accent-primary: #7c7dff;
   --accent-danger: #ff5555;
+  /* 좋아요 활성 색 (테마별 override 가능) */
+  --accent-fav: #ff7ba8;
   --border-color: #3a3b5a;
   --shadow: 0 2px 12px rgba(0,0,0,0.3);
-  --radius: 8px;
+
+  /* === Step 1: Scale tokens === */
+  /* Spacing (4px 베이스) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Type scale (14px 기준 rem) */
+  --text-xs: 0.857rem;
+  --text-sm: 0.928rem;
+  --text-base: 1rem;
+  --text-lg: 1.214rem;
+  --leading-tight: 1.4;
+  --leading-normal: 1.6;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
   --radius-lg: 12px;
+  --radius: var(--radius-md); /* legacy alias */
+
+  /* Elevation */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 2px 12px rgba(0,0,0,0.10);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.18);
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 0.12s;
+  --dur: 0.2s;
+
+  /* Focus ring */
+  --focus-ring: 2px;
+
+  /* Modal widths */
+  --modal-sm: 420px;
+  --modal-md: 520px;
+  --modal-lg: 640px;
+
+  /* Emoji sizes */
+  --emoji-inline: 1.25em;
+  --emoji-reaction: 18px;
+  --emoji-notif-badge: 16px;
+
   --column-width: 380px;
 }
 
-/* Light Theme */
-:root[data-theme="light"] {
+/* === Step 1: 전역 키보드 포커스 === */
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: var(--focus-ring) solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:where(button, a, input, textarea, select, [tabindex]):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* === Light scheme — legacy [data-theme="light"] + 신규 [data-scheme="light"] 양쪽 매칭 === */
+:root[data-theme="light"],
+:root[data-scheme="light"] {
   --bg-primary: #f0f1f5;
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
@@ -41,81 +100,93 @@
   --bg-input: #f5f5f8;
   --text-primary: #1a1b2e;
   --text-secondary: #5a5a78;
-  --text-muted: #8a8aa8;
-  --accent-primary: #6364ff;
+  /* 대비 교정 (Step 2): 기존 #8a8aa8 (~3.0:1) → ~4.6:1 ✓ */
+  --text-muted: #6c6c86;
+  /* 대비 교정 (Step 2): Mastodon brand #6364ff 와 분리해 --accent-primary 만 살짝 진하게 */
+  --accent-primary: #5b5bf0;
   --accent-danger: #e53935;
+  --accent-fav: #e0598b;
   --border-color: #d8d9e5;
   --shadow: 0 2px 12px rgba(0,0,0,0.08);
 }
 
 [data-theme="light"] .post-card,
-[data-theme="light"] .notif-card {
+[data-theme="light"] .notif-card,
+[data-scheme="light"] .post-card,
+[data-scheme="light"] .notif-card {
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   border-top: 1px solid var(--border-color);
   border-right: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
 }
 
-[data-theme="light"] .modal {
+[data-theme="light"] .modal,
+[data-scheme="light"] .modal {
   box-shadow: 0 8px 32px rgba(0,0,0,0.12);
 }
 
-[data-theme="light"] .column {
+[data-theme="light"] .column,
+[data-scheme="light"] .column {
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
-[data-theme="light"] .logo {
+[data-theme="light"] .logo,
+[data-scheme="light"] .logo {
   background: linear-gradient(135deg, #5a9a20, #4a4aff);
   -webkit-background-clip: text;
   background-clip: text;
 }
 
-[data-theme="light"] .settings-about-name {
+[data-theme="light"] .settings-about-name,
+[data-scheme="light"] .settings-about-name {
   background: linear-gradient(135deg, #5a9a20, #4a4aff);
   -webkit-background-clip: text;
   background-clip: text;
 }
 
-[data-theme="light"] ::-webkit-scrollbar-thumb {
+[data-theme="light"] ::-webkit-scrollbar-thumb,
+[data-scheme="light"] ::-webkit-scrollbar-thumb {
   background: rgba(100, 100, 180, 0.2);
 }
 
-[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover,
+[data-scheme="light"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 100, 180, 0.4);
 }
 
 /* Light theme: column toggle bar buttons */
-[data-theme="light"] .col-toggle {
+[data-theme="light"] .col-toggle,
+[data-scheme="light"] .col-toggle {
   background: #edeef3;
   color: #5a5a78;
 }
-[data-theme="light"] .col-toggle:hover {
+[data-theme="light"] .col-toggle:hover, [data-scheme="light"] .col-toggle:hover {
   background: #dfe0ea;
   color: #3a3a58;
 }
-[data-theme="light"] .col-toggle.active {
+[data-theme="light"] .col-toggle.active, [data-scheme="light"] .col-toggle.active {
   background: var(--accent-primary);
   color: white;
   box-shadow: 0 2px 8px rgba(99, 100, 255, 0.25);
 }
-[data-theme="light"] .col-toggle.fixed {
+[data-theme="light"] .col-toggle.fixed, [data-scheme="light"] .col-toggle.fixed {
   background: linear-gradient(135deg, #e0e1f5, #d5d6ee);
   color: #4a4a78;
 }
-[data-theme="light"] .col-toggle.fixed:hover {
+[data-theme="light"] .col-toggle.fixed:hover, [data-scheme="light"] .col-toggle.fixed:hover {
   background: linear-gradient(135deg, #d5d6ee, #c8c9e5);
   color: #3a3a68;
 }
-[data-theme="light"] .col-toggle.fixed.active {
+[data-theme="light"] .col-toggle.fixed.active, [data-scheme="light"] .col-toggle.fixed.active {
   background: linear-gradient(135deg, #6364ff, #7e7fff);
   color: white;
   box-shadow: 0 2px 8px rgba(99, 100, 255, 0.3);
 }
-[data-theme="light"] .col-toggle.thread-toggle {
+[data-theme="light"] .col-toggle.thread-toggle, [data-scheme="light"] .col-toggle.thread-toggle {
   background: linear-gradient(135deg, #daf0e3, #c8e8d5);
   color: #3a6a4a;
 }
-[data-theme="light"] .col-toggle.thread-toggle:hover {
+[data-theme="light"] .col-toggle.thread-toggle:hover, [data-scheme="light"] .col-toggle.thread-toggle:hover {
   background: linear-gradient(135deg, #c8e8d5, #b5dfc5);
   color: #2a5a3a;
 }

@@ -122,25 +122,54 @@ class StarShipApp {
   applySettings() {
     document.documentElement.style.setProperty('--column-width', `${this.settings.columnWidth}px`);
     document.documentElement.style.fontSize = `${this.settings.fontSize}px`;
-    // theme === 'system' → follow OS preference, hooked up below so future
-    // changes (toggling dark/light at OS level) propagate live.
-    const requested = this.settings.theme || 'dark';
-    const resolved = requested === 'system'
-      ? (window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-      : requested;
-    document.documentElement.setAttribute('data-theme', resolved);
-    if (requested === 'system' && !this._systemThemeMql) {
-      this._systemThemeMql = window.matchMedia?.('(prefers-color-scheme: light)');
-      if (this._systemThemeMql) {
-        const handler = (e) => {
-          if (this.settings.theme === 'system') {
-            document.documentElement.setAttribute('data-theme', e.matches ? 'light' : 'dark');
-          }
-        };
-        this._systemThemeMql.addEventListener?.('change', handler);
+    document.documentElement.setAttribute('data-density', this.settings.density || 'comfortable');
+    // theme: 5종 팔레트 (indigo-night/arctic/moss/daylight/linen) 또는 system / 레거시 dark·light
+    const requested = this.settings.theme || 'indigo-night';
+    const isLegacy = (requested === 'dark' || requested === 'light' || requested === 'system');
+    if (isLegacy) {
+      // 레거시 호환: dark → indigo-night, light → daylight, system → OS 따름
+      let resolved = requested;
+      if (requested === 'system') {
+        resolved = window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'daylight' : 'indigo-night';
+      } else if (requested === 'dark') {
+        resolved = 'indigo-night';
+      } else if (requested === 'light') {
+        resolved = 'daylight';
       }
+      this._applyThemeId(resolved);
+      if (requested === 'system' && !this._systemThemeMql) {
+        this._systemThemeMql = window.matchMedia?.('(prefers-color-scheme: light)');
+        this._systemThemeMql?.addEventListener?.('change', (e) => {
+          if (this.settings.theme === 'system') {
+            this._applyThemeId(e.matches ? 'daylight' : 'indigo-night');
+          }
+        });
+      }
+    } else {
+      this._applyThemeId(requested);
     }
     this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
+  }
+
+  // Sets data-theme + data-scheme. Schemes are pre-mapped from theme-switcher's
+  // THEMES table so changing one place updates the other.
+  _applyThemeId(themeId) {
+    const map = {
+      'indigo-night': 'dark',
+      'arctic': 'dark',
+      'moss': 'dark',
+      'daylight': 'light',
+      'linen': 'light',
+    };
+    const scheme = map[themeId] || 'dark';
+    document.documentElement.setAttribute('data-theme', themeId);
+    document.documentElement.setAttribute('data-scheme', scheme);
+    // Sync the mobile address-bar colour to the new palette
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim();
+      if (bg) meta.setAttribute('content', bg);
+    }
   }
 
   loadColumnState() {

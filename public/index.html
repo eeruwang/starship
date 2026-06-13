@@ -13,6 +13,17 @@
   <link rel="stylesheet" href="css/compose.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/pages.css">
+  <!-- Redesign batch (Steps 1~6 from handoff README). Tokens already merged
+       into base.css. These layer on top so they override prior rules. -->
+  <link rel="stylesheet" href="css/redesign-02-themes.css">
+  <link rel="stylesheet" href="css/redesign-03-cards.css">
+  <link rel="stylesheet" href="css/redesign-04-toggle-bar.css">
+  <link rel="stylesheet" href="css/redesign-05-modals.css">
+  <link rel="stylesheet" href="css/redesign-06-mobile.css">
+  <link rel="stylesheet" href="css/redesign-07-states.css">
+  <link rel="stylesheet" href="css/redesign-08-a11y.css">
+  <link rel="stylesheet" href="css/redesign-09-mfm-motion.css">
+  <meta name="theme-color" content="#15162b">
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </head>
 <body>
@@ -235,8 +246,31 @@
         <div class="form-group">
           <label for="setting-theme">테마</label>
           <select id="setting-theme" class="input">
-            <option value="dark">다크</option>
-            <option value="light">라이트</option>
+            <optgroup label="다크">
+              <option value="indigo-night">Indigo Night (기본)</option>
+              <option value="arctic">Arctic</option>
+              <option value="moss">Moss</option>
+            </optgroup>
+            <optgroup label="라이트">
+              <option value="daylight">Daylight</option>
+              <option value="linen">Linen</option>
+            </optgroup>
+            <option value="system">시스템 설정 따름</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="setting-density">카드 밀도</label>
+          <select id="setting-density" class="input">
+            <option value="comfortable">편안함 (기본)</option>
+            <option value="compact">컴팩트</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="setting-mfm">MFM 애니메이션</label>
+          <select id="setting-mfm" class="input">
+            <option value="hover">호버 시에만 재생 (기본)</option>
+            <option value="auto">항상 재생</option>
+            <option value="off">끄기</option>
           </select>
         </div>
         <div class="form-group">

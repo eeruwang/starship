@@ -1,0 +1,72 @@
+/* =====================================================================
+   StarShip — 05. Modals
+   ---------------------------------------------------------------------
+   7개 모달(compose/add-account/settings/profile/auth/page-editor/page-list)을
+   셸 1종 + 폭 토큰 3단계로 통일. 기존 .modal-overlay/.modal/.modal-header/
+   .modal-body/.modal-footer 구조를 그대로 쓰되 규격을 고정.
+   ===================================================================== */
+
+:root {
+  --modal-sm: 420px;   /* 설정 · 계정추가 · auth */
+  --modal-md: 520px;   /* 글쓰기 */
+  --modal-lg: 640px;   /* 프로필 · 페이지 */
+}
+
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 600;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-4);
+  background: rgba(0,0,0,0.5);
+}
+
+.modal {
+  width: 100%; max-width: var(--modal-md);   /* 기본 md, 변형은 아래 */
+  max-height: calc(100dvh - var(--space-6) * 2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.modal.modal-sm { max-width: var(--modal-sm); }
+.modal.modal-lg { max-width: var(--modal-lg); }
+
+/* 헤더: 타이틀(좌) + 닫기 X(우) — 항상 동일. profile 모달의 떠있던 X도 여기로. */
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-4); gap: var(--space-3);
+  border-bottom: 1px solid var(--border-color); flex-shrink: 0;
+}
+.modal-header h2 { font-size: var(--text-lg); font-weight: 700; margin: 0; }
+.modal-header .modal-close {
+  width: 30px; height: 30px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-input); color: var(--text-muted);
+  border: none; cursor: pointer; flex-shrink: 0;
+}
+.modal-header .modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* 바디: 스크롤 영역 */
+.modal-body { padding: var(--space-4); overflow-y: auto; flex: 1; }
+
+/* 푸터: 액션 우측 정렬 — compose 의 본문 내 제출 버튼도 여기로 이전 */
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-card) 50%, var(--bg-secondary));
+  flex-shrink: 0;
+}
+
+/* 중첩 모달: 뒤 모달 디밍 (z-index 는 기존 max(z)+1 로직 유지) */
+.modal-overlay.is-behind { filter: brightness(0.96); }
+
+/* 모바일: 바텀시트화 */
+@media (max-width: 600px) {
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal, .modal.modal-sm, .modal.modal-lg {
+    max-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-height: 92dvh;
+  }
+}

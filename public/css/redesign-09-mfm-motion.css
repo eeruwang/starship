@@ -1,0 +1,63 @@
+/* =====================================================================
+   StarShip — 09. MFM motion policy
+   ---------------------------------------------------------------------
+   <html data-mfm="hover|auto|off"> 속성으로 무한 애니메이션 제어.
+   js/mfm-motion.js 가 부착하는 속성과 짝이 됩니다.
+   ===================================================================== */
+
+/* MFM 애니메이션 클래스 그룹 */
+[data-mfm="off"] .mfm-sparkle,
+[data-mfm="off"] .mfm-spin,
+[data-mfm="off"] .mfm-spin-x,
+[data-mfm="off"] .mfm-spin-y,
+[data-mfm="off"] .mfm-shake,
+[data-mfm="off"] .mfm-bounce,
+[data-mfm="off"] .mfm-jump,
+[data-mfm="off"] .mfm-tada,
+[data-mfm="off"] .mfm-twitch,
+[data-mfm="off"] .mfm-jelly,
+[data-mfm="off"] .mfm-rainbow {
+  animation: none !important;
+}
+
+[data-mfm="hover"] .mfm-sparkle,
+[data-mfm="hover"] .mfm-spin,
+[data-mfm="hover"] .mfm-spin-x,
+[data-mfm="hover"] .mfm-spin-y,
+[data-mfm="hover"] .mfm-shake,
+[data-mfm="hover"] .mfm-bounce,
+[data-mfm="hover"] .mfm-jump,
+[data-mfm="hover"] .mfm-tada,
+[data-mfm="hover"] .mfm-twitch,
+[data-mfm="hover"] .mfm-jelly,
+[data-mfm="hover"] .mfm-rainbow {
+  animation-play-state: paused;
+}
+
+[data-mfm="hover"] .post-card:hover .mfm-sparkle,
+[data-mfm="hover"] .post-card:hover .mfm-spin,
+[data-mfm="hover"] .post-card:hover .mfm-spin-x,
+[data-mfm="hover"] .post-card:hover .mfm-spin-y,
+[data-mfm="hover"] .post-card:hover .mfm-shake,
+[data-mfm="hover"] .post-card:hover .mfm-bounce,
+[data-mfm="hover"] .post-card:hover .mfm-jump,
+[data-mfm="hover"] .post-card:hover .mfm-tada,
+[data-mfm="hover"] .post-card:hover .mfm-twitch,
+[data-mfm="hover"] .post-card:hover .mfm-jelly,
+[data-mfm="hover"] .post-card:hover .mfm-rainbow {
+  animation-play-state: running;
+}
+
+[data-mfm="auto"] .mfm-sparkle,
+[data-mfm="auto"] .mfm-spin,
+[data-mfm="auto"] .mfm-spin-x,
+[data-mfm="auto"] .mfm-spin-y,
+[data-mfm="auto"] .mfm-shake,
+[data-mfm="auto"] .mfm-bounce,
+[data-mfm="auto"] .mfm-jump,
+[data-mfm="auto"] .mfm-tada,
+[data-mfm="auto"] .mfm-twitch,
+[data-mfm="auto"] .mfm-jelly,
+[data-mfm="auto"] .mfm-rainbow {
+  animation-play-state: running;
+}

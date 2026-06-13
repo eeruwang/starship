@@ -1,0 +1,55 @@
+/* =====================================================================
+   StarShip — 07. States (loading / empty / error) + skeleton
+   ---------------------------------------------------------------------
+   기존 .loading-spinner/.spinner/.empty-state 와 공존. 신규 마크업은 [markup].
+   ===================================================================== */
+
+/* ── 스켈레톤 [markup] ──────────────────────────────────────────────
+   초기 로드/새 컬럼에서 spinner 대신 카드 형태 스켈레톤 N개 노출. */
+.skeleton-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+.skeleton-line, .skeleton-avatar {
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  position: relative; overflow: hidden;
+}
+.skeleton-avatar { width: 36px; height: 36px; border-radius: var(--radius-md); }
+.skeleton-line { height: 10px; }
+.skeleton-line.w-50 { width: 50%; }
+.skeleton-line.w-70 { width: 70%; }
+.skeleton-line.w-90 { width: 90%; }
+/* shimmer (reduced-motion 시 정지) */
+.skeleton-line::after, .skeleton-avatar::after {
+  content: ""; position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-primary) 8%, transparent), transparent);
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer { 100% { transform: translateX(100%); } }
+
+/* ── 빈 / 에러 공통 셸 [markup] ─────────────────────────────────────── */
+.state-block {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+}
+.state-block .state-icon {
+  width: 48px; height: 48px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.state-block.empty .state-icon { background: var(--bg-hover); color: var(--text-muted); }
+.state-block.error .state-icon { background: color-mix(in srgb, var(--accent-danger) 14%, transparent); color: var(--accent-danger); }
+.state-block .state-title { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.state-block .state-desc { font-size: var(--text-sm); color: var(--text-muted); line-height: var(--leading-normal); }
+.state-block .state-action {
+  margin-top: var(--space-1); font-size: var(--text-sm); font-weight: 600;
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); cursor: pointer;
+}

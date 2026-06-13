@@ -411,12 +411,35 @@ export const AccountSetupMixin = {
     };
 
     const themeSelect = document.getElementById('setting-theme');
-    themeSelect.value = this.settings.theme || 'dark';
+    // Legacy values 'dark'/'light' map onto new palette defaults so existing
+    // users don't see an empty select.
+    const themeMigrationMap = { dark: 'indigo-night', light: 'daylight' };
+    themeSelect.value = themeMigrationMap[this.settings.theme] || this.settings.theme || 'indigo-night';
     themeSelect.onchange = () => {
       this.settings.theme = themeSelect.value;
       this.saveSettings();
       this.applySettings();
     };
+
+    const densitySelect = document.getElementById('setting-density');
+    if (densitySelect) {
+      densitySelect.value = this.settings.density || 'comfortable';
+      densitySelect.onchange = () => {
+        this.settings.density = densitySelect.value;
+        this.saveSettings();
+        this.applySettings();
+      };
+    }
+
+    const mfmSelect = document.getElementById('setting-mfm');
+    if (mfmSelect) {
+      mfmSelect.value = this.settings.mfm || 'hover';
+      mfmSelect.onchange = () => {
+        this.settings.mfm = mfmSelect.value;
+        this.saveSettings();
+        import('../ui/mfm-motion.js').then(m => m.setMfmMotion(mfmSelect.value));
+      };
+    }
 
     resetBtn.onclick = () => {
       if (confirm('정말로 모든 데이터를 초기화하시겠습니까?\n계정 정보, 설정이 모두 삭제됩니다.')) {

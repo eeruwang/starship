@@ -1,0 +1,54 @@
+/* =====================================================================
+   StarShip — 04. Toggle bar (desktop)
+   ---------------------------------------------------------------------
+   필터(전체/알림/북마크/DM/페이지) = 세그먼트(한 번에 하나),
+   계정 컬럼 = 아바타 칩(채움+테두리=열림 / 회색=닫힘).
+   기존 .column-toggle-bar 빌더의 마크업 교체 동반. [markup]
+   ===================================================================== */
+
+.column-toggle-bar {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto; white-space: nowrap; flex-shrink: 0;
+}
+.column-toggle-bar::-webkit-scrollbar { height: 0; }
+
+/* ── 필터 세그먼트 ── */
+.filter-segment {
+  display: inline-flex; background: var(--bg-primary);
+  border-radius: var(--radius-md); padding: 3px; gap: 2px; flex-shrink: 0;
+}
+.filter-segment button {
+  border: none; background: none; cursor: pointer;
+  font: inherit; font-size: var(--text-sm); color: var(--text-muted);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  white-space: nowrap;
+}
+.filter-segment button[aria-pressed="true"] {
+  background: var(--bg-card); color: var(--text-primary);
+  font-weight: 600; box-shadow: var(--shadow-sm);
+}
+
+/* ── 그룹 구분선 ── */
+.toggle-group-sep { width: 1px; height: 24px; background: var(--border-color); flex-shrink: 0; }
+
+/* ── 계정 칩 ── */
+.account-chip {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  border: 1px solid var(--border-color); background: var(--bg-card);
+  color: var(--text-muted); border-radius: 22px;
+  padding: 5px 12px 5px 5px; cursor: pointer; font: inherit; font-size: var(--text-sm);
+  white-space: nowrap; flex-shrink: 0;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.account-chip .account-chip-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.account-chip[aria-pressed="true"] {            /* 열린 컬럼 */
+  border: 1.5px solid var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-card));
+  color: var(--accent-primary); font-weight: 600;
+}
+/* 스레드/페이지 등 특수 토글은 좌측 점으로 구분 */
+.account-chip .account-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
