@@ -18,6 +18,13 @@ import { escapeHtml } from '../ui/utils.js';
 import { renderPost } from '../ui/dashboard.js';
 import { iconReplyArrow } from '../ui/icons.js';
 
+// 시간 정렬 비교자. createdAt 이 Date / string / number 어느 형식이든 안전.
+function byCreatedAtAsc(a, b) {
+  const ta = a?.createdAt instanceof Date ? a.createdAt.getTime() : Date.parse(a?.createdAt || 0) || 0;
+  const tb = b?.createdAt instanceof Date ? b.createdAt.getTime() : Date.parse(b?.createdAt || 0) || 0;
+  return ta - tb;
+}
+
 export const ThreadViewMixin = {
 
   /**
@@ -126,8 +133,10 @@ export const ThreadViewMixin = {
 
       if (!hasNewData) return;
 
-      ancestors = this._deduplicateThreadPosts(ancestors);
+      ancestors = this._deduplicateThreadPosts(ancestors).sort(byCreatedAtAsc);
       descendants = this._deduplicateThreadPosts(descendants);
+      // 자손 트리 순서는 _buildDescendantEntries / _renderDescendantTree 가
+      // 부모별 시간 정렬을 책임진다. 여기서는 dedup 만.
       // Remove target and cross-duplicates between ancestors and descendants
       const _pk = p => { const dp = p.reblog || p; return dp.canonicalUri || `${dp.platform}:${dp.id}`; };
       if (targetPost) {
@@ -482,16 +491,44 @@ export const ThreadViewMixin = {
    * Deduplicate posts by canonical URI, merging data from duplicates.
    */
   _deduplicateThreadPosts(posts) {
-    const seen = new Map();
+    // primary: canonicalUri (cross-instance 안전), secondary: 작성자 acct + 작성시각.
+    // 한쪽엔 canonicalUri 가 빠진 경우라도 동일 노트를 매칭할 수 있게 한다.
+    const seenPrimary = new Map();
+    const seenSecondary = new Map();
     const result = [];
-    for (const post of posts) {
+    const indexOf = (post) => {
       const dp = post.reblog || post;
-      const key = dp.canonicalUri || `${dp.platform}:${dp.id}`;
-      if (!seen.has(key)) {
-        seen.set(key, result.length);
+      const primary = dp.canonicalUri || '';
+      if (primary && seenPrimary.has(primary)) return seenPrimary.get(primary);
+      const acct = dp.author?.acct || '';
+      const ts = dp.createdAt instanceof Date
+        ? dp.createdAt.getTime()
+        : (Date.parse(dp.createdAt) || 0);
+      if (acct && ts) {
+        const secondary = `${acct}@@${ts}`;
+        if (seenSecondary.has(secondary)) return seenSecondary.get(secondary);
+      }
+      // 마지막 폴백: platform:id (같은 인스턴스 내 중복만 잡음)
+      const fallback = `${dp.platform}:${dp.id}`;
+      if (seenPrimary.has(fallback)) return seenPrimary.get(fallback);
+      return -1;
+    };
+    const remember = (post, idx) => {
+      const dp = post.reblog || post;
+      if (dp.canonicalUri) seenPrimary.set(dp.canonicalUri, idx);
+      const acct = dp.author?.acct || '';
+      const ts = dp.createdAt instanceof Date
+        ? dp.createdAt.getTime()
+        : (Date.parse(dp.createdAt) || 0);
+      if (acct && ts) seenSecondary.set(`${acct}@@${ts}`, idx);
+      seenPrimary.set(`${dp.platform}:${dp.id}`, idx);
+    };
+    for (const post of posts) {
+      const idx = indexOf(post);
+      if (idx === -1) {
         result.push(post);
+        remember(post, result.length - 1);
       } else {
-        const idx = seen.get(key);
         this._mergePostData(result[idx], post);
       }
     }
@@ -582,62 +619,50 @@ export const ThreadViewMixin = {
       newPosts.push(entry);
     }
 
+    // 원하는 순서대로 walk 하며 카드를 다시 부착(appendChild) 한다.
+    // 이미 DOM 에 있는 노드를 appendChild 하면 그 위치로 "이동" 되므로,
+    // walk 끝에서 자연스럽게 DOM 순서가 newPosts 순서와 일치한다.
     const newKeys = new Set();
-    const fragment = document.createDocumentFragment();
+    const newCardEls = [];   // 새로 생성된(=DOM 미부착) 카드 — 애니메이션 표시용
 
     for (const entry of newPosts) {
       const { post, classes, branch, parentPost } = entry;
-      // Use the same key as renderPost (which uses post.reblog || post for
-      // data-post-id/data-platform) so lookup matches DOM card attributes.
       const displayPost = post.reblog || post;
       const key = `${displayPost.platform}:${displayPost.id}`;
-      // Skip duplicate keys (same post in both ancestors and descendants)
-      if (newKeys.has(key)) continue;
+      if (newKeys.has(key)) continue;   // 동일 글이 ancestors/descendants 양쪽에 있을 때
       newKeys.add(key);
+
       const existing = existingCards.get(key);
+      let cardEl;
       if (existing) {
-        // Update existing card in-place with fresh data
-        const newCard = renderPost(post);
-        for (const cls of classes) newCard.classList.add(cls);
-        if (branch) newCard.dataset.threadBranch = 'true';
-        if (parentPost) this._injectReplyBadge(newCard, post, parentPost);
-        existing.replaceWith(newCard);
+        // 기존 카드 → 최신 데이터로 교체 (in-place)
+        cardEl = renderPost(post);
+        for (const cls of classes) cardEl.classList.add(cls);
+        if (branch) cardEl.dataset.threadBranch = 'true';
+        if (parentPost) this._injectReplyBadge(cardEl, post, parentPost);
+        existing.replaceWith(cardEl);
       } else {
-        // New post - create and append to fragment
-        const el = renderPost(post);
-        for (const cls of classes) el.classList.add(cls);
-        if (branch) el.dataset.threadBranch = 'true';
-        if (parentPost) this._injectReplyBadge(el, post, parentPost);
-        el.classList.add('new-post');
-        fragment.appendChild(el);
+        cardEl = renderPost(post);
+        for (const cls of classes) cardEl.classList.add(cls);
+        if (branch) cardEl.dataset.threadBranch = 'true';
+        if (parentPost) this._injectReplyBadge(cardEl, post, parentPost);
+        cardEl.classList.add('new-post');
+        newCardEls.push(cardEl);
       }
+      // 순서 맞춤: 이미 부착돼있어도 다시 끝으로 이동 → walk 끝에 전체 순서 확정.
+      content.appendChild(cardEl);
     }
 
-    // Append new posts first, THEN clean up duplicates/stale from the
-    // complete DOM.  Previous approach (clean before append) missed
-    // duplicates between existing DOM cards and fragment cards, causing
-    // the same note to accumulate on every refresh.
-    if (fragment.childNodes.length > 0) {
-      content.appendChild(fragment);
+    if (newCardEls.length) {
       setTimeout(() => {
-        content.querySelectorAll('.new-post').forEach(el => el.classList.remove('new-post'));
+        for (const el of newCardEls) el.classList.remove('new-post');
       }, 400);
     }
 
-    // Remove stale and duplicate cards from the complete DOM (including
-    // just-appended fragment cards).  For duplicates, keep the LAST
-    // occurrence — it is the most recently rendered version.
-    const lastSeen = new Map();
+    // newKeys 에 없는 잔여 카드 제거 (오래된 dom)
     for (const card of [...content.querySelectorAll('.post-card.thread-post')]) {
       const key = `${card.dataset.platform}:${card.dataset.postId}`;
-      if (!newKeys.has(key)) {
-        card.remove();
-      } else if (lastSeen.has(key)) {
-        lastSeen.get(key).remove();   // remove earlier duplicate
-        lastSeen.set(key, card);       // keep current (later) card
-      } else {
-        lastSeen.set(key, card);
-      }
+      if (!newKeys.has(key)) card.remove();
     }
 
     // Remove loading elements
@@ -666,12 +691,15 @@ export const ThreadViewMixin = {
       if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
       childrenMap.get(parentId).push(post);
     }
+    // 부모별 자식은 시간 오름차순. 여러 계정 머지 후 들어온 순서를 정정.
+    for (const arr of childrenMap.values()) arr.sort(byCreatedAtAsc);
 
     const maxDepth = 4;
     const entries = [];
     const rendered = new Set();
-    let prevDepth = 0;
 
+    // prevDepth 는 walk 재귀 전체에 걸친 상태라 closure 변수가 아니라 객체로 전달
+    const state = { prevDepth: 0 };
     const walk = (postId, depth, parentPost) => {
       const children = childrenMap.get(String(postId)) || [];
       const hasBranch = children.length > 1;
@@ -679,8 +707,8 @@ export const ThreadViewMixin = {
         const child = children[i];
         rendered.add(String(child.id));
         const level = Math.min(depth, maxDepth);
-        const isBranch = (hasBranch && i > 0) || (depth < prevDepth);
-        prevDepth = depth;
+        const isBranch = (hasBranch && i > 0) || (depth < state.prevDepth);
+        state.prevDepth = depth;
         entries.push({
           post: child,
           classes: ['thread-post', 'thread-descendant', `thread-depth-${level}`],
@@ -692,11 +720,10 @@ export const ThreadViewMixin = {
     };
     walk(targetPostId, 1, targetPost);
 
-    // Orphaned descendants
-    for (const post of descendants) {
-      if (!rendered.has(String(post.id))) {
-        entries.push({ post, classes: ['thread-post', 'thread-descendant'], branch: false, parentPost: null });
-      }
+    // 고아 자손도 시간 오름차순
+    const orphans = descendants.filter(p => !rendered.has(String(p.id))).sort(byCreatedAtAsc);
+    for (const post of orphans) {
+      entries.push({ post, classes: ['thread-post', 'thread-descendant'], branch: false, parentPost: null });
     }
 
     return entries;
@@ -717,9 +744,11 @@ export const ThreadViewMixin = {
       if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
       childrenMap.get(parentId).push(post);
     }
+    // 부모별 자식 시간 오름차순
+    for (const arr of childrenMap.values()) arr.sort(byCreatedAtAsc);
 
     const maxDepth = 4;
-    let prevDepth = 0;
+    const state = { prevDepth: 0 };
 
     const renderNode = (postId, depth, parentPost) => {
       const children = childrenMap.get(String(postId)) || [];
@@ -735,10 +764,10 @@ export const ThreadViewMixin = {
         if (hasBranch && i > 0) {
           el.dataset.threadBranch = 'true';
         }
-        if (depth < prevDepth) {
+        if (depth < state.prevDepth) {
           el.dataset.threadBranch = 'true';
         }
-        prevDepth = depth;
+        state.prevDepth = depth;
 
         // Reply badge: show who this replies to
         this._injectReplyBadge(el, child, parentPost);
@@ -750,7 +779,7 @@ export const ThreadViewMixin = {
 
     renderNode(targetPostId, 1, targetPost);
 
-    // Orphaned descendants (replyToId doesn't match any known post)
+    // Orphaned descendants (replyToId doesn't match any known post). 시간 정렬 후 부착.
     const rendered = new Set();
     const collectRendered = (pid) => {
       const children = childrenMap.get(String(pid)) || [];
@@ -761,12 +790,11 @@ export const ThreadViewMixin = {
     };
     collectRendered(targetPostId);
 
-    for (const post of descendants) {
-      if (!rendered.has(String(post.id))) {
-        const el = renderPost(post);
-        el.classList.add('thread-post', 'thread-descendant');
-        container.appendChild(el);
-      }
+    const orphans = descendants.filter(p => !rendered.has(String(p.id))).sort(byCreatedAtAsc);
+    for (const post of orphans) {
+      const el = renderPost(post);
+      el.classList.add('thread-post', 'thread-descendant');
+      container.appendChild(el);
     }
   },
 
