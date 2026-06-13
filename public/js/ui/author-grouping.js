@@ -11,12 +11,22 @@ function authorOf(card) {
   return card.dataset.authorAcct || null;
 }
 
+// 그룹핑 가능 여부: 작성자 일치 + (답글이라면 같은 대상에 단 답글이어야 함).
+// 한쪽만 답글이거나 답글 대상이 서로 다르면 묶지 않는다.
+function canGroup(card, prev) {
+  const mine = authorOf(card);
+  const prevAcct = authorOf(prev);
+  if (!mine || !prevAcct || mine !== prevAcct) return false;
+  const myReply = card.dataset.replyToId || '';
+  const prevReply = prev.dataset.replyToId || '';
+  if (myReply !== prevReply) return false;
+  return true;
+}
+
 function updateOne(card) {
   if (!card || !card.classList?.contains('post-card')) return;
-  const mine = authorOf(card);
   const prev = card.previousElementSibling;
-  const prevAcct = authorOf(prev);
-  if (mine && prevAcct && mine === prevAcct) {
+  if (prev && canGroup(card, prev)) {
     card.classList.add('post-grouped');
   } else {
     card.classList.remove('post-grouped');

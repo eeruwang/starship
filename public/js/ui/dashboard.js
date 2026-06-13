@@ -489,6 +489,14 @@ export function renderPost(post) {
   if (!post.rebloggedBy && displayPostForUri.author?.acct) {
     card.dataset.authorAcct = displayPostForUri.author.acct;
   }
+  // 답글 타깃 표시 — 같은 작성자라도 답글 대상이 다르면 그룹핑 안 함
+  // (예: 동일 사용자가 @thx 와 @amubook 에게 각각 답글한 경우 별개 카드).
+  if (!post.rebloggedBy) {
+    const replyToId = displayPostForUri.replyToId
+      || displayPostForUri.replyTo?.id
+      || displayPostForUri.replyTo?.canonicalUri;
+    if (replyToId) card.dataset.replyToId = String(replyToId);
+  }
 
   // Per-account theme color for single-account posts
   if (!post.mergedAccounts || post.mergedAccounts.length <= 1) {
