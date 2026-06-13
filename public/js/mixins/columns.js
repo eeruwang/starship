@@ -4,6 +4,7 @@
  */
 import { escapeHtml } from '../ui/utils.js';
 import { iconRefresh, iconClose, timeAgo } from '../ui/dashboard.js';
+import { watchColumnGrouping } from '../ui/author-grouping.js';
 
 export const ColumnsMixin = {
 
@@ -420,6 +421,9 @@ export const ColumnsMixin = {
       </div>
       <div class="column-content"></div>
     `;
+
+    // Same-author grouping (renders .post-grouped on consecutive cards)
+    watchColumnGrouping(col.querySelector('.column-content'));
 
     return col;
   },
