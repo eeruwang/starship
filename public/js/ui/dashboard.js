@@ -3,6 +3,7 @@
  * Renders timeline posts, notifications, and account cards.
  */
 import { escapeHtml, cachedImageUrl } from './utils.js';
+import { familyOf } from './platform-families.js';
 import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
@@ -14,6 +15,21 @@ import {
   iconCheckCircle, iconXCircle,
   getNotifIcon,
 } from './icons.js';
+
+const NOTIF_TYPE_LABEL = {
+  favourite: '좋아요했습니다',
+  reblog: '부스트했습니다',
+  renote: '리노트했습니다',
+  reaction: '리액션을 보냈습니다',
+  mention: '멘션했습니다',
+  reply: '답글했습니다',
+  follow: '팔로우했습니다',
+  follow_request: '팔로우를 요청했습니다',
+  receiveFollowRequest: '팔로우를 요청했습니다',
+  quote: '인용했습니다',
+  poll: '투표가 종료되었습니다',
+  status: '새 글을 올렸습니다',
+};
 
 const VISIBILITY_ICONS = {
   public: { icon: iconVisPublic, title: '공개' },
@@ -421,6 +437,9 @@ export function renderPost(post) {
   card.dataset.postId = post.id;
   card.dataset.platform = post.platform;
   if (post.accountId) card.dataset.accountId = post.accountId;
+  // 색맹 모드/계열 그룹핑용 가족 키
+  const _sw = post.accountSoftware || post.platform;
+  if (_sw) card.dataset.platformFamily = familyOf(_sw);
   const _dispAuthor = (post.reblog || post).author?.displayName || '';
   if (_dispAuthor) card.setAttribute('aria-label', `${_dispAuthor}의 글`);
   const displayPostForUri = post.reblog || post;
@@ -595,11 +614,17 @@ export function renderPost(post) {
 }
 
 export function renderNotification(notif) {
-  const card = document.createElement('div');
+  const card = document.createElement('article');
   const hasPost = !!notif.post?.id;
   card.className = `notif-card notif-type-${notif.type} platform-${notif.platform}${hasPost ? ' notif-clickable' : ''}`;
   card.dataset.notifId = notif.id;
   card.dataset.platform = notif.platform;
+  const _nsw = notif.accountSoftware || notif.platform;
+  if (_nsw) card.dataset.platformFamily = familyOf(_nsw);
+  // 스크린리더용 한 문장 요약 — "OOO님이 좋아요했습니다"
+  const _actorName = notif.actor?.displayName || notif.actor?.username || notif.actor?.acct || '';
+  const _typeLabel = NOTIF_TYPE_LABEL[notif.type] || '활동했습니다';
+  if (_actorName) card.setAttribute('aria-label', `${_actorName}님이 ${_typeLabel}`);
   // Dedup key for incremental updates (prefer normalized key from dedup)
   if (notif._dedupKey) {
     card.dataset.dedupKey = notif._dedupKey;
@@ -722,12 +747,12 @@ export function renderNotification(notif) {
 
     html += `
       <div class="post-actions">
-        <button class="post-action" data-action="reply" title="답글"><span class="action-icon">${iconReply}</span>${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}</button>
-        <button class="post-action${notif.reblogged || displayPost.reblogged ? ' active' : ''}" data-action="boost" title="${notif.platform === 'mastodon' ? '부스트' : '리노트'}"><span class="action-icon">${iconBoost}</span>${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}</button>
-        <button class="post-action" data-action="quote" title="인용"><span class="action-icon">${iconQuote}</span></button>
-        <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요"><span class="action-icon">${iconHeart}</span>${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}</button>
-        ${hasReactionSupport ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션"><span class="action-icon">${iconSmile}</span></button>` : ''}
-        <button class="post-action action-end" data-action="open" title="원본 열기"><span class="action-icon">${iconLink}</span></button>
+        <button class="post-action" data-action="reply" title="답글" aria-label="답글"><span class="action-icon">${iconReply}</span>${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}</button>
+        <button class="post-action${notif.reblogged || displayPost.reblogged ? ' active' : ''}" data-action="boost" title="${notif.platform === 'mastodon' ? '부스트' : '리노트'}" aria-label="${notif.platform === 'mastodon' ? '부스트' : '리노트'}"><span class="action-icon">${iconBoost}</span>${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}</button>
+        <button class="post-action" data-action="quote" title="인용" aria-label="인용"><span class="action-icon">${iconQuote}</span></button>
+        <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요" aria-label="좋아요"><span class="action-icon">${iconHeart}</span>${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}</button>
+        ${hasReactionSupport ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션" aria-label="리액션"><span class="action-icon">${iconSmile}</span></button>` : ''}
+        <button class="post-action action-end" data-action="open" title="원본 열기" aria-label="원본 열기"><span class="action-icon">${iconLink}</span></button>
       </div>
     `;
 
@@ -887,10 +912,10 @@ export function renderNotification(notif) {
       const hasCustomReaction = displayPost.myReaction && displayPost.myReaction !== '❤' && displayPost.myReaction !== '❤️';
 
       html += `<div class="notif-actions">
-        <button class="notif-action-btn" data-action="reply" title="답글">${iconReply}${replyCount > 0 ? `<span class="notif-action-count">${replyCount}</span>` : ''}</button>
-        <button class="notif-action-btn${isBoosted ? ' active' : ''}" data-action="boost" title="부스트/리노트">${iconBoost}${boostCount > 0 ? `<span class="notif-action-count">${boostCount}</span>` : ''}</button>
-        <button class="notif-action-btn${isFaved ? ' active' : ''}" data-action="fav" title="좋아요">${iconHeart}${favCount > 0 ? `<span class="notif-action-count">${favCount}</span>` : ''}</button>
-        ${hasReactionSupport ? `<button class="notif-action-btn${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션 선택">${iconSmile}</button>` : ''}
+        <button class="notif-action-btn" data-action="reply" title="답글" aria-label="답글">${iconReply}${replyCount > 0 ? `<span class="notif-action-count">${replyCount}</span>` : ''}</button>
+        <button class="notif-action-btn${isBoosted ? ' active' : ''}" data-action="boost" title="부스트/리노트" aria-label="부스트/리노트">${iconBoost}${boostCount > 0 ? `<span class="notif-action-count">${boostCount}</span>` : ''}</button>
+        <button class="notif-action-btn${isFaved ? ' active' : ''}" data-action="fav" title="좋아요" aria-label="좋아요">${iconHeart}${favCount > 0 ? `<span class="notif-action-count">${favCount}</span>` : ''}</button>
+        ${hasReactionSupport ? `<button class="notif-action-btn${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션 선택" aria-label="리액션 선택">${iconSmile}</button>` : ''}
       </div>`;
     }
 

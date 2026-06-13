@@ -153,7 +153,7 @@
 
   <!-- 계정 추가 모달 -->
   <div class="modal-overlay" id="modal-add-account" style="display:none;">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h2>계정 추가</h2>
         <button class="btn btn-icon modal-close" data-close-modal="modal-add-account"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -206,7 +206,7 @@
 
   <!-- 새 글 작성 모달 -->
   <div class="modal-overlay" id="modal-compose" style="display:none;">
-    <div class="modal compose-modal">
+    <div class="modal compose-modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h2 id="compose-title">새 글 작성</h2>
         <button class="btn btn-icon modal-close" data-close-modal="modal-compose"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -252,7 +252,7 @@
 
   <!-- 페이지 관리 모달 -->
   <div class="modal-overlay" id="modal-pages" style="display:none;">
-    <div class="modal modal-pages">
+    <div class="modal modal-pages" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h2>페이지 관리</h2>
         <button class="btn btn-icon modal-close" data-close-modal="modal-pages"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -263,7 +263,7 @@
 
   <!-- 페이지 뷰어 모달 -->
   <div class="modal-overlay" id="modal-page-viewer" style="display:none;">
-    <div class="modal modal-page-viewer">
+    <div class="modal modal-page-viewer" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h2 id="page-viewer-title"></h2>
         <div style="display:flex;gap:0.25rem;flex-shrink:0;">
@@ -278,7 +278,7 @@
 
   <!-- 설정 모달 -->
   <div class="modal-overlay" id="modal-settings" style="display:none;">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h2>설정</h2>
         <button class="btn btn-icon modal-close" data-close-modal="modal-settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -379,7 +379,7 @@
 
   <!-- 스레드 뷰 모달 -->
   <div class="modal-overlay" id="modal-thread" style="display:none;">
-    <div class="modal modal-thread">
+    <div class="modal modal-thread" role="dialog" aria-modal="true">
       <div class="thread-header">
         <h2>대화 스레드</h2>
         <div class="thread-header-actions">
@@ -408,7 +408,7 @@
 
   <!-- 로그인/회원가입 모달 -->
   <div class="modal-overlay" id="modal-auth" style="display:none;">
-    <div class="modal modal-auth">
+    <div class="modal modal-auth" role="dialog" aria-modal="true">
       <button class="btn btn-icon auth-close" data-close-modal="modal-auth"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       <div class="auth-brand">
         <svg class="auth-logo" width="48" height="48" viewBox="0 0 100 100"><defs><linearGradient id="auth-grad" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#6364ff"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs><path d="M50 8 L62 42 H80 L66 58 L72 90 L50 72 L28 90 L34 58 L20 42 H38 Z" fill="url(#auth-grad)" opacity="0.15"/><path d="M50 15 C50 15 44 35 44 50 C44 62 46 75 50 85 C54 75 56 62 56 50 C56 35 50 15 50 15Z" fill="url(#auth-grad)"/><path d="M50 30 L38 58 C42 55 46 53 50 53 C54 53 58 55 62 58 Z" fill="url(#auth-grad)" opacity="0.8"/><circle cx="50" cy="42" r="4" fill="#1a1b2e"/></svg>
@@ -442,7 +442,7 @@
 
   <!-- 프로필 모달 -->
   <div class="modal-overlay" id="modal-profile" style="display:none;">
-    <div class="modal modal-profile">
+    <div class="modal modal-profile" role="dialog" aria-modal="true">
       <button class="btn btn-icon profile-close" data-close-modal="modal-profile">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -502,7 +502,7 @@
 
   <!-- 초대코드 관리 모달 -->
   <div class="modal-overlay" id="modal-invite-codes" style="display:none;">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h2>초대코드 관리</h2>
         <button class="btn btn-icon modal-close" data-close-modal="modal-invite-codes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
