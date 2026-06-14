@@ -23,27 +23,30 @@
    양쪽 동시 노출 회귀 방지를 위해 각 viewport 에서 비대상 chrome 을 숨김.
    ───────────────────────────────────────────────────────────────────── */
 @media (min-width: 601px) {
-  /* 데스크톱: 모바일 chrome 숨김 (.account-chip-sheet 누락이 회귀 원인이었음) */
+  /* 데스크톱: 모바일 chrome 숨김. cascade 의존을 끊기 위해 !important */
   .mobile-tabbar,
   .compose-fab,
   .column-pager-dots,
-  .account-chip-sheet { display: none; }
+  .account-chip-sheet { display: none !important; }
 }
 
 @media (max-width: 600px) {
-  /* 모바일: 데스크톱 chrome(헤더 + 토글바) 숨김 */
-  .app-header { display: none; }
-  .column-toggle-bar { display: none; }
+  /* 모바일: 데스크톱 chrome(헤더 + 토글바) 숨김. cascade 의존을 끊기 위해 !important.
+     (legacy layout.css/components.css 의 .column-toggle-bar { display:flex }
+      가 같은 specificity 라 캐시·로딩 순서에 따라 회귀할 수 있음) */
+  .app-header { display: none !important; }
+  .column-toggle-bar { display: none !important; }
 
-
-  /* 컬럼 컨테이너: 100vw 풀스크린 페이저 */
+  /* 컬럼 컨테이너: 100vw 풀스크린 페이저. components.css 의 모바일 .columns-container
+     padding:0.5rem / .column min-width:min(...,100vw-1rem) 를 덮어쓴다. */
   .columns-container {
     scroll-snap-type: x mandatory;
-    gap: 0; padding: 0;
+    gap: 0 !important; padding: 0 !important;
+    scroll-padding-left: 0 !important; scroll-padding-right: 0 !important;
     flex: 1;
   }
   .column {
-    min-width: 100vw; max-width: 100vw;
+    min-width: 100vw !important; max-width: 100vw !important;
     scroll-snap-align: center;
     border-radius: 0; border-left: none; border-right: none;
   }
