@@ -151,10 +151,32 @@ export const ColumnsMixin = {
     });
   },
 
-  // 모바일: 햄버거 ≡ 탭이 토글하는 계정 시트의 칩 목록을 다시 그림.
-  // 칩들은 .account-chip 클래스 + data-toggle-type="account" 를 그대로 쓰므로
-  // 기존 클릭 위임(events.js _bindToggleEvents) 이 그대로 동작한다.
+  // 모바일: 햄버거 ≡ 탭이 토글하는 시트의 칩 목록을 다시 그림.
+  // (1) 북마크/DM/페이지 = 필터 칩 (전체/알림은 탭바에 따로 있음),
+  // (2) 계정 칩 = 가로 줄.
+  // 칩들은 data-toggle-type 으로 기존 handleToggleClick 위임을 그대로 탄다.
   _renderAccountChipSheet() {
+    // (1) 북마크 / DM / 페이지 필터 칩
+    const extras = document.getElementById('account-chip-sheet-extras');
+    if (extras) {
+      extras.innerHTML = '';
+      const makeFilterChip = (type, label) => {
+        const b = document.createElement('button');
+        const on = !!this.columnState[type];
+        b.className = `account-chip${on ? ' active' : ''}`;
+        b.dataset.toggleType = type;
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        b.textContent = label;
+        return b;
+      };
+      extras.appendChild(makeFilterChip('bookmarks', '북마크'));
+      extras.appendChild(makeFilterChip('dm', 'DM'));
+      if (this.store.getPagesAccounts().length > 0) {
+        extras.appendChild(makeFilterChip('pages', '페이지'));
+      }
+    }
+
+    // (2) 계정 칩
     const list = document.getElementById('account-chip-sheet-list');
     if (!list) return;
     list.innerHTML = '';

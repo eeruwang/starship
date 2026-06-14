@@ -44,10 +44,7 @@ export const EventsMixin = {
       const type = tab.dataset.mobileTab;
       switch (type) {
         case 'all':
-        case 'notifications':
-        case 'bookmarks':
-        case 'dm':
-        case 'pages': {
+        case 'notifications': {
           // 닫혀있으면 열고 스크롤. 이미 열려있고 해당 컬럼이 포커스 상태면 닫기.
           let col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
           const cols = Array.from(this.columnsContainer?.querySelectorAll('.column') || []);

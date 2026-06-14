@@ -90,11 +90,18 @@
   .account-chip-sheet-label {
     font-size: var(--text-xs); color: var(--text-muted); padding: 0 4px;
   }
+  .account-chip-sheet-extras {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .account-chip-sheet-extras:empty { display: none; padding: 0; border: 0; }
   .account-chip-sheet-list {
     display: flex; flex-wrap: wrap; gap: 6px;
     overflow-y: auto;
   }
-  .account-chip-sheet-list .account-chip { flex-shrink: 0; }
+  .account-chip-sheet-list .account-chip,
+  .account-chip-sheet-extras .account-chip { flex-shrink: 0; }
 
   /* ── 앱 액션 탭바 (헤더 대체): 새로고침 / 페이지 / 설정 / 사용자 ── */
   .mobile-tabbar {
@@ -106,13 +113,13 @@
     border-top: 1px solid var(--border-color);
   }
   .mobile-tabbar button, .mobile-tabbar a {
-    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
     background: none; border: none; cursor: pointer;
-    color: var(--text-muted); font: inherit; font-size: 9px;
-    min-height: 44px; padding: 0 2px; justify-content: center; flex: 1;
+    color: var(--text-muted); font: inherit; font-size: 10px;
+    min-height: 44px; padding: 0 6px; justify-content: center; flex: 1;
     min-width: 0;
   }
-  .mobile-tabbar button svg { width: 18px; height: 18px; }
+  .mobile-tabbar button svg { width: 20px; height: 20px; }
   .mobile-tabbar button[aria-pressed="true"],
   .mobile-tabbar .tab.active { color: var(--accent-primary); font-weight: 600; }
   .mobile-tabbar .tab-spacer { display: none; }
