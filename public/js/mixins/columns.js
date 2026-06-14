@@ -156,24 +156,35 @@ export const ColumnsMixin = {
   // (2) 계정 칩 = 가로 줄.
   // 칩들은 data-toggle-type 으로 기존 handleToggleClick 위임을 그대로 탄다.
   _renderAccountChipSheet() {
-    // (1) 북마크 / DM / 페이지 필터 칩
+    // (1) 북마크 / DM / 페이지 필터 칩 — 사이트의 .filter-segment 스타일 채택.
+    //     아이콘 + 라벨 형식으로 .account-chip 의 아바타 칩과 시각적 구분.
     const extras = document.getElementById('account-chip-sheet-extras');
     if (extras) {
       extras.innerHTML = '';
-      const makeFilterChip = (type, label) => {
+      const seg = document.createElement('div');
+      seg.className = 'filter-segment filter-segment-block';
+      seg.setAttribute('role', 'group');
+      seg.setAttribute('aria-label', '필터');
+      const ICONS = {
+        bookmarks: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+        dm: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+        pages: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+      };
+      const makeBtn = (type, label) => {
         const b = document.createElement('button');
         const on = !!this.columnState[type];
-        b.className = `account-chip${on ? ' active' : ''}`;
+        b.className = on ? 'active' : '';
         b.dataset.toggleType = type;
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
-        b.textContent = label;
+        b.innerHTML = `${ICONS[type] || ''}<span>${label}</span>`;
         return b;
       };
-      extras.appendChild(makeFilterChip('bookmarks', '북마크'));
-      extras.appendChild(makeFilterChip('dm', 'DM'));
+      seg.appendChild(makeBtn('bookmarks', '북마크'));
+      seg.appendChild(makeBtn('dm', 'DM'));
       if (this.store.getPagesAccounts().length > 0) {
-        extras.appendChild(makeFilterChip('pages', '페이지'));
+        seg.appendChild(makeBtn('pages', '페이지'));
       }
+      extras.appendChild(seg);
     }
 
     // (2) 계정 칩

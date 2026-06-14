@@ -100,11 +100,20 @@
     font-size: var(--text-xs); color: var(--text-muted); padding: 0 4px;
   }
   .account-chip-sheet-extras {
-    display: flex; flex-wrap: wrap; gap: 6px;
+    display: flex; flex-direction: column; gap: 6px;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border-color);
   }
   .account-chip-sheet-extras:empty { display: none; padding: 0; border: 0; }
+  /* 시트 안 filter-segment 는 가로 풀폭 */
+  .account-chip-sheet .filter-segment.filter-segment-block { display: flex; width: 100%; }
+  .account-chip-sheet .filter-segment.filter-segment-block button {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 7px 8px; min-height: 32px;
+  }
+  .account-chip-sheet .filter-segment.filter-segment-block button svg {
+    flex-shrink: 0;
+  }
   .account-chip-sheet-list {
     display: flex; flex-wrap: wrap; gap: 6px;
     overflow-y: auto;
