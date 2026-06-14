@@ -45,18 +45,15 @@ export const EventsMixin = {
       switch (type) {
         case 'all':
         case 'notifications': {
-          // 닫혀있으면 열고 스크롤. 이미 열려있고 해당 컬럼이 포커스 상태면 닫기.
+          // 이미 해당 컬럼을 보고 있으면(스와이프 위치 기준 focused) 본문 맨 위로
+          // 스크롤. 다른 컬럼에 있거나 아직 안 열려있으면 열고 그쪽으로 이동.
           let col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
           const cols = Array.from(this.columnsContainer?.querySelectorAll('.column') || []);
           const focusedCol = cols[this.focusedColumnIndex || 0];
           const focusedType = focusedCol?.dataset?.columnType;
           if (col && focusedType === type) {
-            // 같은 컬럼을 다시 누르면 닫기
-            this.columnState[type] = false;
-            this.updateColumnOrder(type, false);
-            this.saveColumnState();
-            this.renderToggleBar();
-            this.renderColumns();
+            const content = col.querySelector('.column-content');
+            if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
             break;
           }
           if (!col) {

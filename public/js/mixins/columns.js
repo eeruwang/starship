@@ -241,7 +241,33 @@ export const ColumnsMixin = {
     setTimeout(() => document.addEventListener('click', handler, true), 0);
   },
 
+  // 이미 보고 있는(=focused) 컬럼의 토글을 다시 누른 경우 본문 맨 위로 스크롤.
+  // 매칭되면 true 반환해서 호출자가 토글 동작을 건너뛰게 한다.
+  // 모바일(≤600px) 한정 — 데스크톱 토글바는 on/off 토글 패러다임 유지.
+  _scrollFocusedToTopIfMatching(toggle) {
+    if (!window.matchMedia?.('(max-width: 600px)').matches) return false;
+    const type = toggle.dataset.toggleType;
+    const accountId = toggle.dataset.accountId;
+    if (!this.columnsContainer) return false;
+    const cols = Array.from(this.columnsContainer.querySelectorAll('.column'));
+    const focusedCol = cols[this.focusedColumnIndex || 0];
+    if (!focusedCol) return false;
+    let match = false;
+    if (type === 'account') {
+      match = focusedCol.dataset.columnType === 'account'
+        && focusedCol.dataset.accountId === accountId;
+    } else {
+      match = focusedCol.dataset.columnType === type;
+    }
+    if (!match) return false;
+    const content = focusedCol.querySelector('.column-content');
+    if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+    return true;
+  },
+
   handleToggleClick(toggle) {
+    // 같은 컬럼을 보고 있을 때 그 토글을 다시 누르면 맨 위로 스크롤 (열기/끄기 대신)
+    if (this._scrollFocusedToTopIfMatching(toggle)) return;
     const type = toggle.dataset.toggleType;
 
     if (type === 'all') {
