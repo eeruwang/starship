@@ -368,6 +368,34 @@ export const EventsMixin = {
         if (willOpen) {
           menu.removeAttribute('hidden');
           btn.setAttribute('aria-expanded', 'true');
+          // position:fixed 좌표 계산. 위/아래 중 공간 큰 쪽을 선택.
+          const rect = btn.getBoundingClientRect();
+          const menuW = menu.offsetWidth || 168;
+          const menuH = menu.offsetHeight || 140;
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const spaceBelow = vh - rect.bottom;
+          const spaceAbove = rect.top;
+          // 기본: 위로 띄움 (액션 행이 보통 카드 하단). 위 공간이 부족하면 아래로.
+          let top;
+          if (spaceAbove >= menuH + 8 || spaceAbove >= spaceBelow) {
+            top = Math.max(8, rect.top - menuH - 4);
+          } else {
+            top = Math.min(vh - menuH - 8, rect.bottom + 4);
+          }
+          // 가로: 오른쪽 정렬을 기본으로 하되 화면 안에 맞춤
+          let left = rect.right - menuW;
+          if (left < 8) left = 8;
+          if (left + menuW > vw - 8) left = vw - menuW - 8;
+          menu.style.left = `${left}px`;
+          menu.style.top = `${top}px`;
+          // 스크롤 시 좌표가 어긋나므로 첫 스크롤 이벤트에서 메뉴 닫기.
+          const closeOnScroll = () => {
+            if (menu.hasAttribute('hidden')) return;
+            menu.setAttribute('hidden', '');
+            btn.setAttribute('aria-expanded', 'false');
+          };
+          window.addEventListener('scroll', closeOnScroll, { once: true, capture: true });
         }
         return;
       }

@@ -30,12 +30,14 @@
 
 /* ── 2. 부차 액션 오버플로 메뉴 [markup] ──────────────────────────────
    renderPost: 수정/삭제/북마크/원본을 .post-action-overflow 로 이동,
-   트리거 <button data-action="more"> 추가. 1차 노출 = 답글·부스트·인용·좋아요·리액션. */
+   트리거 <button data-action="more"> 추가. 1차 노출 = 답글·부스트·인용·좋아요·리액션.
+   .post-card 의 content-visibility:auto + contain-intrinsic-size 가 absolute
+   자식을 잘라내므로 position:fixed 로 띄우고 좌표는 JS 가 박는다. */
 .post-actions { position: relative; }
 .post-action[data-action="more"] { margin-left: auto; }
 .post-action-overflow {
-  position: absolute; z-index: 50; min-width: 168px;
-  right: 0; bottom: calc(100% + 4px);
+  position: fixed;       /* JS 가 left/top 박음. content-visibility 클리핑 회피 */
+  z-index: 600; min-width: 168px;
   padding: var(--space-1);
   background: var(--bg-card);
   border: 1px solid var(--border-color);
