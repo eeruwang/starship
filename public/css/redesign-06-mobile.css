@@ -18,12 +18,23 @@
      └──────────────────────────────┘
    ===================================================================== */
 
-/* 데스크톱에선 숨김 */
-.mobile-tabbar, .compose-fab, .column-pager-dots { display: none; }
+/* ─────────────────────────────────────────────────────────────────────
+   Chrome 가시성 규칙 — 데스크톱 ↔ 모바일 양방향 미디어 쿼리로 명시.
+   양쪽 동시 노출 회귀 방지를 위해 각 viewport 에서 비대상 chrome 을 숨김.
+   ───────────────────────────────────────────────────────────────────── */
+@media (min-width: 601px) {
+  /* 데스크톱: 모바일 chrome 숨김 (.account-chip-sheet 누락이 회귀 원인이었음) */
+  .mobile-tabbar,
+  .compose-fab,
+  .column-pager-dots,
+  .account-chip-sheet { display: none; }
+}
 
 @media (max-width: 600px) {
-  /* 상단 헤더 완전 숨김. 새로고침/페이지/설정/사용자는 하단 .mobile-tabbar 가 대신. */
+  /* 모바일: 데스크톱 chrome(헤더 + 토글바) 숨김 */
   .app-header { display: none; }
+  .column-toggle-bar { display: none; }
+
 
   /* 컬럼 컨테이너: 100vw 풀스크린 페이저 */
   .columns-container {
@@ -60,10 +71,8 @@
   }
   .column-pager-dots .dot.active { width: 18px; background: var(--accent-primary); }
 
-  /* ── 토글바: 모바일에선 완전 숨김 ──
-     필터(전체/알림/북마크/DM/페이지)는 mobile-tabbar 가, 계정 칩은
-     .account-chip-sheet (햄버거 ≡) 가 대체한다. */
-  .column-toggle-bar { display: none; }
+  /* 토글바: 모바일에선 완전 숨김 (위 가시성 블록에서 처리). 필터(전체/알림/
+     북마크/DM/페이지)는 mobile-tabbar 가, 계정 칩은 .account-chip-sheet 가 대체. */
 
   /* ── 계정 칩 시트 (햄버거 ≡ 탭이 토글) ── */
   .account-chip-sheet {
