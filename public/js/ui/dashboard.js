@@ -620,17 +620,14 @@ export function renderPost(post) {
 
   const hasReactionSupport = supportsReactions(post);
 
-  // 내 글에서만 보이는 인라인 수정/삭제 (이전엔 ⋯ 메뉴 안에 있어 못 찾는다는 피드백 반영).
-  // 부스트 래퍼는 수정할 수 없으므로 edit 는 rebloggedBy 없을 때만.
-  const ownEditHtml = (post.isOwn && !post.rebloggedBy)
-    ? `<button class="post-action action-edit" data-action="edit" title="수정" aria-label="수정"><span class="action-icon">${iconEdit}</span></button>`
-    : '';
-  const ownDeleteHtml = post.isOwn
-    ? `<button class="post-action action-delete" data-action="delete" title="삭제" aria-label="삭제"><span class="action-icon">${iconTrash}</span></button>`
-    : '';
-
-  // ⋯ 메뉴에는 북마크 / 원본 열기만.
+  // ⋯ 확장 메뉴 (overflow): 내 글이면 수정·삭제 포함, 항상 북마크·원본 열기.
   const overflowItems = [];
+  if (post.isOwn && !post.rebloggedBy) {
+    overflowItems.push(`<button data-action="edit"><span class="action-icon">${iconEdit}</span>수정</button>`);
+  }
+  if (post.isOwn) {
+    overflowItems.push(`<button class="danger" data-action="delete"><span class="action-icon">${iconTrash}</span>삭제</button>`);
+  }
   overflowItems.push(`<button data-action="bookmark"><span class="action-icon">${post.bookmarked ? iconBookmarkFill : iconBookmark}</span>${post.bookmarked ? '북마크 해제' : '북마크'}</button>`);
   overflowItems.push(`<button data-action="open"><span class="action-icon">${iconLink}</span>원본 열기</button>`);
 
@@ -654,7 +651,6 @@ export function renderPost(post) {
       ${hasReactionSupport ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션" aria-label="리액션">
         <span class="action-icon">${iconSmile}</span>
       </button>` : ''}
-      ${ownEditHtml}${ownDeleteHtml}
       <button class="post-action" data-action="more" title="더보기" aria-label="더보기" aria-haspopup="true" aria-expanded="false">
         <span class="action-icon">${iconMore}</span>
       </button>

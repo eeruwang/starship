@@ -399,10 +399,17 @@ export const EventsMixin = {
         this.handlePostAction('bookmark', postId, platform, accountId, btn);
       } else if (action === 'pin') {
         this.handlePostAction('pin', postId, platform, accountId, btn);
-      } else if (action === 'edit') {
-        this.openEditModal(postId, platform, accountId);
-      } else if (action === 'delete') {
-        this.handleDeletePost(postId, platform, accountId, btn);
+      } else if (action === 'edit' || action === 'delete') {
+        // dedup 으로 합쳐진 글은 card.dataset.accountId 가 "처음 본 계정" 이라
+        // 실제 작성 계정과 다를 수 있다. 캐시의 ownerAccountId 가 있으면 그쪽으로
+        // 라우팅 (data-loading.js _deduplicatePosts 에서 isOwn 승격 시 기록).
+        const cached = this.postCache.get(`${platform}:${postId}`);
+        const authorAccountId = cached?.ownerAccountId || accountId;
+        if (action === 'edit') {
+          this.openEditModal(postId, platform, authorAccountId);
+        } else {
+          this.handleDeletePost(postId, platform, authorAccountId, btn);
+        }
       }
     });
 

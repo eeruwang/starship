@@ -760,6 +760,13 @@ export const DataLoadingMixin = {
         if (existing.mergedAccounts && !existing.mergedAccounts.some(a => a.id === post.accountId)) {
           existing.mergedAccounts.push({ id: post.accountId, platform: post.accountPlatform || post.platform, themeColor: post.themeColor });
         }
+        // 다른 계정이 작성자(=내 글)였다면 그 결과를 보존. 첫 번째 시각만 유지하면
+        // "다른 내 계정 글" 이 isOwn=false 로 묻혀서 ⋯ 메뉴의 수정/삭제가 사라진다.
+        if (post.isOwn && !existing.isOwn) {
+          existing.isOwn = true;
+          // 수정/삭제 API 호출 때 작성 계정으로 라우팅하도록 ownerAccountId 도 기록
+          existing.ownerAccountId = post.accountId;
+        }
         // Cache post IDs for cross-instance lookup (avoids ap/show and search API calls)
         const srcDisplay = post.reblog || post;
         const dstDisplay = existing.reblog || existing;
