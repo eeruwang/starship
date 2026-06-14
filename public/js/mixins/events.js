@@ -48,8 +48,20 @@ export const EventsMixin = {
         case 'bookmarks':
         case 'dm':
         case 'pages': {
-          // 해당 컬럼으로 이동. 없으면 켜고 추가.
+          // 닫혀있으면 열고 스크롤. 이미 열려있고 해당 컬럼이 포커스 상태면 닫기.
           let col = this.columnsContainer?.querySelector(`.column[data-column-type="${type}"]`);
+          const cols = Array.from(this.columnsContainer?.querySelectorAll('.column') || []);
+          const focusedCol = cols[this.focusedColumnIndex || 0];
+          const focusedType = focusedCol?.dataset?.columnType;
+          if (col && focusedType === type) {
+            // 같은 컬럼을 다시 누르면 닫기
+            this.columnState[type] = false;
+            this.updateColumnOrder(type, false);
+            this.saveColumnState();
+            this.renderToggleBar();
+            this.renderColumns();
+            break;
+          }
           if (!col) {
             this.columnState[type] = true;
             this.updateColumnOrder(type, true);

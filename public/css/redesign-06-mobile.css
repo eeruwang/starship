@@ -36,10 +36,11 @@
     scroll-snap-align: center;
     border-radius: 0; border-left: none; border-right: none;
   }
-  /* 컬럼 헤더는 슬림하게: 닫기 버튼 숨김 (스와이프로 이동, 토글바 칩에서 닫기) */
+  /* 컬럼 헤더는 슬림하게. 닫기(✕)·새로고침(↻) 버튼은 유지. */
   .column .column-header { padding: 6px var(--space-3); flex-shrink: 0; }
-  .column .column-header [data-action="close-column"] { display: none; }
   .column .column-header h2 { font-size: var(--text-base); }
+  .column .column-header .btn-icon { min-width: 30px; min-height: 30px; padding: 4px; }
+  .column .column-header .btn-icon svg { width: 14px; height: 14px; }
 
   /* 컬럼 본문은 페이저 안에서 세로 풀높이. 하단 탭바만큼 패딩. */
   .column-content {
