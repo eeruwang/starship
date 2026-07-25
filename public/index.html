@@ -543,6 +543,56 @@
     </div>
   </div>
 
+  <!-- 커스텀 이모지 정보 / 서버로 가져오기 (어드민 전용) -->
+  <div class="modal-overlay" id="modal-emoji-info" style="display:none;">
+    <div class="modal modal-sm" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2>이모지 정보</h2>
+        <button class="btn btn-icon modal-close" data-close-modal="modal-emoji-info"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="emoji-info-preview">
+          <img id="emoji-info-img" alt="" width="72" height="72" data-fb="alt-text">
+          <div class="emoji-info-meta">
+            <div class="emoji-info-shortcode" id="emoji-info-shortcode"></div>
+            <div class="emoji-info-source" id="emoji-info-source"></div>
+          </div>
+        </div>
+        <div id="emoji-info-import" class="emoji-info-import" hidden>
+          <div class="form-group">
+            <label for="emoji-import-account">가져올 서버</label>
+            <select id="emoji-import-account" class="input"></select>
+          </div>
+          <div class="form-group">
+            <label for="emoji-import-shortcode">쇼트코드</label>
+            <input id="emoji-import-shortcode" class="input" type="text" placeholder="shortcode">
+          </div>
+          <div class="form-group">
+            <label for="emoji-import-category">카테고리(폴더)</label>
+            <div class="emoji-category-picker">
+              <select id="emoji-import-category" class="input"></select>
+              <button type="button" class="btn btn-secondary" id="emoji-import-new-category">새로 만들기</button>
+            </div>
+            <input id="emoji-import-category-new" class="input" type="text" placeholder="새 카테고리 이름" hidden>
+          </div>
+          <div class="form-group" data-misskey-only hidden>
+            <label for="emoji-import-aliases">별칭 (쉼표로 구분)</label>
+            <input id="emoji-import-aliases" class="input" type="text" placeholder="alias1, alias2">
+          </div>
+          <div class="form-group" data-misskey-only hidden>
+            <label for="emoji-import-license">라이선스</label>
+            <input id="emoji-import-license" class="input" type="text" placeholder="예: CC BY 4.0">
+          </div>
+          <div id="emoji-import-error" class="form-error" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-modal="modal-emoji-info">닫기</button>
+        <button class="btn btn-primary" id="btn-emoji-import" hidden>서버에 추가</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

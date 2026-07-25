@@ -17,6 +17,7 @@ export const EventsMixin = {
     this._bindColumnEvents();
     this._bindKeyboardEvents();
     this._bindPagesEvents();
+    this._bindEmojiInfo?.();
   },
 
   _bindHeaderEvents() {

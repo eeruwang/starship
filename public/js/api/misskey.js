@@ -244,6 +244,70 @@ export class MisskeyClient {
     } catch { return null; }
   }
 
+  // Admin: 인스턴스 커스텀 이모지 목록 (카테고리 포함).
+  async adminListCustomEmojis() {
+    // Misskey/Sharkey: admin/emoji/list 는 페이지네이션. 최대 500개까지 긁음.
+    const all = [];
+    let untilId = null;
+    for (let i = 0; i < 5; i++) {
+      const params = { limit: 100 };
+      if (untilId) params.untilId = untilId;
+      let batch;
+      try {
+        batch = await this.request('admin/emoji/list', params);
+      } catch (_) {
+        // fallback: 공개 emojis 목록만.
+        try {
+          const emojis = await this.request('emojis', {});
+          return (emojis?.emojis || []).map(e => ({
+            shortcode: e.name, url: e.url, category: e.category || null,
+          }));
+        } catch { return []; }
+      }
+      if (!Array.isArray(batch) || !batch.length) break;
+      all.push(...batch);
+      if (batch.length < 100) break;
+      untilId = batch[batch.length - 1].id;
+    }
+    return all.map(e => ({
+      id: e.id, shortcode: e.name, url: e.url, category: e.category || null,
+      aliases: e.aliases || [], license: e.license || '',
+    }));
+  }
+
+  // Admin: URL 로 커스텀 이모지 추가.
+  //   Misskey 표준: 드라이브에 업로드 → admin/emoji/add {fileId}
+  //   Sharkey/Firefish 등 일부 fork 는 admin/emoji/add {url} 직접 수용.
+  async adminAddCustomEmoji({ shortcode, url, category = '', aliases = [], license = '', isSensitive = false }) {
+    if (!shortcode || !url) throw new Error('name and url required');
+    // 1) URL 직접 수용 시도 (Sharkey 등)
+    try {
+      return await this.request('admin/emoji/add', {
+        name: shortcode, url, category: category || undefined,
+        aliases, license, isSensitive,
+      });
+    } catch (err) {
+      // 400/422 = url 필드 미지원 가능성 → 파일 업로드 폴백
+      if (!/\b(400|404|422|501)\b/.test(err?.message || '')) {
+        // 계속 폴백
+      }
+    }
+    // 2) 파일 업로드 → fileId 로 add
+    const proxyUrl = this.useProxy ? `/proxy?url=${encodeURIComponent(url)}` : url;
+    const imgRes = await fetch(proxyUrl);
+    if (!imgRes.ok) throw new Error(`이모지 이미지 다운로드 실패 (${imgRes.status})`);
+    const blob = await imgRes.blob();
+    const ext = (blob.type.split('/')[1] || 'png').split(';')[0].replace('jpeg', 'jpg');
+    const file = new File([blob], `${shortcode}.${ext}`, { type: blob.type || 'image/png' });
+    const uploaded = await this.uploadFile(file);
+    if (!uploaded?.id) throw new Error('드라이브 업로드 실패');
+    return this.request('admin/emoji/add', {
+      fileId: uploaded.id,
+      name: shortcode, category: category || undefined,
+      aliases, license, isSensitive,
+    });
+  }
+
   async uploadFile(file, { onProgress } = {}) {
     const formData = new FormData();
     formData.append('file', file);

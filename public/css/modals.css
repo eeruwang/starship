@@ -1582,3 +1582,32 @@ textarea.input {
   }
 }
 
+
+/* ===== Emoji Info Modal ===== */
+.emoji-info-preview {
+  display: flex; align-items: center; gap: 0.8rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, var(--radius));
+  margin-bottom: 0.75rem;
+}
+.emoji-info-preview img {
+  width: 72px; height: 72px;
+  object-fit: contain;
+  background: var(--bg-hover);
+  border-radius: 8px; padding: 4px;
+}
+.emoji-info-meta { min-width: 0; }
+.emoji-info-shortcode {
+  font-family: ui-monospace, monospace;
+  font-size: 1rem; font-weight: 700;
+  color: var(--text-primary);
+}
+.emoji-info-source {
+  font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;
+}
+.emoji-info-import { display: flex; flex-direction: column; gap: 0.6rem; }
+.emoji-info-import .form-group { margin: 0; }
+.emoji-category-picker { display: flex; gap: 0.35rem; align-items: center; }
+.emoji-category-picker select { flex: 1; }
