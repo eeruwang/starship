@@ -209,6 +209,11 @@ export const PostActionsMixin = {
       if (action === 'fav') {
         const displayPost = cachedPost?.reblog || cachedPost;
         const alreadyFaved = cachedPost?.favourited || displayPost?.myReaction;
+        // Hollo 는 "좋아요" 를 별도 개념이 아니라 ❤ 이모지 리액션으로 저장.
+        // /statuses/:id/favourite 이 없거나 반영이 어긋나 fav 카운트가 안 늘어남.
+        // → Hollo 계정은 fav 도 emoji_reactions/❤ 경로로 통일.
+        const isHollo = accountPlatform === 'mastodon' && account?.software === 'hollo';
+        const useReactionForFav = accountPlatform !== 'mastodon' || isHollo;
 
         // Optimistic update: apply immediately, then send API call
         if (alreadyFaved) {
@@ -228,10 +233,10 @@ export const PostActionsMixin = {
           }
           btnElement.classList.remove('processing', 'active');
           // Background API call
-          if (accountPlatform === 'mastodon') {
-            client.unfavourite(actionPostId).catch(e => console.error('Unfav failed:', e));
+          if (useReactionForFav) {
+            client.deleteReaction(actionPostId, '❤').catch(e => console.error('Unreact(fav) failed:', e));
           } else {
-            client.deleteReaction(actionPostId).catch(e => console.error('Unreact failed:', e));
+            client.unfavourite(actionPostId).catch(e => console.error('Unfav failed:', e));
           }
         } else {
           if (cachedPost) {
@@ -239,7 +244,7 @@ export const PostActionsMixin = {
             if (displayPost) {
               displayPost.favourited = true;
               // Increment reaction/fav count
-              if (accountPlatform !== 'mastodon') {
+              if (useReactionForFav) {
                 if (!displayPost.reactions) displayPost.reactions = {};
                 displayPost.reactions['❤'] = (displayPost.reactions['❤'] || 0) + 1;
                 displayPost.myReaction = '❤';
@@ -253,10 +258,10 @@ export const PostActionsMixin = {
           btnElement.classList.add('active', 'just-activated');
           setTimeout(() => btnElement.classList.remove('just-activated'), 600);
           // Background API call
-          if (accountPlatform === 'mastodon') {
-            client.favourite(actionPostId).catch(e => console.error('Fav failed:', e));
+          if (useReactionForFav) {
+            client.createReaction(actionPostId, '❤').catch(e => console.error('React(fav) failed:', e));
           } else {
-            client.createReaction(actionPostId, '❤').catch(e => console.error('React failed:', e));
+            client.favourite(actionPostId).catch(e => console.error('Fav failed:', e));
           }
         }
         // Fav already handled optimistically — background server confirm via streaming
