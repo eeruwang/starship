@@ -267,23 +267,48 @@ export class MastodonClient {
     return this.request('GET', '/api/v1/custom_emojis').catch(() => []);
   }
 
-  // Admin: URL 로 커스텀 이모지 추가. Mastodon 공식 admin API 는 multipart 파일만
-  // 받으므로 URL → blob 다운로드 → multipart upload.
+  // Admin: URL 로 커스텀 이모지 추가.
+  // 서버(사프트웨어)마다 엔드포인트가 다르므로 여러 후보를 순서대로 시도.
+  //  ① Hollo: POST /api/v1/emojis  (JSON, image=url)  ← Hollo 공식 엔드포인트
+  //  ② Mastodon 표준: multipart POST /api/v1/admin/custom_emojis
+  //  ③ Fedibird 확장: POST /api/v1/admin/custom_emojis (JSON, image=url)
+  // 404 는 다음 후보로 진행. 다른 상태(400/403/422) 는 중단하고 에러 반환.
   async adminAddCustomEmoji({ shortcode, url, category = '', visibleInPicker = true, aliases = [], license = '' }) {
     if (!shortcode || !url) throw new Error('shortcode and url required');
-    // Hollo 는 URL 로 바로 추가하는 확장 엔드포인트가 있음. 시도해보고 없으면 폴백.
+    const errors = [];
+    const jsonBody = {
+      shortcode, image: url, category, visible_in_picker: visibleInPicker,
+    };
+    if (aliases?.length) jsonBody.aliases = aliases;
+    if (license) jsonBody.license = license;
+
+    // ① Hollo (dahlia/hollo): POST /api/v1/emojis {name?, shortcode, image_url|image, category?}
     if (this.software === 'hollo') {
-      try {
-        return await this.request('POST', '/api/v1/admin/custom_emojis', {
-          shortcode, image: url, category, visible_in_picker: visibleInPicker,
-        });
-      } catch (err) {
-        if (!/\b(404|405|501)\b/.test(err?.message || '')) throw err;
+      const holloBody = {
+        shortcode, image: url, image_url: url,
+        category: category || undefined,
+      };
+      for (const path of ['/api/v1/emojis', '/api/v1/admin/emojis', '/api/v1/admin/custom_emojis']) {
+        try {
+          return await this.request('POST', path, holloBody);
+        } catch (err) {
+          const msg = err?.message || String(err);
+          if (/\b404\b/.test(msg)) { errors.push(`${path}: 404`); continue; }
+          throw err;
+        }
       }
     }
-    // 표준: 이미지 다운로드 → FormData 로 POST.
-    // /proxy 는 API 경로 화이트리스트가 있어 이모지 URL(/emoji/*, /system/...)
-    // 을 403 처리한다. 대신 /cache/image 를 사용 (이미지 전용, 화이트리스트 없음).
+
+    // ② Fedibird 확장: JSON 으로 URL 직접 전송.
+    try {
+      return await this.request('POST', '/api/v1/admin/custom_emojis', jsonBody);
+    } catch (err) {
+      const msg = err?.message || String(err);
+      if (!/\b(400|404|415|422|501)\b/.test(msg)) throw err;
+      errors.push(`admin/custom_emojis(JSON): ${msg}`);
+    }
+
+    // ③ 표준: 이미지 다운로드 → multipart FormData 로 POST.
     let originUrl = url;
     try {
       const u = new URL(url, (typeof window !== 'undefined' ? window.location.origin : 'https://x/'));
@@ -298,7 +323,6 @@ export class MastodonClient {
     const imgRes = await fetch(fetchUrl);
     if (!imgRes.ok) throw new Error(`이모지 이미지 다운로드 실패 (${imgRes.status})`);
     const blob = await imgRes.blob();
-    // 확장자 추정
     const ext = (blob.type.split('/')[1] || 'png').split(';')[0].replace('jpeg', 'jpg');
     const file = new File([blob], `${shortcode}.${ext}`, { type: blob.type || 'image/png' });
     const fd = new FormData();
@@ -306,7 +330,13 @@ export class MastodonClient {
     fd.append('image', file);
     if (category) fd.append('category', category);
     fd.append('visible_in_picker', visibleInPicker ? 'true' : 'false');
-    return this.requestFormData('POST', '/api/v1/admin/custom_emojis', fd);
+    try {
+      return await this.requestFormData('POST', '/api/v1/admin/custom_emojis', fd);
+    } catch (err) {
+      const msg = err?.message || String(err);
+      errors.push(`admin/custom_emojis(multipart): ${msg}`);
+      throw new Error(`이 서버는 이모지 추가 API 를 지원하지 않는 것 같습니다.\n${errors.join('\n')}`);
+    }
   }
 
   async fetchThemeColor() {
