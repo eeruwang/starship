@@ -342,6 +342,9 @@ export const EventsMixin = {
 
     // Post actions (works for post-card and mention-style notif-card)
     document.addEventListener('click', (e) => {
+      // 부스트 미니 메뉴의 항목은 별도 핸들러에서 처리 (아래) — 여기서 가로채면
+      // card.closest 가 null 이라 조기 return 되고 무동작으로 보임.
+      if (e.target.closest('.boost-menu')) return;
       const overflowBtn = e.target.closest('.post-action-overflow > button');
       const btn = overflowBtn || e.target.closest('.post-action');
       if (!btn) return;
