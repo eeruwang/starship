@@ -253,6 +253,50 @@ export class MastodonClient {
     } catch { return []; }
   }
 
+  // Admin: 인스턴스의 커스텀 이모지 원본 목록 (카테고리 포함).
+  // 폴백 순서: v2 admin → v1 admin → public custom_emojis.
+  async adminListCustomEmojis() {
+    try {
+      const res = await this.request('GET', '/api/v2/admin/custom_emojis?limit=500');
+      if (Array.isArray(res)) return res;
+    } catch (_) {}
+    try {
+      const res = await this.request('GET', '/api/v1/admin/custom_emojis?limit=500');
+      if (Array.isArray(res)) return res;
+    } catch (_) {}
+    return this.request('GET', '/api/v1/custom_emojis').catch(() => []);
+  }
+
+  // Admin: URL 로 커스텀 이모지 추가. Mastodon 공식 admin API 는 multipart 파일만
+  // 받으므로 URL → blob 다운로드 → multipart upload.
+  async adminAddCustomEmoji({ shortcode, url, category = '', visibleInPicker = true, aliases = [], license = '' }) {
+    if (!shortcode || !url) throw new Error('shortcode and url required');
+    // Hollo 는 URL 로 바로 추가하는 확장 엔드포인트가 있음. 시도해보고 없으면 폴백.
+    if (this.software === 'hollo') {
+      try {
+        return await this.request('POST', '/api/v1/admin/custom_emojis', {
+          shortcode, image: url, category, visible_in_picker: visibleInPicker,
+        });
+      } catch (err) {
+        if (!/\b(404|405|501)\b/.test(err?.message || '')) throw err;
+      }
+    }
+    // 표준: 이미지 다운로드 → FormData 로 POST.
+    const proxyUrl = this.useProxy ? `/proxy?url=${encodeURIComponent(url)}` : url;
+    const imgRes = await fetch(proxyUrl);
+    if (!imgRes.ok) throw new Error(`이모지 이미지 다운로드 실패 (${imgRes.status})`);
+    const blob = await imgRes.blob();
+    // 확장자 추정
+    const ext = (blob.type.split('/')[1] || 'png').split(';')[0].replace('jpeg', 'jpg');
+    const file = new File([blob], `${shortcode}.${ext}`, { type: blob.type || 'image/png' });
+    const fd = new FormData();
+    fd.append('shortcode', shortcode);
+    fd.append('image', file);
+    if (category) fd.append('category', category);
+    fd.append('visible_in_picker', visibleInPicker ? 'true' : 'false');
+    return this.requestFormData('POST', '/api/v1/admin/custom_emojis', fd);
+  }
+
   async fetchThemeColor() {
     // Strategy 1: Try Mastodon v2 instance API for accent_color (Mastodon 4.3+)
     try {

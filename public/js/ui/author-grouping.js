@@ -24,13 +24,11 @@ function canGroup(card, prev) {
 }
 
 function updateOne(card) {
+  // 사용자 피드백: 같은 작성자 연속 글이 답글/댓글처럼 들여쓰기+레일로 보여 혼란.
+  // "이렇게 들어가는 거 없애줘. 댓글도 아닌데 연속으로 나왔다고 저렇게 댓글처럼 떠"
+  // → 그룹핑 클래스를 부여하지 않고 남아있으면 제거만 한다.
   if (!card || !card.classList?.contains('post-card')) return;
-  const prev = card.previousElementSibling;
-  if (prev && canGroup(card, prev)) {
-    card.classList.add('post-grouped');
-  } else {
-    card.classList.remove('post-grouped');
-  }
+  card.classList.remove('post-grouped');
 }
 
 function updateBatch(container) {

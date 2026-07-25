@@ -206,6 +206,17 @@ export class AccountStore {
             if (!account.label || account.label === oldDisplayName) {
               account.label = newDisplayName;
             }
+            // 관리자/모더레이터 여부 감지 — Mastodon 4.0+ role.permissions 비트마스크,
+            // 구버전은 profile.role === 'admin'|'moderator'.
+            const roleName = (profile.role && typeof profile.role === 'object')
+              ? (profile.role.name || '')
+              : (typeof profile.role === 'string' ? profile.role : '');
+            const rolePerms = (profile.role && typeof profile.role === 'object')
+              ? Number(profile.role.permissions || 0) : 0;
+            const isAdminByPerm = !!(rolePerms & 1);   // ADMINISTRATOR bit
+            const isModByPerm = !!(rolePerms & (1<<8)); // MANAGE_CUSTOM_EMOJIS bit
+            account.isAdmin = isAdminByPerm || /admin|owner/i.test(roleName)
+              || isModByPerm || /moderator/i.test(roleName);
             account.profile = {
               id: profile.id,
               username: profile.username,
@@ -215,12 +226,15 @@ export class AccountStore {
               followersCount: profile.followers_count,
               followingCount: profile.following_count,
               statusesCount: profile.statuses_count,
+              role: profile.role || null,
             };
           } else {
             const newDisplayName = profile.name || profile.username;
             if (!account.label || account.label === oldDisplayName) {
               account.label = newDisplayName;
             }
+            // Misskey: isAdmin / isModerator 플래그
+            account.isAdmin = !!(profile.isAdmin || profile.isModerator);
             account.profile = {
               id: profile.id,
               username: profile.username,
@@ -230,6 +244,8 @@ export class AccountStore {
               followersCount: profile.followersCount,
               followingCount: profile.followingCount,
               notesCount: profile.notesCount,
+              isAdmin: !!profile.isAdmin,
+              isModerator: !!profile.isModerator,
             };
           }
         }).catch(err => {
