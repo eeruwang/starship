@@ -639,12 +639,9 @@ export function renderPost(post) {
         <span class="action-icon">${iconReply}</span>
         ${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}
       </button>
-      <button class="post-action${post.reblogged ? ' active' : ''}" data-action="boost" title="${post.platform === 'mastodon' ? '부스트' : '리노트'}" aria-label="${post.platform === 'mastodon' ? '부스트' : '리노트'}">
+      <button class="post-action${post.reblogged ? ' active' : ''}" data-action="boost-menu" data-boost-label="${post.platform === 'mastodon' ? '부스트' : '리노트'}" title="${post.platform === 'mastodon' ? '부스트' : '리노트'} / 인용" aria-label="${post.platform === 'mastodon' ? '부스트' : '리노트'} 또는 인용" aria-haspopup="true" aria-expanded="false">
         <span class="action-icon">${iconBoost}</span>
         ${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}
-      </button>
-      <button class="post-action" data-action="quote" title="인용" aria-label="인용">
-        <span class="action-icon">${iconQuote}</span>
       </button>
       <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요" aria-label="좋아요">
         <span class="action-icon">${favIcon}</span>
@@ -799,8 +796,7 @@ export function renderNotification(notif) {
     html += `
       <div class="post-actions">
         <button class="post-action" data-action="reply" title="답글" aria-label="답글"><span class="action-icon">${iconReply}</span>${replyCount > 0 ? `<span class="action-count">${replyCount}</span>` : ''}</button>
-        <button class="post-action${notif.reblogged || displayPost.reblogged ? ' active' : ''}" data-action="boost" title="${notif.platform === 'mastodon' ? '부스트' : '리노트'}" aria-label="${notif.platform === 'mastodon' ? '부스트' : '리노트'}"><span class="action-icon">${iconBoost}</span>${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}</button>
-        <button class="post-action" data-action="quote" title="인용" aria-label="인용"><span class="action-icon">${iconQuote}</span></button>
+        <button class="post-action${notif.reblogged || displayPost.reblogged ? ' active' : ''}" data-action="boost-menu" data-boost-label="${notif.platform === 'mastodon' ? '부스트' : '리노트'}" title="${notif.platform === 'mastodon' ? '부스트' : '리노트'} / 인용" aria-label="${notif.platform === 'mastodon' ? '부스트' : '리노트'} 또는 인용" aria-haspopup="true" aria-expanded="false"><span class="action-icon">${iconBoost}</span>${boostCount > 0 ? `<span class="action-count">${boostCount}</span>` : ''}</button>
         <button class="post-action${isFaved ? ' active' : ''}" data-action="fav" title="좋아요" aria-label="좋아요"><span class="action-icon">${isFaved ? iconHeartFill : iconHeart}</span>${favCount > 0 ? `<span class="action-count">${favCount}</span>` : ''}</button>
         ${hasReactionSupport ? `<button class="post-action${hasCustomReaction ? ' active' : ''}" data-action="reaction" title="리액션" aria-label="리액션"><span class="action-icon">${iconSmile}</span></button>` : ''}
         <button class="post-action action-end" data-action="open" title="원본 열기" aria-label="원본 열기"><span class="action-icon">${iconLink}</span></button>

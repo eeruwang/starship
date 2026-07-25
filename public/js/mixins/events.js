@@ -428,6 +428,15 @@ export const EventsMixin = {
         this.handlePostAction('fav', postId, platform, accountId, btn);
       } else if (action === 'boost') {
         this.handlePostAction('boost', postId, platform, accountId, btn);
+      } else if (action === 'boost-menu') {
+        // 부스트 버튼 = 팝업으로 [부스트][인용] 선택. 이미 부스트한 상태면
+        // 팝업 없이 바로 취소.
+        const cached = this.postCache.get(`${platform}:${postId}`);
+        if (cached?.reblogged) {
+          this.handlePostAction('boost', postId, platform, accountId, btn);
+        } else {
+          this._openBoostMenu(btn, { postId, platform, accountId });
+        }
       } else if (action === 'reply') {
         this.handlePostAction('reply', postId, platform, accountId, btn);
       } else if (action === 'quote') {
@@ -466,6 +475,32 @@ export const EventsMixin = {
       open.forEach(m => {
         (m._closeCleanup || (() => m.setAttribute('hidden', '')))();
       });
+    });
+
+    // 부스트 미니 메뉴 항목 클릭 위임 (부스트 / 인용)
+    document.addEventListener('click', (e) => {
+      const item = e.target.closest('.boost-menu-item');
+      if (!item) return;
+      const menu = item.closest('.boost-menu');
+      const ctx = menu?._ctx;
+      const pick = item.dataset.pick;
+      menu?._closeCleanup?.();
+      if (!ctx) return;
+      const trigger = document.querySelector(`.post-card[data-post-id="${CSS.escape(ctx.postId)}"] [data-action="boost-menu"]`);
+      if (pick === 'boost') {
+        this.handlePostAction('boost', ctx.postId, ctx.platform, ctx.accountId, trigger);
+      } else if (pick === 'quote') {
+        this.handlePostAction('quote', ctx.postId, ctx.platform, ctx.accountId, trigger);
+      }
+    });
+    document.addEventListener('click', (e) => {
+      // 외부 클릭: 열려있는 부스트 메뉴 닫기
+      if (e.target.closest('.boost-menu') || e.target.closest('[data-action="boost-menu"]')) return;
+      document.querySelectorAll('.boost-menu:not([hidden])').forEach(m => m._closeCleanup?.());
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      document.querySelectorAll('.boost-menu:not([hidden])').forEach(m => m._closeCleanup?.());
     });
 
     // Poll vote button
@@ -1301,5 +1336,54 @@ export const EventsMixin = {
     this.lightboxImg.addEventListener('animationend', onDone);
     // Fallback if animation doesn't fire
     setTimeout(onDone, 200);
+  },
+
+  // 부스트 버튼 클릭 시 뜨는 [부스트][인용] 미니 메뉴.
+  // 모달의 transform 조상 이슈를 피하기 위해 body 로 append + position:fixed.
+  _openBoostMenu(triggerBtn, ctx) {
+    // 이미 열려있는 다른 boost-menu 는 닫기
+    document.querySelectorAll('.boost-menu:not([hidden])').forEach(m => m._closeCleanup?.());
+
+    const boostLabel = triggerBtn.dataset.boostLabel || '부스트';
+    const menu = document.createElement('div');
+    menu.className = 'boost-menu post-action-overflow';   // 오버플로 메뉴 스타일 재사용
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = `
+      <button class="boost-menu-item" data-pick="boost" role="menuitem">
+        <span class="action-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>${boostLabel}
+      </button>
+      <button class="boost-menu-item" data-pick="quote" role="menuitem">
+        <span class="action-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.75-2-2-2H4c-1.25 0-2 .75-2 2v10c0 1.25.75 2 2 2h4"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.75-2-2-2h-4c-1.25 0-2 .75-2 2v10c0 1.25.75 2 2 2h4"/></svg></span>인용
+      </button>
+    `;
+    menu._ctx = ctx;
+    document.body.appendChild(menu);
+
+    // 위치 계산 (post-action-overflow 와 동일 로직)
+    triggerBtn.setAttribute('aria-expanded', 'true');
+    const rect = triggerBtn.getBoundingClientRect();
+    const menuW = menu.offsetWidth || 160;
+    const menuH = menu.offsetHeight || 90;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let top;
+    if (rect.top >= menuH + 8 || rect.top >= vh - rect.bottom) {
+      top = Math.max(8, rect.top - menuH - 4);
+    } else {
+      top = Math.min(vh - menuH - 8, rect.bottom + 4);
+    }
+    let left = rect.left + rect.width / 2 - menuW / 2;
+    if (left < 8) left = 8;
+    if (left + menuW > vw - 8) left = vw - menuW - 8;
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+
+    const closeOnScroll = () => menu._closeCleanup?.();
+    window.addEventListener('scroll', closeOnScroll, { once: true, capture: true });
+    menu._closeCleanup = () => {
+      triggerBtn.setAttribute('aria-expanded', 'false');
+      window.removeEventListener('scroll', closeOnScroll, true);
+      menu.remove();
+    };
   },
 };

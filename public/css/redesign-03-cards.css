@@ -46,6 +46,18 @@
   display: flex; flex-direction: column; gap: 2px;
 }
 .post-action-overflow[hidden] { display: none; }
+
+/* 부스트 미니 메뉴 (부스트 버튼 클릭 시): .post-action-overflow 스타일 재사용 */
+.boost-menu { min-width: 140px; }
+.boost-menu-item {
+  display: flex; align-items: center; gap: var(--space-2);
+  width: 100%; padding: var(--space-2) var(--space-3);
+  background: none; border: none; cursor: pointer;
+  color: var(--text-primary); font: inherit; font-size: var(--text-sm);
+  border-radius: var(--radius-sm); text-align: left;
+}
+.boost-menu-item:hover { background: var(--bg-hover); }
+.boost-menu-item .action-icon { display: inline-flex; }
 .post-action-overflow button {
   display: flex; align-items: center; gap: var(--space-2);
   width: 100%; padding: var(--space-2) var(--space-3);
