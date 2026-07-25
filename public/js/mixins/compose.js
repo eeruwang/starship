@@ -154,7 +154,9 @@ export const ComposeMixin = {
     if (textWrap) textWrap.classList.remove('emoji-active');
     if (overlay) overlay.innerHTML = '';
 
-    // Setup live emoji preview on input + scroll sync
+    // Setup live emoji preview on input + scroll sync.
+    // Emoji 오버레이는 입력 중엔 캐럿 위치가 어긋나 보이므로 focus 상태에서
+    // 자동 숨김. blur 시 다시 표시.
     if (!this._composeEmojiInputHandler) {
       this._composeEmojiInputHandler = () => this._updateComposeEmojiPreview();
       this.composeText.addEventListener('input', this._composeEmojiInputHandler);
@@ -163,6 +165,14 @@ export const ComposeMixin = {
         if (ov) ov.scrollTop = this.composeText.scrollTop;
       };
       this.composeText.addEventListener('scroll', this._composeScrollSyncHandler, { passive: true });
+      // focus 시엔 raw 텍스트 그대로(캐럿 정확), blur 시엔 오버레이 재계산.
+      this.composeText.addEventListener('focus', () => {
+        const w = document.querySelector('.compose-text-wrap');
+        if (w) w.classList.remove('emoji-active');
+      });
+      this.composeText.addEventListener('blur', () => {
+        this._updateComposeEmojiPreview();
+      });
     }
 
     this.openModal(this.modalCompose);
@@ -327,7 +337,14 @@ export const ComposeMixin = {
 
     if (hasCustomEmoji) {
       overlay.innerHTML = html;
-      textWrap.classList.add('emoji-active');
+      // focus 상태에서는 오버레이를 활성화하지 않아 raw 텍스트가 그대로 보이고
+      // 캐럿 위치가 정확. blur 시엔 오버레이로 예쁘게 표시.
+      const isFocused = document.activeElement === this.composeText;
+      if (isFocused) {
+        textWrap.classList.remove('emoji-active');
+      } else {
+        textWrap.classList.add('emoji-active');
+      }
       overlay.scrollTop = this.composeText.scrollTop;
     } else {
       textWrap.classList.remove('emoji-active');

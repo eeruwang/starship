@@ -293,17 +293,18 @@ export class MisskeyClient {
       }
     }
     // 2) 파일 업로드 → fileId 로 add
-    let fetchUrl = url;
+    // /proxy 는 API 경로 화이트리스트가 있어 이모지 URL 을 403 → /cache/image 사용.
+    let originUrl = url;
     try {
       const u = new URL(url, (typeof window !== 'undefined' ? window.location.origin : 'https://x/'));
       if (u.pathname === '/cache/image' || u.pathname === '/proxy') {
         const inner = u.searchParams.get('url');
-        if (inner) fetchUrl = inner;
+        if (inner) originUrl = inner;
       }
     } catch (_) {}
-    if (this.useProxy && !/^\/(cache|proxy)/.test(fetchUrl)) {
-      fetchUrl = `/proxy?url=${encodeURIComponent(fetchUrl)}`;
-    }
+    const fetchUrl = this.useProxy
+      ? `/cache/image?url=${encodeURIComponent(originUrl)}`
+      : originUrl;
     const imgRes = await fetch(fetchUrl);
     if (!imgRes.ok) throw new Error(`이모지 이미지 다운로드 실패 (${imgRes.status})`);
     const blob = await imgRes.blob();

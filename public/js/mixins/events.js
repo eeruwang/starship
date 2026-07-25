@@ -467,7 +467,10 @@ export const EventsMixin = {
 
     // Close overflow menu on outside click / Esc
     document.addEventListener('click', (e) => {
-      if (e.target.closest('.post-action-overflow') || e.target.closest('[data-action="more"]')) return;
+      // .post-action-overflow 내부 / ⋯(more) / 부스트(boost-menu) 트리거는 예외.
+      // (boost-menu 는 스타일 재사용을 위해 .post-action-overflow 클래스를 함께 갖고
+      // 있어서 여기 outside-click 스윕에 잡힘 → 열자마자 닫히는 회귀 방지)
+      if (e.target.closest('.post-action-overflow') || e.target.closest('[data-action="more"]') || e.target.closest('[data-action="boost-menu"]')) return;
       document.querySelectorAll('.post-action-overflow:not([hidden])').forEach(m => {
         (m._closeCleanup || (() => m.setAttribute('hidden', '')))();
       });

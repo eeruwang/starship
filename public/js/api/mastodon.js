@@ -282,18 +282,19 @@ export class MastodonClient {
       }
     }
     // 표준: 이미지 다운로드 → FormData 로 POST.
-    // 이미 앱 프록시(/cache/image, /proxy) 로 감싸진 URL 이면 원본을 뽑아냄.
-    let fetchUrl = url;
+    // /proxy 는 API 경로 화이트리스트가 있어 이모지 URL(/emoji/*, /system/...)
+    // 을 403 처리한다. 대신 /cache/image 를 사용 (이미지 전용, 화이트리스트 없음).
+    let originUrl = url;
     try {
       const u = new URL(url, (typeof window !== 'undefined' ? window.location.origin : 'https://x/'));
       if (u.pathname === '/cache/image' || u.pathname === '/proxy') {
         const inner = u.searchParams.get('url');
-        if (inner) fetchUrl = inner;
+        if (inner) originUrl = inner;
       }
     } catch (_) {}
-    if (this.useProxy && !/^\/(cache|proxy)/.test(fetchUrl)) {
-      fetchUrl = `/proxy?url=${encodeURIComponent(fetchUrl)}`;
-    }
+    const fetchUrl = this.useProxy
+      ? `/cache/image?url=${encodeURIComponent(originUrl)}`
+      : originUrl;
     const imgRes = await fetch(fetchUrl);
     if (!imgRes.ok) throw new Error(`이모지 이미지 다운로드 실패 (${imgRes.status})`);
     const blob = await imgRes.blob();
