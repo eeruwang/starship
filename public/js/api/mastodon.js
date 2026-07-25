@@ -282,8 +282,19 @@ export class MastodonClient {
       }
     }
     // 표준: 이미지 다운로드 → FormData 로 POST.
-    const proxyUrl = this.useProxy ? `/proxy?url=${encodeURIComponent(url)}` : url;
-    const imgRes = await fetch(proxyUrl);
+    // 이미 앱 프록시(/cache/image, /proxy) 로 감싸진 URL 이면 원본을 뽑아냄.
+    let fetchUrl = url;
+    try {
+      const u = new URL(url, (typeof window !== 'undefined' ? window.location.origin : 'https://x/'));
+      if (u.pathname === '/cache/image' || u.pathname === '/proxy') {
+        const inner = u.searchParams.get('url');
+        if (inner) fetchUrl = inner;
+      }
+    } catch (_) {}
+    if (this.useProxy && !/^\/(cache|proxy)/.test(fetchUrl)) {
+      fetchUrl = `/proxy?url=${encodeURIComponent(fetchUrl)}`;
+    }
+    const imgRes = await fetch(fetchUrl);
     if (!imgRes.ok) throw new Error(`이모지 이미지 다운로드 실패 (${imgRes.status})`);
     const blob = await imgRes.blob();
     // 확장자 추정

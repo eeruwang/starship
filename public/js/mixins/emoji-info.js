@@ -7,6 +7,26 @@
  */
 import { escapeHtml } from '../ui/utils.js';
 
+// 앱 프록시 wrap 해제. cachedImageUrl 이 만든 `/cache/image?url=X` → X.
+// 이미 절대 URL 이면 그대로. 상대경로면 window.location.origin 기준 절대화.
+function _unwrapCacheUrl(src) {
+  if (!src) return '';
+  try {
+    const u = new URL(src, window.location.origin);
+    if (u.pathname === '/cache/image') {
+      const inner = u.searchParams.get('url');
+      if (inner) return inner;
+    }
+    if (u.pathname === '/proxy') {
+      const inner = u.searchParams.get('url');
+      if (inner) return inner;
+    }
+    return u.toString();
+  } catch (_) {
+    return src;
+  }
+}
+
 // 이모지 이미지에 붙는 클래스들. picker/compose/toolbar 안의 것은 제외.
 const EMOJI_SELECTOR = [
   '.post-content img.custom-emoji',
@@ -58,18 +78,21 @@ export const EmojiInfoMixin = {
   },
 
   openEmojiInfoModal(img) {
-    // 이모지 정보 추출
-    const src = img.src || '';
+    // 이모지 정보 추출.
+    // img.src 는 대개 /cache/image?url=ENCODED_ORIGIN 형태(앱 프록시)라, 서버에
+    // 다시 가져올 때는 원본 URL 로 되돌려야 한다.
+    const rawSrc = img.src || '';
+    const originUrl = _unwrapCacheUrl(rawSrc);
     const alt = (img.alt || '').replace(/^:|:$/g, '');
     const title = (img.title || '').replace(/^:|:$/g, '');
     const shortcode = (alt || title || 'emoji').split('@')[0];  // remote form :name@host: → name
 
-    // 원본 인스턴스 추정 (이미지 URL 의 호스트 = 원본 인스턴스)
+    // 원본 인스턴스 호스트 (원본 URL 기준)
     let sourceHost = '';
-    try { sourceHost = new URL(src).host; } catch (_) {}
+    try { sourceHost = new URL(originUrl).host; } catch (_) {}
 
     // 모달 채우기
-    document.getElementById('emoji-info-img').src = src;
+    document.getElementById('emoji-info-img').src = rawSrc;
     document.getElementById('emoji-info-img').alt = shortcode;
     document.getElementById('emoji-info-shortcode').textContent = `:${shortcode}:`;
     document.getElementById('emoji-info-source').textContent = sourceHost ? `출처: ${sourceHost}` : '';
@@ -91,8 +114,8 @@ export const EmojiInfoMixin = {
         ).join('');
         const scInput = document.getElementById('emoji-import-shortcode');
         if (scInput) scInput.value = shortcode;
-        // 원본 URL 을 hidden state 로 기억
-        importBtn.dataset.emojiUrl = src;
+        // 원본 URL 을 hidden state 로 기억 (프록시 wrap 이 아닌 원본)
+        importBtn.dataset.emojiUrl = originUrl;
         importBtn.dataset.emojiShortcode = shortcode;
         importBtn.dataset.emojiSourceHost = sourceHost;
         // 카테고리 목록 로드
