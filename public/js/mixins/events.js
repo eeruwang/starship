@@ -477,6 +477,35 @@ export const EventsMixin = {
       });
     });
 
+    // 포스트 본문의 멘션 / 해시태그 링크 클릭 가로채기.
+    // 원본 인스턴스로 이동하는 대신 프로필 모달 / 태그 모달 을 앱 안에서 연다.
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('.post-content a, .quote-post-content a, .notif-post-content a, .thread-content .post-content a');
+      if (!a || !a.href) return;
+      // 명시적으로 mention/hashtag class 가 있거나 href 패턴이 매치할 때만.
+      const cls = a.className || '';
+      const isMention = /\bmention\b/.test(cls) || /\/@[^/@]+(@[^/]+)?(?:$|\?|#)/.test(a.href);
+      const isHashtag = /\bhashtag\b/.test(cls) || /\brel=["']?tag/.test(a.outerHTML || '') || /\/tags?\/[^/?#]+(?:$|\?|#)/.test(a.href);
+      if (!isMention && !isHashtag) return;
+
+      const card = a.closest('.post-card, .notif-card');
+      const platform = card?.dataset.platform;
+      const accountId = card?.dataset.accountId;
+      if (!platform || !accountId) return;
+
+      if (isMention && !isHashtag) {   // mention 우선
+        e.preventDefault();
+        e.stopPropagation();
+        this._openProfileByMentionLink(a, platform, accountId, card);
+        return;
+      }
+      if (isHashtag) {
+        e.preventDefault();
+        e.stopPropagation();
+        this._openTagModal(a, platform, accountId);
+      }
+    }, true);   // capture: card-click / open-thread 위임 전에 실행
+
     // 부스트 미니 메뉴 항목 클릭 위임 (부스트 / 인용)
     document.addEventListener('click', (e) => {
       const item = e.target.closest('.boost-menu-item');
@@ -1336,6 +1365,141 @@ export const EventsMixin = {
     this.lightboxImg.addEventListener('animationend', onDone);
     // Fallback if animation doesn't fire
     setTimeout(onDone, 200);
+  },
+
+  // 멘션 링크(a.mention) 클릭 → 프로필 모달.
+  // 앵커 텍스트 또는 href 에서 @user 또는 @user@host 를 뽑아 API 로 resolve.
+  async _openProfileByMentionLink(anchor, platform, accountId, card) {
+    let acct = '';
+    // 우선순위 1) 앵커 텍스트에서 @user 뽑기
+    const text = (anchor.textContent || '').trim();
+    const m = text.match(/@([\w.-]+)(?:@([\w.-]+))?/);
+    if (m) {
+      acct = m[2] ? `${m[1]}@${m[2]}` : m[1];
+    }
+    // 2) href 에서 뽑기 (Mastodon: /@user@host, Misskey: /@user@host)
+    if (!acct) {
+      try {
+        const u = new URL(anchor.href);
+        const pm = u.pathname.match(/^\/@([\w.-]+)(?:@([\w.-]+))?/);
+        if (pm) acct = pm[2] ? `${pm[1]}@${pm[2]}` : pm[1];
+        if (acct && !acct.includes('@')) {
+          // 로컬 유저면 앵커 href 의 host 를 붙임
+          acct = `${acct}@${u.host}`;
+        }
+      } catch (_) {}
+    }
+    if (!acct) return;
+
+    const client = this.store.getClient(accountId);
+    if (!client) return;
+    // resolve via API
+    let user = null;
+    try {
+      if (platform === 'mastodon') {
+        const results = await client.searchAccounts(acct, 1, { resolve: true });
+        if (results && results.length) user = client.normalizeUser(results[0]);
+      } else {
+        // Misskey: users/show 로 조회. acct → { username, host } 분해.
+        const [username, host] = acct.split('@');
+        const params = host ? { username, host } : { username };
+        try {
+          const raw = await client.request('users/show', params);
+          if (raw) user = client.normalizeUser(raw);
+        } catch (_) {
+          // 다른 계정으로 폴백 시도
+          for (const acc of this.store.getAll()) {
+            if (acc.id === accountId) continue;
+            const c = this.store.getClient(acc.id);
+            if (!c || acc.platform !== 'misskey') continue;
+            try {
+              const raw = await c.request('users/show', params);
+              if (raw) { user = c.normalizeUser(raw); accountId = acc.id; break; }
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('mention resolve failed', e);
+    }
+    if (!user) {
+      this.showToast?.(`${acct} 프로필을 불러올 수 없습니다`, 'error');
+      return;
+    }
+    this.openProfileModal(user, platform, accountId);
+  },
+
+  // 해시태그 링크 클릭 → 해당 태그 타임라인 모달.
+  async _openTagModal(anchor, platform, accountId) {
+    // 태그 이름 뽑기: 앵커 텍스트에서 #tag, 없으면 href 마지막 세그먼트
+    let tag = '';
+    const text = (anchor.textContent || '').trim();
+    const m = text.match(/#(\S+)/);
+    if (m) tag = m[1];
+    if (!tag) {
+      try {
+        const u = new URL(anchor.href);
+        const seg = u.pathname.split('/').filter(Boolean).pop();
+        if (seg) tag = decodeURIComponent(seg);
+      } catch (_) {}
+    }
+    if (!tag) return;
+
+    const client = this.store.getClient(accountId);
+    if (!client) return;
+
+    // 기존 thread 모달을 재사용해 태그 결과를 표시.
+    const modal = document.getElementById('modal-thread');
+    const titleEl = modal?.querySelector('.thread-header h2');
+    const content = document.getElementById('thread-content');
+    if (!modal || !content) return;
+    if (titleEl) {
+      titleEl.textContent = `#${tag}`;
+      titleEl.dataset.tagMode = '1';
+    }
+    // 핀 버튼 숨김 (태그는 컬럼 핀 미지원)
+    const pinBtn = document.getElementById('btn-pin-thread');
+    if (pinBtn) pinBtn.style.display = 'none';
+    content.innerHTML = '<div class="thread-loading">불러오는 중...</div>';
+    this.openModal(modal);
+
+    try {
+      const { renderPost } = await import('../ui/dashboard.js');
+      let posts = [];
+      if (platform === 'mastodon') {
+        const raw = await client.getHashtagTimeline(tag, 30);
+        posts = (raw || []).map(s => client.normalizePost(s));
+      } else {
+        const raw = await client.searchByTag(tag, 30);
+        posts = (raw || []).map(n => client.normalizePost(n));
+      }
+      // 계정 메타 부착
+      const account = this.store.getById(accountId);
+      if (account) {
+        for (const p of posts) {
+          p.accountId = account.id;
+          p.accountPlatform = account.platform;
+          p.accountSoftware = account.software || account.platform;
+          if (account.instanceUrl) {
+            try { p.accountInstanceHost = new URL(account.instanceUrl).host; } catch (_) {}
+          }
+          p.themeColor = this._accountColor(account);
+        }
+      }
+      this.cachePosts(posts);
+      content.innerHTML = '';
+      if (!posts.length) {
+        content.innerHTML = '<div class="thread-loading">이 태그의 글이 없습니다.</div>';
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      for (const p of posts) frag.appendChild(renderPost(p));
+      content.appendChild(frag);
+      this.enrichLinkCards?.(content);
+    } catch (err) {
+      console.error('tag timeline fetch failed', err);
+      content.innerHTML = '<div class="thread-loading">태그를 불러올 수 없습니다.</div>';
+    }
   },
 
   // 부스트 버튼 클릭 시 뜨는 [부스트][인용] 미니 메뉴.

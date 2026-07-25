@@ -897,13 +897,20 @@ export class MisskeyClient {
     // MFM <center> and <small>
     html = html.replace(/&lt;center&gt;([\s\S]*?)&lt;\/center&gt;/g, '<div class="mfm-center">$1</div>');
     html = html.replace(/&lt;small&gt;([\s\S]*?)&lt;\/small&gt;/g, '<small>$1</small>');
-    // Mentions (safe - URLs are placeholders now)
+    // Mentions \u2014 anchor \ub85c \ub80c\ub354\ud574 events.js \uc758 \uc704\uc784 \ud578\ub4e4\ub7ec\uac00 \ud504\ub85c\ud544 \ubaa8\ub2ec\uc744 \uc5f0\ub2e4.
+    // sanitizeHtml \uc774 data-* \ub97c \uc81c\uac70\ud558\ubbc0\ub85c href \uc5d0 acct \uc778\ucf54\ub529. \uc2e4\uc81c \uc774\ub3d9\uc740 preventDefault \ub428.
     html = html.replace(/@([\w.-]+)(?:@([\w.-]+))?/g, (match, user, host) => {
-      return `<span class="mention">@${user}${host ? '@' + host : ''}</span>`;
+      const acct = host ? `${user}@${host}` : user;
+      const label = `@${user}${host ? '@' + host : ''}`;
+      const href = `${this.instanceUrl}/@${acct}`;
+      return `<a class="mention" href="${escapeHtml(href)}" rel="nofollow noopener noreferrer">${escapeHtml(label)}</a>`;
     });
-    // Hashtags
+    // Hashtags \u2014 \ub3d9\uc77c \uc774\uc720\ub85c anchor \ub85c.
     html = html.replace(/#([\w\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\u4e00-\u9faf\uac00-\ud7af]+)/g,
-      '<span class="hashtag">#$1</span>');
+      (match, tag) => {
+        const href = `${this.instanceUrl}/tags/${encodeURIComponent(tag)}`;
+        return `<a class="hashtag" href="${escapeHtml(href)}" rel="tag nofollow noopener noreferrer">#${escapeHtml(tag)}</a>`;
+      });
     // Custom emojis :name: or :name@host:
     html = html.replace(/:([a-zA-Z0-9_\-]+(?:@[\w.\-]+)?):/g, (match, name) => {
       const url = emojis[name] || emojis[name + '@.'] || null;

@@ -37,6 +37,11 @@ export const ThreadViewMixin = {
 
     const modal = document.getElementById('modal-thread');
     const content = document.getElementById('thread-content');
+    // 태그 모달이 재사용한 h2/pin 버튼 되돌리기
+    const titleEl = modal?.querySelector('.thread-header h2');
+    if (titleEl) { titleEl.textContent = '대화 스레드'; delete titleEl.dataset.tagMode; }
+    const pinBtn = document.getElementById('btn-pin-thread');
+    if (pinBtn) pinBtn.style.display = '';
     content.innerHTML = '<div class="thread-loading"><div class="spinner"></div></div>';
     this.openModal(modal);
 
