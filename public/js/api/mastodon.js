@@ -156,15 +156,24 @@ export class MastodonClient {
 
   /**
    * Emoji reaction support for Mastodon-compatible forks.
-   * - Fedibird/glitch-soc/Hollo: /api/v1/statuses/:id/emoji_reactions/:emoji
-   * - Pleroma/Akkoma: /api/v1/pleroma/statuses/:id/reactions/:emoji
+   * - Fedibird/glitch-soc/Hollo:  PUT  /api/v1/statuses/:id/emoji_reactions/:emoji
+   * - Hollo(native)  fallback:    POST /api/v1/statuses/:id/react/:emoji
+   * - Pleroma/Akkoma:             PUT  /api/v1/pleroma/statuses/:id/reactions/:emoji
    */
   async createReaction(id, reaction = '❤') {
     const emoji = encodeURIComponent(reaction.replace(/^:|:$/g, ''));
     if (this.software === 'akkoma' || this.software === 'pleroma') {
       return this.request('PUT', `/api/v1/pleroma/statuses/${encodeURIComponent(id)}/reactions/${emoji}`);
     }
-    return this.request('PUT', `/api/v1/statuses/${encodeURIComponent(id)}/emoji_reactions/${emoji}`);
+    try {
+      return await this.request('PUT', `/api/v1/statuses/${encodeURIComponent(id)}/emoji_reactions/${emoji}`);
+    } catch (err) {
+      // Hollo: 구버전 / 미구현 시 네이티브 react 엔드포인트로 폴백
+      if (this.software === 'hollo' && /\b(404|405|501)\b/.test(err?.message || '')) {
+        return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/react/${emoji}`);
+      }
+      throw err;
+    }
   }
 
   async deleteReaction(id, reaction) {
@@ -173,7 +182,15 @@ export class MastodonClient {
     if (this.software === 'akkoma' || this.software === 'pleroma') {
       return this.request('DELETE', `/api/v1/pleroma/statuses/${encodeURIComponent(id)}/reactions/${emoji}`);
     }
-    return this.request('DELETE', `/api/v1/statuses/${encodeURIComponent(id)}/emoji_reactions/${emoji}`);
+    try {
+      return await this.request('DELETE', `/api/v1/statuses/${encodeURIComponent(id)}/emoji_reactions/${emoji}`);
+    } catch (err) {
+      if (this.software === 'hollo' && /\b(404|405|501)\b/.test(err?.message || '')) {
+        // Hollo 네이티브: POST /unreact/:emoji
+        return this.request('POST', `/api/v1/statuses/${encodeURIComponent(id)}/unreact/${emoji}`);
+      }
+      throw err;
+    }
   }
 
   async getReactions(id, type = null) {
