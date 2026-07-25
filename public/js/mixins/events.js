@@ -356,19 +356,26 @@ export const EventsMixin = {
       // Overflow menu toggle (no per-action handling)
       if (action === 'more') {
         const actions = btn.closest('.post-actions');
-        const menu = actions?.querySelector('.post-action-overflow');
+        const menu = actions?.querySelector('.post-action-overflow')
+          || document.querySelector(`.post-action-overflow[data-owner="${CSS.escape(postId)}"]`);
         if (!menu) return;
         const willOpen = menu.hasAttribute('hidden');
         // Close any other open overflow menus first
         document.querySelectorAll('.post-action-overflow:not([hidden])').forEach(m => {
           m.setAttribute('hidden', '');
-          const trig = m.parentElement?.querySelector('[data-action="more"]');
-          if (trig) trig.setAttribute('aria-expanded', 'false');
+          m._closeCleanup?.();
         });
         if (willOpen) {
+          // 모달 등 transform 을 가진 조상이 있으면 position:fixed 가 뷰포트가 아닌
+          // 조상 기준으로 잡혀 좌표가 어긋난다. body 로 옮겨 회피.
+          if (menu.parentElement !== document.body) {
+            menu._originalParent = menu.parentElement;
+            menu.dataset.owner = postId;
+            document.body.appendChild(menu);
+          }
           menu.removeAttribute('hidden');
           btn.setAttribute('aria-expanded', 'true');
-          // position:fixed 좌표 계산. 위/아래 중 공간 큰 쪽을 선택.
+          // 좌표 계산 — 위/아래 공간 큰 쪽 선택.
           const rect = btn.getBoundingClientRect();
           const menuW = menu.offsetWidth || 168;
           const menuH = menu.offsetHeight || 140;
@@ -376,26 +383,32 @@ export const EventsMixin = {
           const vh = window.innerHeight;
           const spaceBelow = vh - rect.bottom;
           const spaceAbove = rect.top;
-          // 기본: 위로 띄움 (액션 행이 보통 카드 하단). 위 공간이 부족하면 아래로.
           let top;
           if (spaceAbove >= menuH + 8 || spaceAbove >= spaceBelow) {
             top = Math.max(8, rect.top - menuH - 4);
           } else {
             top = Math.min(vh - menuH - 8, rect.bottom + 4);
           }
-          // 가로: 오른쪽 정렬을 기본으로 하되 화면 안에 맞춤
           let left = rect.right - menuW;
           if (left < 8) left = 8;
           if (left + menuW > vw - 8) left = vw - menuW - 8;
           menu.style.left = `${left}px`;
           menu.style.top = `${top}px`;
-          // 스크롤 시 좌표가 어긋나므로 첫 스크롤 이벤트에서 메뉴 닫기.
-          const closeOnScroll = () => {
-            if (menu.hasAttribute('hidden')) return;
+          // 스크롤 시 좌표가 어긋나므로 첫 스크롤 이벤트에서 닫기.
+          const closeOnScroll = () => menu._closeCleanup?.();
+          window.addEventListener('scroll', closeOnScroll, { once: true, capture: true });
+          menu._closeCleanup = () => {
             menu.setAttribute('hidden', '');
             btn.setAttribute('aria-expanded', 'false');
+            window.removeEventListener('scroll', closeOnScroll, true);
+            // body 로 옮겼던 걸 원 위치로 복귀 (다음 render 시 새 카드가 새 메뉴를
+            // 만들 때 orphan 이 되지 않도록)
+            if (menu._originalParent && menu._originalParent.isConnected) {
+              menu._originalParent.appendChild(menu);
+              menu._originalParent = null;
+            }
+            menu._closeCleanup = null;
           };
-          window.addEventListener('scroll', closeOnScroll, { once: true, capture: true });
         }
         return;
       }
@@ -404,9 +417,7 @@ export const EventsMixin = {
       if (overflowBtn) {
         const menu = overflowBtn.closest('.post-action-overflow');
         if (menu) {
-          menu.setAttribute('hidden', '');
-          const trig = menu.parentElement?.querySelector('[data-action="more"]');
-          if (trig) trig.setAttribute('aria-expanded', 'false');
+          (menu._closeCleanup || (() => menu.setAttribute('hidden', '')))();
         }
       }
 
@@ -445,9 +456,7 @@ export const EventsMixin = {
     document.addEventListener('click', (e) => {
       if (e.target.closest('.post-action-overflow') || e.target.closest('[data-action="more"]')) return;
       document.querySelectorAll('.post-action-overflow:not([hidden])').forEach(m => {
-        m.setAttribute('hidden', '');
-        const trig = m.parentElement?.querySelector('[data-action="more"]');
-        if (trig) trig.setAttribute('aria-expanded', 'false');
+        (m._closeCleanup || (() => m.setAttribute('hidden', '')))();
       });
     });
     document.addEventListener('keydown', (e) => {
@@ -455,9 +464,7 @@ export const EventsMixin = {
       const open = document.querySelectorAll('.post-action-overflow:not([hidden])');
       if (!open.length) return;
       open.forEach(m => {
-        m.setAttribute('hidden', '');
-        const trig = m.parentElement?.querySelector('[data-action="more"]');
-        if (trig) trig.setAttribute('aria-expanded', 'false');
+        (m._closeCleanup || (() => m.setAttribute('hidden', '')))();
       });
     });
 
