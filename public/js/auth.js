@@ -19,7 +19,10 @@ function buildFetchUrl(targetUrl) {
 
 // ===== Mastodon OAuth 2.0 =====
 
-const MASTODON_SCOPES = 'read write follow push';
+// admin:read:custom_emojis / admin:write:custom_emojis 는 어드민 이모지 가져오기
+// 기능에 필요 (Mastodon 4.x+). 서버가 어드민 스코프를 지원하지 않아도 앱 등록에는
+// 실패하지 않으며, 어드민 아닌 사용자에겐 조회/추가 API 가 여전히 403/404 로 막힘.
+const MASTODON_SCOPES = 'read write follow push admin:read:custom_emojis admin:write:custom_emojis';
 
 export async function startMastodonOAuth(instanceUrl, popup) {
   instanceUrl = instanceUrl.replace(/\/+$/, '');

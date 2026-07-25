@@ -1113,23 +1113,67 @@ export const PostActionsMixin = {
       this.composeCw.value = quotedPost.contentWarning;
     }
 
-    // Show quote preview using the existing reply-context container
+    // Show quote preview as a card (author + time + content + media + X to remove).
     const ctx = document.getElementById('compose-reply-context');
     if (ctx && quotedPost) {
       const author = quotedPost.author || {};
       const authorName = author.displayNameHtml || this.escapeHtml(author.displayName || '');
+      const authorAcct = author.acct || author.username || '';
       const avatarHtml = author.avatarUrl
-        ? `<img class="compose-reply-context-avatar" src="${this.escapeHtml(author.avatarUrl)}" alt="" width="20" height="20" referrerpolicy="no-referrer" data-fb="hide">`
+        ? `<img class="compose-quote-avatar" src="${this.escapeHtml(author.avatarUrl)}" alt="" width="28" height="28" referrerpolicy="no-referrer" data-fb="hide">`
+        : '<span class="compose-quote-avatar-placeholder"></span>';
+      // 시간 표시 (있으면)
+      let timeHtml = '';
+      try {
+        if (quotedPost.createdAt) {
+          const d = new Date(quotedPost.createdAt);
+          const diffMs = Date.now() - d.getTime();
+          const diffMin = Math.floor(diffMs / 60000);
+          const diffH = Math.floor(diffMin / 60);
+          const diffD = Math.floor(diffH / 24);
+          let rel;
+          if (diffMin < 1) rel = '방금';
+          else if (diffMin < 60) rel = `${diffMin}분 전`;
+          else if (diffH < 24) rel = `${diffH}시간 전`;
+          else if (diffD < 30) rel = `${diffD}일 전`;
+          else rel = d.toLocaleDateString();
+          timeHtml = `<span class="compose-quote-time">${this.escapeHtml(rel)}</span>`;
+        }
+      } catch (_) {}
+      // 미디어 썸네일 (첫 장만)
+      const media = Array.isArray(quotedPost.media) ? quotedPost.media : [];
+      const firstImg = media.find(m => m.type === 'image' || m.type === 'gifv');
+      const mediaHtml = firstImg
+        ? `<div class="compose-quote-media"><img src="${this.escapeHtml(firstImg.previewUrl || firstImg.url)}" alt="" referrerpolicy="no-referrer" data-fb="hide"></div>`
         : '';
+      ctx.classList.add('compose-quote-card');
       ctx.innerHTML = `
-        <div class="compose-reply-context-header">
+        <button type="button" class="compose-quote-remove" title="인용 취소" aria-label="인용 취소">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="compose-quote-header">
           ${avatarHtml}
-          <span class="compose-reply-context-name">${authorName}</span>
-          <span class="compose-reply-context-label">의 글을 인용</span>
+          <div class="compose-quote-author">
+            <span class="compose-quote-name">${authorName}</span>
+            ${authorAcct ? `<span class="compose-quote-handle">@${this.escapeHtml(authorAcct)}</span>` : ''}
+          </div>
+          ${timeHtml}
         </div>
-        <div class="compose-reply-context-body">${quotedPost.content || ''}</div>
+        <div class="compose-quote-body">${quotedPost.content || ''}</div>
+        ${mediaHtml}
       `;
       ctx.style.display = '';
+      // 인용 취소 버튼: dataset 지우고 미리보기 숨김
+      ctx.querySelector('.compose-quote-remove')?.addEventListener('click', () => {
+        delete this.composeText.dataset.quoteId;
+        delete this.composeText.dataset.quotePlatform;
+        delete this.composeText.dataset.quoteUrl;
+        delete this.composeText.dataset.quoteAccountId;
+        ctx.classList.remove('compose-quote-card');
+        ctx.style.display = 'none';
+        ctx.innerHTML = '';
+        this.composeTitle.textContent = '새 글 작성';
+      });
     }
   },
 

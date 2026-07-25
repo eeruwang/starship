@@ -806,3 +806,71 @@
   background: rgba(230, 126, 34, 0.12);
 }
 
+
+/* ===== Compose Quote Card ===== */
+.compose-reply-context.compose-quote-card {
+  position: relative;
+  padding: 0.7rem 0.85rem 0.65rem;
+  border-radius: var(--radius-md, var(--radius));
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  max-height: none;
+  overflow: hidden;
+}
+.compose-quote-remove {
+  position: absolute; top: 8px; right: 8px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--bg-hover); color: var(--text-muted);
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.compose-quote-remove:hover {
+  background: var(--accent-danger); color: #fff;
+}
+.compose-quote-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding-right: 32px;   /* X 버튼 공간 */
+  margin-bottom: 0.4rem;
+}
+.compose-quote-avatar {
+  width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+  flex-shrink: 0;
+}
+.compose-quote-avatar-placeholder {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--bg-hover); flex-shrink: 0;
+}
+.compose-quote-author {
+  flex: 1; min-width: 0;
+  display: flex; align-items: baseline; gap: 0.35rem;
+  font-size: 0.85rem;
+}
+.compose-quote-name {
+  font-weight: 700; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.compose-quote-handle {
+  color: var(--text-muted); font-size: 0.75rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.compose-quote-time {
+  color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0;
+}
+.compose-quote-body {
+  font-size: 0.85rem; color: var(--text-secondary);
+  line-height: 1.5;
+  max-height: 4.5em;
+  overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+.compose-quote-body > *:first-child { margin-top: 0; }
+.compose-quote-body > *:last-child { margin-bottom: 0; }
+.compose-quote-body .inline-emoji { height: 1.1em; vertical-align: -0.2em; }
+.compose-quote-media {
+  margin-top: 0.4rem; border-radius: 8px; overflow: hidden;
+  max-height: 180px;
+}
+.compose-quote-media img {
+  width: 100%; height: auto; max-height: 180px; object-fit: cover;
+  display: block;
+}

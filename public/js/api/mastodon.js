@@ -335,6 +335,11 @@ export class MastodonClient {
     } catch (err) {
       const msg = err?.message || String(err);
       errors.push(`admin/custom_emojis(multipart): ${msg}`);
+      // 404 는 관리자 권한/스코프 없음 (Mastodon 은 admin 엔드포인트를 non-admin 에게
+      // 404 로 감춤). 재인증 안내.
+      if (/\b404\b/.test(msg)) {
+        throw new Error('관리자 권한이 필요합니다. 이 계정을 삭제하고 다시 로그인해 admin:write:custom_emojis 스코프를 승인해주세요. (또는 서버에서 계정에 이모지 관리 권한이 부여되지 않았을 수 있습니다.)');
+      }
       throw new Error(`이 서버는 이모지 추가 API 를 지원하지 않는 것 같습니다.\n${errors.join('\n')}`);
     }
   }
