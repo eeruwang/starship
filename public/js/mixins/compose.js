@@ -844,19 +844,21 @@ export const ComposeMixin = {
         // Create post and optimistically inject into timeline
         let rawPost;
         if (account.platform === 'mastodon') {
-          // Native quote 지원하는 소프트웨어는 quote_id 만 보내고 URL append 스킵
-          // (본문에 URL 이 있으면 quote + link card 가 이중으로 표시됨).
-          //  - Mastodon 4.4+ (native quote)
-          //  - Hollo / Fedibird / glitch-soc / Akkoma / Pleroma (fork native)
-          //  - GoToSocial 등 vanilla 는 URL append 로 폴백 (링크카드가 인용 대체)
+          // Native quote 지원 = quoted_status_id 파라미터를 서버가 실제로 처리하는 경우.
+          // 이 경우 본문 URL append 를 스킵 (네이티브 카드 + 링크카드 중복 방지).
+          //   Mastodon 4.5+          : 공식 quote 생성 API (quoted_status_id)
+          //     ※ 4.4 는 표시만 가능하고 생성 불가 → URL append 폴백
+          //   Hollo/Fedibird/glitch-soc/Akkoma/Pleroma : fork 관행 (quote_id)
+          //   GoToSocial 등 vanilla 는 URL append (링크카드가 인용을 대체)
           const NATIVE_QUOTE_SW = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
           const sw = account.software || '';
           const versionMatch = /^(\d+)\.(\d+)/.exec(account.serverVersion || '');
           const mastodonMajor = versionMatch ? Number(versionMatch[1]) : 0;
           const mastodonMinor = versionMatch ? Number(versionMatch[2]) : 0;
-          const isMastodon44Plus = sw === 'mastodon'
-            && (mastodonMajor > 4 || (mastodonMajor === 4 && mastodonMinor >= 4));
-          const supportsNativeQuote = NATIVE_QUOTE_SW.has(sw) || isMastodon44Plus;
+          // 4.5+ 만 생성 가능 (4.4 는 표시 전용).
+          const isMastodon45Plus = sw === 'mastodon'
+            && (mastodonMajor > 4 || (mastodonMajor === 4 && mastodonMinor >= 5));
+          const supportsNativeQuote = NATIVE_QUOTE_SW.has(sw) || isMastodon45Plus;
 
           let statusText = text;
           if (quoteUrl && !supportsNativeQuote && !text.includes(quoteUrl)) {

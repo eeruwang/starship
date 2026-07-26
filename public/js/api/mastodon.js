@@ -457,7 +457,14 @@ export class MastodonClient {
     if (options.visibility) body.visibility = options.visibility;
     if (options.mediaIds && options.mediaIds.length > 0) body.media_ids = options.mediaIds;
     if (options.inReplyToId) body.in_reply_to_id = options.inReplyToId;
-    if (options.quoteId) body.quote_id = options.quoteId;
+    if (options.quoteId) {
+      // 파라미터 이름이 서버별로 다름 → 둘 다 보내면 각 서버가 아는 것만 인식.
+      //   Mastodon 4.5+                     : quoted_status_id  (공식)
+      //   Fedibird / Hollo / Akkoma /
+      //     Pleroma / glitch-soc            : quote_id          (fork 관행)
+      body.quote_id = options.quoteId;
+      body.quoted_status_id = options.quoteId;
+    }
     return this.request('POST', '/api/v1/statuses', body);
   }
 
