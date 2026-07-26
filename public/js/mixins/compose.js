@@ -844,14 +844,22 @@ export const ComposeMixin = {
         // Create post and optimistically inject into timeline
         let rawPost;
         if (account.platform === 'mastodon') {
-          // Always include the URL in body text when quoting. Vanilla Mastodon
-          // and GoToSocial render it as a link card (the de-facto quote
-          // pattern), and forks that natively support quote_id (Hollo,
-          // Fedibird, glitch-soc, Akkoma, Pleroma) additionally get the
-          // relationship — our renderer suppresses the duplicate link card and
-          // the trailing URL <a> on display, so visually there's no clutter.
+          // Native quote 지원하는 소프트웨어는 quote_id 만 보내고 URL append 스킵
+          // (본문에 URL 이 있으면 quote + link card 가 이중으로 표시됨).
+          //  - Mastodon 4.4+ (native quote)
+          //  - Hollo / Fedibird / glitch-soc / Akkoma / Pleroma (fork native)
+          //  - GoToSocial 등 vanilla 는 URL append 로 폴백 (링크카드가 인용 대체)
+          const NATIVE_QUOTE_SW = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+          const sw = account.software || '';
+          const versionMatch = /^(\d+)\.(\d+)/.exec(account.serverVersion || '');
+          const mastodonMajor = versionMatch ? Number(versionMatch[1]) : 0;
+          const mastodonMinor = versionMatch ? Number(versionMatch[2]) : 0;
+          const isMastodon44Plus = sw === 'mastodon'
+            && (mastodonMajor > 4 || (mastodonMajor === 4 && mastodonMinor >= 4));
+          const supportsNativeQuote = NATIVE_QUOTE_SW.has(sw) || isMastodon44Plus;
+
           let statusText = text;
-          if (quoteUrl && !text.includes(quoteUrl)) {
+          if (quoteUrl && !supportsNativeQuote && !text.includes(quoteUrl)) {
             statusText = text + '\n\n' + quoteUrl;
           }
           const mastodonVisibility = ({ public: 'public', home: 'unlisted', followers: 'private', direct: 'direct' })[visibility] || 'public';

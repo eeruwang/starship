@@ -344,6 +344,20 @@ export class MastodonClient {
     }
   }
 
+  // 서버 버전 문자열 조회 (예: "4.4.0"). 실패 시 null.
+  // Mastodon 4.4+ 네이티브 quote 지원 판별용.
+  async getServerVersion() {
+    try {
+      const inst = await this.request('GET', '/api/v2/instance');
+      if (inst?.version) return String(inst.version);
+    } catch (_) {}
+    try {
+      const inst = await this.request('GET', '/api/v1/instance');
+      if (inst?.version) return String(inst.version);
+    } catch (_) {}
+    return null;
+  }
+
   async fetchThemeColor() {
     // Strategy 1: Try Mastodon v2 instance API for accent_color (Mastodon 4.3+)
     try {
@@ -686,9 +700,22 @@ export class MastodonClient {
       }
     }
 
-    // Quote post support (Fedibird, Pleroma/Akkoma, Mastodon 4.3+, etc.)
+    // Quote post support — 서버별 응답 shape 이 다름:
+    //   Fedibird / Pleroma / Akkoma / Hollo : status.quote = <quoted-status>  (직접)
+    //   Mastodon 4.4+                        : status.quote = { state, quoted_status: <quoted-status> }
+    //   구 fork                              : status.reblog_quote = <quoted-status>
+    // 세 케이스 모두 지원.
     let quotePost = null;
-    const quoteSource = status.quote || status.reblog_quote;
+    const rawQuote = status.quote || status.reblog_quote;
+    let quoteSource = rawQuote;
+    if (rawQuote && rawQuote.quoted_status) {
+      // Mastodon 4.4+ 포장 형태 — 안쪽 status 를 꺼내고 state=accepted 만 유효로 취급
+      if (rawQuote.state && rawQuote.state !== 'accepted') {
+        quoteSource = null;   // pending/revoked/deleted → 렌더 안 함
+      } else {
+        quoteSource = rawQuote.quoted_status;
+      }
+    }
     if (quoteSource && quoteSource.account) {
       // Process custom emojis in quote content
       let qContent = quoteSource.content || '';
@@ -700,9 +727,14 @@ export class MastodonClient {
       }
       qContent = this.enhanceHtml(qContent);
       const qAuthor = this.normalizeUser(quoteSource.account);
-      // Nested quote
+      // Nested quote (동일 언래핑)
       let nestedQuote = null;
-      const nqs = quoteSource.quote || quoteSource.reblog_quote;
+      const rawNested = quoteSource.quote || quoteSource.reblog_quote;
+      let nqs = rawNested;
+      if (rawNested && rawNested.quoted_status) {
+        if (rawNested.state && rawNested.state !== 'accepted') nqs = null;
+        else nqs = rawNested.quoted_status;
+      }
       if (nqs && nqs.account) {
         let nqContent = nqs.content || '';
         if (nqs.emojis && nqs.emojis.length > 0) {

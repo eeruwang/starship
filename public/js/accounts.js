@@ -196,6 +196,15 @@ export class AccountStore {
           }).catch(() => {})
         );
       }
+      // Mastodon 4.4+ native quote 지원 판별용 서버 버전 조회 (Mastodon 계열만).
+      // 캐시된 최신값을 account.serverVersion 에 저장.
+      if (account.platform === 'mastodon' && client?.getServerVersion) {
+        updates.push(
+          client.getServerVersion().then(v => {
+            if (v) account.serverVersion = v;
+          }).catch(() => {})
+        );
+      }
       updates.push(
         client.verifyCredentials().then(profile => {
           if (account.needsReauth) account.needsReauth = false;
