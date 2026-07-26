@@ -19,20 +19,25 @@ function buildFetchUrl(targetUrl) {
 
 // ===== Mastodon OAuth 2.0 =====
 
-// Mastodon 4.x 는 admin:read:custom_emojis / admin:write:custom_emojis 를 지원.
-// 구버전/일부 fork(Hollo·Akkoma 등) 는 미지원 → 앱 등록이 422 로 실패할 수 있어
-// 순서대로 fallback 시도한다.
+// 어드민 스코프 표기가 서버 버전마다 다르므로 여러 형태를 순서대로 시도한다.
+// 폴백 없이 admin 을 반드시 포함하도록 — non-admin 만으로 등록되면 어드민 이모지
+// 가져오기 기능이 아예 불가능해지기 때문.
 const MASTODON_SCOPE_ATTEMPTS = [
+  // Mastodon 4.3+ 세분화 스코프
   'read write follow push admin:read:custom_emojis admin:write:custom_emojis',
-  'read write follow push',   // 어드민 스코프 미지원 서버용 폴백
+  // Mastodon 4.0~4.2 폭넓은 어드민 스코프
+  'read write follow push admin:read admin:write',
+  // 최광의 admin (일부 fork)
+  'read write follow push admin',
 ];
 
 export async function startMastodonOAuth(instanceUrl, popup) {
   instanceUrl = instanceUrl.replace(/\/+$/, '');
 
-  // 1. 앱 등록 — admin 스코프 포함 실패 시 없이 재시도.
+  // 1. 앱 등록 — 어드민 스코프 조합을 순서대로 시도. 모두 실패면 명확히 throw.
   let app = null;
-  let usedScope = MASTODON_SCOPE_ATTEMPTS[0];
+  let usedScope = null;
+  const failures = [];
   for (const scope of MASTODON_SCOPE_ATTEMPTS) {
     const res = await fetch(buildFetchUrl(`${instanceUrl}/api/v1/apps`), {
       method: 'POST',
@@ -49,12 +54,21 @@ export async function startMastodonOAuth(instanceUrl, popup) {
       usedScope = scope;
       break;
     }
-    // 422 (invalid scope) 이면 다음 후보로. 그 외 실패는 즉시 중단.
+    let detail = '';
+    try { detail = (await res.text()).slice(0, 200); } catch (_) {}
+    failures.push(`[${res.status}] ${scope} — ${detail}`);
+    // 400/422 (invalid scope) 이면 다음 후보. 그 외 (네트워크·5xx) 는 즉시 중단.
     if (res.status !== 422 && res.status !== 400) {
-      throw new Error(`앱 등록 실패 (${res.status})`);
+      throw new Error(`앱 등록 실패 (${res.status})\n${detail}`);
     }
   }
-  if (!app) throw new Error('앱 등록 실패 (모든 스코프 조합 시도 실패)');
+  if (!app) {
+    throw new Error(
+      '앱 등록 실패: 이 Mastodon 서버가 admin 스코프를 지원하지 않습니다.\n'
+      + '서버 버전을 확인하거나(4.0+ 권장) 관리자에게 문의하세요.\n\n'
+      + failures.join('\n')
+    );
+  }
 
   // 2. 인증 정보 임시 저장 (실제 쓴 scope 도 함께 저장 — authorize 랑 맞춰야 함)
   savePendingAuth({
