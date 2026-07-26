@@ -268,87 +268,68 @@ export class MastodonClient {
   }
 
   // Admin: URL 로 커스텀 이모지 추가.
-  async adminAddCustomEmoji({ shortcode, url, category = '', visibleInPicker = true, aliases = [], license = '' }) {
+  //
+  // 확인된 사실 (Mastodon/Hollo 소스 대조 후):
+  //   - Mastodon 은 /api/v1/admin/custom_emojis 를 제공하지 않는다.
+  //     config/routes/api.rb 의 admin 네임스페이스에 custom_emojis 리소스 없음.
+  //     이모지 관리는 웹 대시보드 (/admin/custom_emojis) form 만 존재
+  //     (config/routes/admin.rb:186 은 API 가 아닌 웹 라우트).
+  //   - Hollo 도 동일. /emojis 웹 대시보드만.
+  //   - Pleroma/Akkoma 는 /api/v1/pleroma/emoji/packs/... 별도 API 지원 (미구현).
+  //   - Fedibird 는 확장 API 있을 수 있으나 정확 스펙 미확인.
+  //
+  // 결론: Mastodon-순정과 Hollo 는 API 지원 안 함 → 웹 대시보드 안내로 대체.
+  //       fedibird/pleroma/akkoma 등에서는 향후 필요 시 별도 구현.
+  async adminAddCustomEmoji({ shortcode, url, category = '' }) {
     if (!shortcode || !url) throw new Error('shortcode and url required');
-    const errors = [];
+    const sw = this.software || 'mastodon';
+    // 웹 대시보드 경로 (사용자에게 안내)
+    let dashboardPath = '/admin/custom_emojis';   // Mastodon
+    if (sw === 'hollo') dashboardPath = '/emojis';
+    else if (sw === 'akkoma' || sw === 'pleroma') dashboardPath = '/pleroma/admin/#/custom-emojis';
+    const dashboardUrl = `${this.instanceUrl}${dashboardPath}`;
 
-    // Hollo 는 API 로 커스텀 이모지 추가를 지원하지 않는다.
-    // (dahlia/hollo 소스 확인 — src/pages/emojis.tsx 의 웹 대시보드 form 만 존재,
-    //  src/api/v1 에는 GET /custom_emojis 만 있고 POST 는 없음)
-    // 사용자가 웹 대시보드로 등록하도록 안내.
-    if (this.software === 'hollo') {
-      const dashboardUrl = `${this.instanceUrl}/emojis`;
-      throw new Error(
-        `Hollo 는 API 로 커스텀 이모지 추가를 지원하지 않습니다.\n`
-        + `웹 대시보드에서 추가하세요: ${dashboardUrl}\n`
-        + `(추가할 이모지: :${shortcode}:  ← 원본 URL: ${url})`
-      );
-    }
-
-    // ② Fedibird 확장: JSON URL 직접. (Mastodon 순정은 이 경로에서 404 → 다음)
-    //    Mastodon 순정 서버에는 무의미하므로 non-Mastodon 소프트웨어만 시도.
-    if (this.software !== 'mastodon') {
+    // fedibird/glitchcafe 는 실험적으로 admin API 있을 수 있음 — 시도만 해봄
+    if (sw === 'fedibird' || sw === 'glitchcafe') {
+      // 이미지 다운로드 → multipart POST
+      let originUrl = url;
       try {
-        const jsonBody = {
-          shortcode, image: url, category, visible_in_picker: visibleInPicker,
-        };
-        if (aliases?.length) jsonBody.aliases = aliases;
-        if (license) jsonBody.license = license;
-        return await this.request('POST', '/api/v1/admin/custom_emojis', jsonBody);
-      } catch (err) {
-        const msg = err?.message || String(err);
-        if (!/\b(400|404|415|422|501)\b/.test(msg)) throw err;
-        errors.push(`admin/custom_emojis(JSON): ${msg}`);
+        const u = new URL(url, (typeof window !== 'undefined' ? window.location.origin : 'https://x/'));
+        if (u.pathname === '/cache/image' || u.pathname === '/proxy') {
+          const inner = u.searchParams.get('url');
+          if (inner) originUrl = inner;
+        }
+      } catch (_) {}
+      const fetchUrl = this.useProxy
+        ? `/cache/image?url=${encodeURIComponent(originUrl)}`
+        : originUrl;
+      const imgRes = await fetch(fetchUrl);
+      if (!imgRes.ok) throw new Error(`이모지 이미지 다운로드 실패 (${imgRes.status})`);
+      const blob = await imgRes.blob();
+      const ext = (blob.type.split('/')[1] || 'png').split(';')[0].replace('jpeg', 'jpg');
+      const file = new File([blob], `${shortcode}.${ext}`, { type: blob.type || 'image/png' });
+      const fd = new FormData();
+      fd.append('shortcode', shortcode);
+      fd.append('image', file);
+      if (category) fd.append('category', category);
+      fd.append('visible_in_picker', 'true');
+      try {
+        return await this.requestFormData('POST', '/api/v1/admin/custom_emojis', fd);
+      } catch (_) {
+        // 실패 시 fall through to dashboard 안내
       }
     }
 
-    // ③ 표준 Mastodon: 이미지 다운로드 → multipart FormData 로 POST.
-    let originUrl = url;
-    try {
-      const u = new URL(url, (typeof window !== 'undefined' ? window.location.origin : 'https://x/'));
-      if (u.pathname === '/cache/image' || u.pathname === '/proxy') {
-        const inner = u.searchParams.get('url');
-        if (inner) originUrl = inner;
-      }
-    } catch (_) {}
-    const fetchUrl = this.useProxy
-      ? `/cache/image?url=${encodeURIComponent(originUrl)}`
-      : originUrl;
-    const imgRes = await fetch(fetchUrl);
-    if (!imgRes.ok) throw new Error(`이모지 이미지 다운로드 실패 (${imgRes.status})`);
-    const blob = await imgRes.blob();
-    const ext = (blob.type.split('/')[1] || 'png').split(';')[0].replace('jpeg', 'jpg');
-    const file = new File([blob], `${shortcode}.${ext}`, { type: blob.type || 'image/png' });
-    const fd = new FormData();
-    fd.append('shortcode', shortcode);
-    fd.append('image', file);
-    if (category) fd.append('category', category);
-    fd.append('visible_in_picker', visibleInPicker ? 'true' : 'false');
-    try {
-      return await this.requestFormData('POST', '/api/v1/admin/custom_emojis', fd);
-    } catch (err) {
-      const msg = err?.message || String(err);
-      errors.push(`admin/custom_emojis(multipart): ${msg}`);
-      // 404 원인 판별을 위해 verify_credentials 로 role 다시 조회 → 사용자 안내에 활용
-      if (/\b404\b/.test(msg)) {
-        let roleName = '', permMask = 0;
-        try {
-          const me = await this.request('GET', '/api/v1/accounts/verify_credentials');
-          roleName = me?.role?.name || (typeof me?.role === 'string' ? me.role : '');
-          permMask = Number(me?.role?.permissions || 0);
-        } catch (_) {}
-        // MANAGE_CUSTOM_EMOJIS bit = 8 (Mastodon 4.x role_permissions)
-        // ADMINISTRATOR bit = 0
-        const isAdmin = !!(permMask & 1);
-        const canManageEmojis = !!(permMask & (1 << 8));
-        if (!isAdmin && !canManageEmojis) {
-          throw new Error(`서버(${this.instanceUrl.replace(/^https?:\/\//, '')})에서 이 계정에 이모지 관리 권한이 없습니다.\n현재 역할: ${roleName || '(없음)'} · 권한 비트: ${permMask || 0}\n서버 관리 화면에서 이 계정에 Admin 역할 또는 MANAGE_CUSTOM_EMOJIS 권한을 부여해주세요.`);
-        }
-        // 권한은 있는데 404 → 스코프 부족 (재인증 필요) 또는 엔드포인트 실종
-        throw new Error(`이모지 API 가 404 를 반환했습니다.\n토큰 스코프에 admin:write:custom_emojis 가 없거나(계정 재로그인 필요) 서버가 이 엔드포인트를 지원하지 않습니다.\n\n${errors.join('\n')}`);
-      }
-      throw new Error(`이모지 추가 실패.\n${errors.join('\n')}`);
-    }
+    // Mastodon/Hollo: API 미지원 → 대시보드 안내 throw
+    const swLabel = { mastodon: 'Mastodon', hollo: 'Hollo', akkoma: 'Akkoma', pleroma: 'Pleroma' }[sw] || sw;
+    throw new Error(
+      `${swLabel} 은/는 API 로 커스텀 이모지 추가를 지원하지 않습니다.\n`
+      + `웹 관리자 대시보드에서 추가하세요: ${dashboardUrl}\n\n`
+      + `추가할 정보:\n`
+      + `  · 쇼트코드: ${shortcode}\n`
+      + `  · 카테고리: ${category || '(없음)'}\n`
+      + `  · 원본 URL: ${url}`
+    );
   }
 
   // 서버 버전 문자열 조회 (예: "4.4.0"). 실패 시 null.
