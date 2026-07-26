@@ -272,21 +272,17 @@ export class MastodonClient {
     if (!shortcode || !url) throw new Error('shortcode and url required');
     const errors = [];
 
-    // ① Hollo (dahlia/hollo): POST /api/v1/emojis {shortcode, image_url}
+    // Hollo 는 API 로 커스텀 이모지 추가를 지원하지 않는다.
+    // (dahlia/hollo 소스 확인 — src/pages/emojis.tsx 의 웹 대시보드 form 만 존재,
+    //  src/api/v1 에는 GET /custom_emojis 만 있고 POST 는 없음)
+    // 사용자가 웹 대시보드로 등록하도록 안내.
     if (this.software === 'hollo') {
-      const holloBody = {
-        shortcode, image: url, image_url: url,
-        category: category || undefined,
-      };
-      for (const path of ['/api/v1/emojis', '/api/v1/admin/emojis']) {
-        try {
-          return await this.request('POST', path, holloBody);
-        } catch (err) {
-          const msg = err?.message || String(err);
-          if (/\b404\b/.test(msg)) { errors.push(`${path}: 404`); continue; }
-          throw err;
-        }
-      }
+      const dashboardUrl = `${this.instanceUrl}/emojis`;
+      throw new Error(
+        `Hollo 는 API 로 커스텀 이모지 추가를 지원하지 않습니다.\n`
+        + `웹 대시보드에서 추가하세요: ${dashboardUrl}\n`
+        + `(추가할 이모지: :${shortcode}:  ← 원본 URL: ${url})`
+      );
     }
 
     // ② Fedibird 확장: JSON URL 직접. (Mastodon 순정은 이 경로에서 404 → 다음)
