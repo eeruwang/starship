@@ -19,38 +19,50 @@ function buildFetchUrl(targetUrl) {
 
 // ===== Mastodon OAuth 2.0 =====
 
-// admin:read:custom_emojis / admin:write:custom_emojis 는 어드민 이모지 가져오기
-// 기능에 필요 (Mastodon 4.x+). 서버가 어드민 스코프를 지원하지 않아도 앱 등록에는
-// 실패하지 않으며, 어드민 아닌 사용자에겐 조회/추가 API 가 여전히 403/404 로 막힘.
-const MASTODON_SCOPES = 'read write follow push admin:read:custom_emojis admin:write:custom_emojis';
+// Mastodon 4.x 는 admin:read:custom_emojis / admin:write:custom_emojis 를 지원.
+// 구버전/일부 fork(Hollo·Akkoma 등) 는 미지원 → 앱 등록이 422 로 실패할 수 있어
+// 순서대로 fallback 시도한다.
+const MASTODON_SCOPE_ATTEMPTS = [
+  'read write follow push admin:read:custom_emojis admin:write:custom_emojis',
+  'read write follow push',   // 어드민 스코프 미지원 서버용 폴백
+];
 
 export async function startMastodonOAuth(instanceUrl, popup) {
   instanceUrl = instanceUrl.replace(/\/+$/, '');
 
-  // 1. 앱 등록
-  const appRes = await fetch(buildFetchUrl(`${instanceUrl}/api/v1/apps`), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_name: APP_NAME,
-      redirect_uris: CALLBACK_URL,
-      scopes: MASTODON_SCOPES,
-      website: APP_WEBSITE,
-    }),
-  });
-
-  if (!appRes.ok) {
-    throw new Error(`앱 등록 실패 (${appRes.status})`);
+  // 1. 앱 등록 — admin 스코프 포함 실패 시 없이 재시도.
+  let app = null;
+  let usedScope = MASTODON_SCOPE_ATTEMPTS[0];
+  for (const scope of MASTODON_SCOPE_ATTEMPTS) {
+    const res = await fetch(buildFetchUrl(`${instanceUrl}/api/v1/apps`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: APP_NAME,
+        redirect_uris: CALLBACK_URL,
+        scopes: scope,
+        website: APP_WEBSITE,
+      }),
+    });
+    if (res.ok) {
+      app = await res.json();
+      usedScope = scope;
+      break;
+    }
+    // 422 (invalid scope) 이면 다음 후보로. 그 외 실패는 즉시 중단.
+    if (res.status !== 422 && res.status !== 400) {
+      throw new Error(`앱 등록 실패 (${res.status})`);
+    }
   }
+  if (!app) throw new Error('앱 등록 실패 (모든 스코프 조합 시도 실패)');
 
-  const app = await appRes.json();
-
-  // 2. 인증 정보 임시 저장
+  // 2. 인증 정보 임시 저장 (실제 쓴 scope 도 함께 저장 — authorize 랑 맞춰야 함)
   savePendingAuth({
     platform: 'mastodon',
     instanceUrl,
     clientId: app.client_id,
     clientSecret: app.client_secret,
+    scope: usedScope,
   });
 
   // 3. 인증 페이지로 이동
@@ -58,7 +70,7 @@ export async function startMastodonOAuth(instanceUrl, popup) {
     client_id: app.client_id,
     redirect_uri: CALLBACK_URL,
     response_type: 'code',
-    scope: MASTODON_SCOPES,
+    scope: usedScope,
   }).toString();
 
   if (popup) {
