@@ -1404,8 +1404,24 @@ export const EventsMixin = {
     let user = null;
     try {
       if (platform === 'mastodon') {
-        const results = await client.searchAccounts(acct, 1, { resolve: true });
-        if (results && results.length) user = client.normalizeUser(results[0]);
+        // Mastodon /api/v2/search 는 { accounts, statuses, hashtags } 를 반환.
+        // 이전엔 results.length 로 배열처럼 취급해 항상 실패했음.
+        const res = await client.searchAccounts(acct, 1);
+        const arr = Array.isArray(res) ? res : (res?.accounts || []);
+        if (arr.length) user = client.normalizeUser(arr[0]);
+        // 폴백 1: 다른 Mastodon 계열 계정에서 다시 검색 (원본 서버가 못 찾을 때)
+        if (!user) {
+          for (const acc of this.store.getAll()) {
+            if (acc.id === accountId || acc.platform !== 'mastodon') continue;
+            const c = this.store.getClient(acc.id);
+            if (!c) continue;
+            try {
+              const r = await c.searchAccounts(acct, 1);
+              const a = Array.isArray(r) ? r : (r?.accounts || []);
+              if (a.length) { user = c.normalizeUser(a[0]); accountId = acc.id; break; }
+            } catch (_) {}
+          }
+        }
       } else {
         // Misskey: users/show 로 조회. acct → { username, host } 분해.
         const [username, host] = acct.split('@');
