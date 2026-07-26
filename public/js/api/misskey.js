@@ -287,10 +287,13 @@ export class MisskeyClient {
         aliases, license, isSensitive,
       });
     } catch (err) {
-      // 400/422 = url 필드 미지원 가능성 → 파일 업로드 폴백
-      if (!/\b(400|404|422|501)\b/.test(err?.message || '')) {
-        // 계속 폴백
+      const msg = err?.message || '';
+      // 권한 부족: 토큰에 write:admin:emoji 없음 (기존 계정) 또는 관리자 아님
+      if (/PERMISSION_DENIED|permission/i.test(msg) || /\b403\b/.test(msg)) {
+        throw new Error('관리자 권한(write:admin:emoji) 이 필요합니다. 이 계정을 삭제하고 다시 로그인해서 어드민 이모지 권한을 승인해주세요. (또는 이 계정이 서버 관리자가 아닐 수 있습니다.)');
       }
+      // 400/422/404/501 = url 필드 미지원 가능성 → 파일 업로드 폴백
+      if (!/\b(400|404|422|501)\b/.test(msg)) throw err;
     }
     // 2) 파일 업로드 → fileId 로 add
     // /proxy 는 API 경로 화이트리스트가 있어 이모지 URL 을 403 → /cache/image 사용.
@@ -312,11 +315,19 @@ export class MisskeyClient {
     const file = new File([blob], `${shortcode}.${ext}`, { type: blob.type || 'image/png' });
     const uploaded = await this.uploadFile(file);
     if (!uploaded?.id) throw new Error('드라이브 업로드 실패');
-    return this.request('admin/emoji/add', {
-      fileId: uploaded.id,
-      name: shortcode, category: category || undefined,
-      aliases, license, isSensitive,
-    });
+    try {
+      return await this.request('admin/emoji/add', {
+        fileId: uploaded.id,
+        name: shortcode, category: category || undefined,
+        aliases, license, isSensitive,
+      });
+    } catch (err) {
+      const msg = err?.message || '';
+      if (/PERMISSION_DENIED|permission/i.test(msg) || /\b403\b/.test(msg)) {
+        throw new Error('관리자 권한(write:admin:emoji) 이 필요합니다. 이 계정을 삭제하고 다시 로그인해서 어드민 이모지 권한을 승인해주세요.');
+      }
+      throw err;
+    }
   }
 
   async uploadFile(file, { onProgress } = {}) {

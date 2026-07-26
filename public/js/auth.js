@@ -115,6 +115,9 @@ const MISSKEY_PERMISSIONS = [
   'write:notes',
   'write:reactions',
   'write:votes',
+  // 어드민 이모지 관리 (관리자 계정에서만 실제 권한 부여됨. 일반 사용자는 무시)
+  'read:admin:emoji',
+  'write:admin:emoji',
 ].join(',');
 
 export async function startMiAuth(instanceUrl, platform, popup) {
