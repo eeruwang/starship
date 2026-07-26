@@ -1086,23 +1086,27 @@ export const PostActionsMixin = {
   },
 
   openQuoteModal(postId, platform, accountId, restrictedAccounts = null) {
-    // Find the original post URL for the quote
+    // Find the original post URL for the quote.
+    // 부스트 래퍼(wrapper)의 postId 가 오면 실제 원본 ID 로 언래핑 — quoted_status_id
+    // 는 원본 status 를 가리켜야 하며 wrapper 를 넣으면 서버가 무시하거나 에러.
     let quoteUrl = '';
     let quoteAccountId = accountId;
     let quotedPost = null;
+    let unwrappedId = postId;
     for (const [key, post] of this.postCache) {
       const dp = post.reblog || post;
       if (post.id === postId || dp.id === postId) {
         quoteUrl = dp.url || dp.canonicalUri || '';
         if (!quoteAccountId) quoteAccountId = post.accountId;
         quotedPost = dp;
+        unwrappedId = dp.id;   // 부스트면 원본 ID, 아니면 자기 자신
         break;
       }
     }
 
     this.openComposeModal(null, accountId, restrictedAccounts);
     this.composeTitle.textContent = '인용';
-    this.composeText.dataset.quoteId = postId;
+    this.composeText.dataset.quoteId = unwrappedId;
     this.composeText.dataset.quotePlatform = platform;
     this.composeText.dataset.quoteUrl = quoteUrl;
     if (quoteAccountId) this.composeText.dataset.quoteAccountId = quoteAccountId;
