@@ -268,27 +268,17 @@ export class MastodonClient {
   }
 
   // Admin: URL 로 커스텀 이모지 추가.
-  // 서버(사프트웨어)마다 엔드포인트가 다르므로 여러 후보를 순서대로 시도.
-  //  ① Hollo: POST /api/v1/emojis  (JSON, image=url)  ← Hollo 공식 엔드포인트
-  //  ② Mastodon 표준: multipart POST /api/v1/admin/custom_emojis
-  //  ③ Fedibird 확장: POST /api/v1/admin/custom_emojis (JSON, image=url)
-  // 404 는 다음 후보로 진행. 다른 상태(400/403/422) 는 중단하고 에러 반환.
   async adminAddCustomEmoji({ shortcode, url, category = '', visibleInPicker = true, aliases = [], license = '' }) {
     if (!shortcode || !url) throw new Error('shortcode and url required');
     const errors = [];
-    const jsonBody = {
-      shortcode, image: url, category, visible_in_picker: visibleInPicker,
-    };
-    if (aliases?.length) jsonBody.aliases = aliases;
-    if (license) jsonBody.license = license;
 
-    // ① Hollo (dahlia/hollo): POST /api/v1/emojis {name?, shortcode, image_url|image, category?}
+    // ① Hollo (dahlia/hollo): POST /api/v1/emojis {shortcode, image_url}
     if (this.software === 'hollo') {
       const holloBody = {
         shortcode, image: url, image_url: url,
         category: category || undefined,
       };
-      for (const path of ['/api/v1/emojis', '/api/v1/admin/emojis', '/api/v1/admin/custom_emojis']) {
+      for (const path of ['/api/v1/emojis', '/api/v1/admin/emojis']) {
         try {
           return await this.request('POST', path, holloBody);
         } catch (err) {
@@ -299,16 +289,24 @@ export class MastodonClient {
       }
     }
 
-    // ② Fedibird 확장: JSON 으로 URL 직접 전송.
-    try {
-      return await this.request('POST', '/api/v1/admin/custom_emojis', jsonBody);
-    } catch (err) {
-      const msg = err?.message || String(err);
-      if (!/\b(400|404|415|422|501)\b/.test(msg)) throw err;
-      errors.push(`admin/custom_emojis(JSON): ${msg}`);
+    // ② Fedibird 확장: JSON URL 직접. (Mastodon 순정은 이 경로에서 404 → 다음)
+    //    Mastodon 순정 서버에는 무의미하므로 non-Mastodon 소프트웨어만 시도.
+    if (this.software !== 'mastodon') {
+      try {
+        const jsonBody = {
+          shortcode, image: url, category, visible_in_picker: visibleInPicker,
+        };
+        if (aliases?.length) jsonBody.aliases = aliases;
+        if (license) jsonBody.license = license;
+        return await this.request('POST', '/api/v1/admin/custom_emojis', jsonBody);
+      } catch (err) {
+        const msg = err?.message || String(err);
+        if (!/\b(400|404|415|422|501)\b/.test(msg)) throw err;
+        errors.push(`admin/custom_emojis(JSON): ${msg}`);
+      }
     }
 
-    // ③ 표준: 이미지 다운로드 → multipart FormData 로 POST.
+    // ③ 표준 Mastodon: 이미지 다운로드 → multipart FormData 로 POST.
     let originUrl = url;
     try {
       const u = new URL(url, (typeof window !== 'undefined' ? window.location.origin : 'https://x/'));
@@ -335,12 +333,25 @@ export class MastodonClient {
     } catch (err) {
       const msg = err?.message || String(err);
       errors.push(`admin/custom_emojis(multipart): ${msg}`);
-      // 404 는 관리자 권한/스코프 없음 (Mastodon 은 admin 엔드포인트를 non-admin 에게
-      // 404 로 감춤). 재인증 안내.
+      // 404 원인 판별을 위해 verify_credentials 로 role 다시 조회 → 사용자 안내에 활용
       if (/\b404\b/.test(msg)) {
-        throw new Error('관리자 권한이 필요합니다. 이 계정을 삭제하고 다시 로그인해 admin:write:custom_emojis 스코프를 승인해주세요. (또는 서버에서 계정에 이모지 관리 권한이 부여되지 않았을 수 있습니다.)');
+        let roleName = '', permMask = 0;
+        try {
+          const me = await this.request('GET', '/api/v1/accounts/verify_credentials');
+          roleName = me?.role?.name || (typeof me?.role === 'string' ? me.role : '');
+          permMask = Number(me?.role?.permissions || 0);
+        } catch (_) {}
+        // MANAGE_CUSTOM_EMOJIS bit = 8 (Mastodon 4.x role_permissions)
+        // ADMINISTRATOR bit = 0
+        const isAdmin = !!(permMask & 1);
+        const canManageEmojis = !!(permMask & (1 << 8));
+        if (!isAdmin && !canManageEmojis) {
+          throw new Error(`서버(${this.instanceUrl.replace(/^https?:\/\//, '')})에서 이 계정에 이모지 관리 권한이 없습니다.\n현재 역할: ${roleName || '(없음)'} · 권한 비트: ${permMask || 0}\n서버 관리 화면에서 이 계정에 Admin 역할 또는 MANAGE_CUSTOM_EMOJIS 권한을 부여해주세요.`);
+        }
+        // 권한은 있는데 404 → 스코프 부족 (재인증 필요) 또는 엔드포인트 실종
+        throw new Error(`이모지 API 가 404 를 반환했습니다.\n토큰 스코프에 admin:write:custom_emojis 가 없거나(계정 재로그인 필요) 서버가 이 엔드포인트를 지원하지 않습니다.\n\n${errors.join('\n')}`);
       }
-      throw new Error(`이 서버는 이모지 추가 API 를 지원하지 않는 것 같습니다.\n${errors.join('\n')}`);
+      throw new Error(`이모지 추가 실패.\n${errors.join('\n')}`);
     }
   }
 
