@@ -434,7 +434,9 @@ export const PostActionsMixin = {
   _updateCardActions(card, displayPost, wrapperPost) {
     // Action button selectors work for both post-card and notif-card
     const favBtn = card.querySelector('[data-action="fav"]');
-    const boostBtn = card.querySelector('[data-action="boost"]');
+    // 부스트 버튼은 renderPost 에서 data-action="boost-menu" 로 렌더(팝업 트리거).
+    // 알림 카드/mention 스타일은 여전히 data-action="boost".
+    const boostBtn = card.querySelector('[data-action="boost-menu"], [data-action="boost"]');
 
     const isFaved = wrapperPost.favourited || displayPost.favourited
       || (displayPost.myReaction && (displayPost.myReaction === '❤' || displayPost.myReaction === '❤️'));
