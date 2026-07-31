@@ -107,8 +107,15 @@ export const AccountSetupMixin = {
     if (sw === 'misskey' || signals.includes('misskey')) {
       return { platform: 'misskey', software: 'misskey', displayName: 'Misskey' };
     }
-    // Hollo (Mastodon-compatible, single-user)
-    if (sw === 'hollo') return { platform: 'mastodon', software: 'hollo', displayName: 'Hollo' };
+    // Hollo (Mastodon-compatible, single-user).
+    // 포크(예: eeruwang/cloud-hollo — Cloudflare Workers 포팅)는 softwareName 을
+    // "cloud-hollo" / "hollo-cf" / "hollo-worker" 등으로 다르게 신고할 수 있음.
+    // NodeInfo softwareName 필드(sw)에 "hollo" 가 들어가면 Hollo 계열로 취급해
+    // 리액션/인용/이모지 대시보드 안내 등이 그대로 동작하게 한다.
+    // (signals 전체를 훑으면 "hologra..." 같은 무관한 단어가 오탐될 수 있어 sw 만.)
+    if (sw === 'hollo' || /hollo/i.test(sw)) {
+      return { platform: 'mastodon', software: 'hollo', displayName: 'Hollo' };
+    }
     // Mastodon-compatible platforms
     if (sw === 'akkoma') return { platform: 'mastodon', software: 'akkoma', displayName: 'Akkoma' };
     if (sw === 'pleroma') return { platform: 'mastodon', software: 'pleroma', displayName: 'Pleroma' };
