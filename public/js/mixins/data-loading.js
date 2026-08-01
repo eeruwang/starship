@@ -2504,6 +2504,7 @@ export const DataLoadingMixin = {
     // Stats counts
     if (cd.stats && fd.stats) {
       if ((cd.stats.replies || 0) !== (fd.stats.replies || 0)) changed = true;
+      if ((cd.stats.boosts || 0) !== (fd.stats.boosts || 0)) changed = true;
       if ((cd.stats.reblogs || 0) !== (fd.stats.reblogs || 0)) changed = true;
       if ((cd.stats.renotes || 0) !== (fd.stats.renotes || 0)) changed = true;
       if ((cd.stats.favourites || 0) !== (fd.stats.favourites || 0)) changed = true;
@@ -2546,8 +2547,8 @@ export const DataLoadingMixin = {
         }
       };
       setActionCount('[data-action="reply"]', fd.stats?.replies);
-      setActionCount('[data-action="boost"]', fd.stats?.reblogs ?? fd.stats?.renotes, fresh.reblogged || fresh.boosted);
-      setActionCount('[data-action="fav"]', fd.stats?.favourites ?? fd.stats?.reactions, !!(fresh.favourited || fresh.myReaction));
+      setActionCount('[data-action="boost-menu"], [data-action="boost"]', fd.stats?.boosts ?? fd.stats?.reblogs ?? fd.stats?.renotes, fresh.reblogged || fresh.boosted || fd.reblogged);
+      setActionCount('[data-action="fav"]', fd.stats?.favourites ?? fd.stats?.reactions, !!(fresh.favourited || fd.favourited || fresh.myReaction || fd.myReaction));
     }
     // Patch existing reaction-badge counts (key set is identical when this is called)
     if (fd.reactions) {

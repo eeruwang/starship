@@ -202,6 +202,9 @@ export const PostActionsMixin = {
       }
     }
 
+    let optimisticBoostPost = null;
+    let optimisticBoostPrevious = false;
+
     try {
       // Immediate visual feedback: add processing state
       btnElement.classList.add('processing');
@@ -268,24 +271,28 @@ export const PostActionsMixin = {
         return;
       } else if (action === 'boost') {
         const alreadyBoosted = cachedPost?.reblogged;
+        if (cachedPost) {
+          optimisticBoostPost = cachedPost;
+          optimisticBoostPrevious = !!cachedPost.reblogged || !!(cachedPost.reblog || cachedPost).reblogged;
+          this._applyOptimisticBoost(cachedPost, !alreadyBoosted);
+          this._updateVisiblePostActions(postId, platform);
+        }
         if (alreadyBoosted) {
+          btnElement.classList.remove('processing', 'active');
           if (accountPlatform === 'mastodon') {
             await client.unreblog(actionPostId);
           } else {
             await client.unrenote(actionPostId);
           }
-          if (cachedPost) cachedPost.reblogged = false;
-          btnElement.classList.remove('processing', 'active');
         } else {
+          btnElement.classList.remove('processing');
+          btnElement.classList.add('active', 'just-activated');
+          setTimeout(() => btnElement.classList.remove('just-activated'), 600);
           if (accountPlatform === 'mastodon') {
             await client.reblog(actionPostId);
           } else {
             await client.renote(actionPostId);
           }
-          if (cachedPost) cachedPost.reblogged = true;
-          btnElement.classList.remove('processing');
-          btnElement.classList.add('active', 'just-activated');
-          setTimeout(() => btnElement.classList.remove('just-activated'), 600);
         }
       } else if (action === 'reply') {
         btnElement.classList.remove('processing');
@@ -313,8 +320,43 @@ export const PostActionsMixin = {
         await this.refreshSinglePost(postId, platform, accountId);
       }
     } catch (err) {
+      if (action === 'boost' && optimisticBoostPost) {
+        this._applyOptimisticBoost(optimisticBoostPost, optimisticBoostPrevious);
+        this._updateVisiblePostActions(postId, platform);
+      }
       console.error(`Action ${action} failed:`, err);
       btnElement.classList.remove('processing');
+    }
+  },
+
+  _applyOptimisticBoost(post, nextReblogged) {
+    const displayPost = post.reblog || post;
+    const wasReblogged = !!post.reblogged || !!displayPost.reblogged;
+    if (wasReblogged === nextReblogged) return;
+
+    post.reblogged = nextReblogged;
+    displayPost.reblogged = nextReblogged;
+    if (!displayPost.stats) displayPost.stats = {};
+    const current = displayPost.stats.boosts || 0;
+    displayPost.stats.boosts = Math.max(0, current + (nextReblogged ? 1 : -1));
+  },
+
+  _updateVisiblePostActions(postId, platform) {
+    const cachedPost = this.postCache.get(`${platform}:${postId}`);
+    if (!cachedPost) return;
+
+    const displayPost = cachedPost.reblog || cachedPost;
+    const selectors = [
+      `.post-card[data-platform="${CSS.escape(platform)}"][data-post-id="${CSS.escape(postId)}"]`,
+      `.notif-card[data-platform="${CSS.escape(platform)}"][data-post-id="${CSS.escape(postId)}"]`,
+    ];
+    if (displayPost.canonicalUri) {
+      selectors.push(`.post-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`);
+      selectors.push(`.notif-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`);
+    }
+
+    for (const card of document.querySelectorAll(selectors.join(','))) {
+      this._updateCardActions(card, displayPost, cachedPost);
     }
   },
 
