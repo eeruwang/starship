@@ -4,8 +4,13 @@
  * notifications into visible columns.
  */
 import { renderPost, renderNotification } from '../ui/dashboard.js';
+import { debugLog } from '../ui/debug.js';
 
 export const StreamingMixin = {
+
+  debugStream(...args) {
+    debugLog('stream', ...args);
+  },
 
   startStreaming() {
     if (!this.streamManager) return;
@@ -451,7 +456,7 @@ export const StreamingMixin = {
    * (e.g. due to background throttling, silent socket drops, etc.).
    */
   _onResumeFromBackground({ hiddenMs }) {
-    console.log(`[Stream] Resuming from background (hidden ${Math.round(hiddenMs / 1000)}s), refreshing`);
+    this.debugStream?.(`[Stream] Resuming from background (hidden ${Math.round(hiddenMs / 1000)}s), refreshing`);
     // Small delay to let connection probes settle first
     setTimeout(() => {
       this.refreshAll(false, { skipColumnTypes: ['thread'] });
