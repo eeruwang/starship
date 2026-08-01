@@ -202,9 +202,6 @@ export const PostActionsMixin = {
       }
     }
 
-    let optimisticBoostPost = null;
-    let optimisticBoostPrevious = false;
-
     try {
       // Immediate visual feedback: add processing state
       btnElement.classList.add('processing');
@@ -218,81 +215,29 @@ export const PostActionsMixin = {
         const isHollo = accountPlatform === 'mastodon' && account?.software === 'hollo';
         const useReactionForFav = accountPlatform !== 'mastodon' || isHollo;
 
-        // Optimistic update: apply immediately, then send API call
         if (alreadyFaved) {
-          if (cachedPost) {
-            cachedPost.favourited = false;
-            if (displayPost) {
-              displayPost.favourited = false;
-              // Decrement reaction count
-              if (displayPost.myReaction && displayPost.reactions?.[displayPost.myReaction] > 0) {
-                displayPost.reactions[displayPost.myReaction] = Math.max(0, displayPost.reactions[displayPost.myReaction] - 1);
-                if (displayPost.reactions[displayPost.myReaction] === 0) delete displayPost.reactions[displayPost.myReaction];
-              }
-              displayPost.myReaction = null;
-              if (displayPost.stats) displayPost.stats.favourites = Math.max(0, (displayPost.stats.favourites || 1) - 1);
-            }
-            this._rerenderCachedPost(postId, platform);
-          }
-          btnElement.classList.remove('processing', 'active');
-          // Background API call
           if (useReactionForFav) {
-            client.deleteReaction(actionPostId, '❤').catch(e => console.error('Unreact(fav) failed:', e));
+            await client.deleteReaction(actionPostId, '❤');
           } else {
-            client.unfavourite(actionPostId).catch(e => console.error('Unfav failed:', e));
+            await client.unfavourite(actionPostId);
           }
+        } else if (useReactionForFav) {
+          await client.createReaction(actionPostId, '❤');
         } else {
-          if (cachedPost) {
-            cachedPost.favourited = true;
-            if (displayPost) {
-              displayPost.favourited = true;
-              // Increment reaction/fav count
-              if (useReactionForFav) {
-                if (!displayPost.reactions) displayPost.reactions = {};
-                displayPost.reactions['❤'] = (displayPost.reactions['❤'] || 0) + 1;
-                displayPost.myReaction = '❤';
-              } else {
-                if (displayPost.stats) displayPost.stats.favourites = (displayPost.stats.favourites || 0) + 1;
-              }
-            }
-            this._rerenderCachedPost(postId, platform);
-          }
-          btnElement.classList.remove('processing');
-          btnElement.classList.add('active', 'just-activated');
-          setTimeout(() => btnElement.classList.remove('just-activated'), 600);
-          // Background API call
-          if (useReactionForFav) {
-            client.createReaction(actionPostId, '❤').catch(e => console.error('React(fav) failed:', e));
-          } else {
-            client.favourite(actionPostId).catch(e => console.error('Fav failed:', e));
-          }
+          await client.favourite(actionPostId);
         }
-        // Fav already handled optimistically — background server confirm via streaming
-        return;
       } else if (action === 'boost') {
         const alreadyBoosted = cachedPost?.reblogged;
-        if (cachedPost) {
-          optimisticBoostPost = cachedPost;
-          optimisticBoostPrevious = !!cachedPost.reblogged || !!(cachedPost.reblog || cachedPost).reblogged;
-          this._applyOptimisticBoost(cachedPost, !alreadyBoosted);
-          this._updateVisiblePostActions(postId, platform);
-        }
         if (alreadyBoosted) {
-          btnElement.classList.remove('processing', 'active');
           if (accountPlatform === 'mastodon') {
             await client.unreblog(actionPostId);
           } else {
             await client.unrenote(actionPostId);
           }
+        } else if (accountPlatform === 'mastodon') {
+          await client.reblog(actionPostId);
         } else {
-          btnElement.classList.remove('processing');
-          btnElement.classList.add('active', 'just-activated');
-          setTimeout(() => btnElement.classList.remove('just-activated'), 600);
-          if (accountPlatform === 'mastodon') {
-            await client.reblog(actionPostId);
-          } else {
-            await client.renote(actionPostId);
-          }
+          await client.renote(actionPostId);
         }
       } else if (action === 'reply') {
         btnElement.classList.remove('processing');
@@ -319,44 +264,10 @@ export const PostActionsMixin = {
       } else {
         await this.refreshSinglePost(postId, platform, accountId);
       }
+      btnElement.classList.remove('processing');
     } catch (err) {
-      if (action === 'boost' && optimisticBoostPost) {
-        this._applyOptimisticBoost(optimisticBoostPost, optimisticBoostPrevious);
-        this._updateVisiblePostActions(postId, platform);
-      }
       console.error(`Action ${action} failed:`, err);
       btnElement.classList.remove('processing');
-    }
-  },
-
-  _applyOptimisticBoost(post, nextReblogged) {
-    const displayPost = post.reblog || post;
-    const wasReblogged = !!post.reblogged || !!displayPost.reblogged;
-    if (wasReblogged === nextReblogged) return;
-
-    post.reblogged = nextReblogged;
-    displayPost.reblogged = nextReblogged;
-    if (!displayPost.stats) displayPost.stats = {};
-    const current = displayPost.stats.boosts || 0;
-    displayPost.stats.boosts = Math.max(0, current + (nextReblogged ? 1 : -1));
-  },
-
-  _updateVisiblePostActions(postId, platform) {
-    const cachedPost = this.postCache.get(`${platform}:${postId}`);
-    if (!cachedPost) return;
-
-    const displayPost = cachedPost.reblog || cachedPost;
-    const selectors = [
-      `.post-card[data-platform="${CSS.escape(platform)}"][data-post-id="${CSS.escape(postId)}"]`,
-      `.notif-card[data-platform="${CSS.escape(platform)}"][data-post-id="${CSS.escape(postId)}"]`,
-    ];
-    if (displayPost.canonicalUri) {
-      selectors.push(`.post-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`);
-      selectors.push(`.notif-card[data-canonical-uri="${CSS.escape(displayPost.canonicalUri)}"]`);
-    }
-
-    for (const card of document.querySelectorAll(selectors.join(','))) {
-      this._updateCardActions(card, displayPost, cachedPost);
     }
   },
 
