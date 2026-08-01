@@ -215,57 +215,17 @@ export const PostActionsMixin = {
         const isHollo = accountPlatform === 'mastodon' && account?.software === 'hollo';
         const useReactionForFav = accountPlatform !== 'mastodon' || isHollo;
 
-        // Optimistic update: apply immediately, then send API call
         if (alreadyFaved) {
-          if (cachedPost) {
-            cachedPost.favourited = false;
-            if (displayPost) {
-              displayPost.favourited = false;
-              // Decrement reaction count
-              if (displayPost.myReaction && displayPost.reactions?.[displayPost.myReaction] > 0) {
-                displayPost.reactions[displayPost.myReaction] = Math.max(0, displayPost.reactions[displayPost.myReaction] - 1);
-                if (displayPost.reactions[displayPost.myReaction] === 0) delete displayPost.reactions[displayPost.myReaction];
-              }
-              displayPost.myReaction = null;
-              if (displayPost.stats) displayPost.stats.favourites = Math.max(0, (displayPost.stats.favourites || 1) - 1);
-            }
-            this._rerenderCachedPost(postId, platform);
-          }
-          btnElement.classList.remove('processing', 'active');
-          // Background API call
           if (useReactionForFav) {
-            client.deleteReaction(actionPostId, '❤').catch(e => console.error('Unreact(fav) failed:', e));
+            await client.deleteReaction(actionPostId, '❤');
           } else {
-            client.unfavourite(actionPostId).catch(e => console.error('Unfav failed:', e));
+            await client.unfavourite(actionPostId);
           }
+        } else if (useReactionForFav) {
+          await client.createReaction(actionPostId, '❤');
         } else {
-          if (cachedPost) {
-            cachedPost.favourited = true;
-            if (displayPost) {
-              displayPost.favourited = true;
-              // Increment reaction/fav count
-              if (useReactionForFav) {
-                if (!displayPost.reactions) displayPost.reactions = {};
-                displayPost.reactions['❤'] = (displayPost.reactions['❤'] || 0) + 1;
-                displayPost.myReaction = '❤';
-              } else {
-                if (displayPost.stats) displayPost.stats.favourites = (displayPost.stats.favourites || 0) + 1;
-              }
-            }
-            this._rerenderCachedPost(postId, platform);
-          }
-          btnElement.classList.remove('processing');
-          btnElement.classList.add('active', 'just-activated');
-          setTimeout(() => btnElement.classList.remove('just-activated'), 600);
-          // Background API call
-          if (useReactionForFav) {
-            client.createReaction(actionPostId, '❤').catch(e => console.error('React(fav) failed:', e));
-          } else {
-            client.favourite(actionPostId).catch(e => console.error('Fav failed:', e));
-          }
+          await client.favourite(actionPostId);
         }
-        // Fav already handled optimistically — background server confirm via streaming
-        return;
       } else if (action === 'boost') {
         const alreadyBoosted = cachedPost?.reblogged;
         if (alreadyBoosted) {
@@ -274,18 +234,10 @@ export const PostActionsMixin = {
           } else {
             await client.unrenote(actionPostId);
           }
-          if (cachedPost) cachedPost.reblogged = false;
-          btnElement.classList.remove('processing', 'active');
+        } else if (accountPlatform === 'mastodon') {
+          await client.reblog(actionPostId);
         } else {
-          if (accountPlatform === 'mastodon') {
-            await client.reblog(actionPostId);
-          } else {
-            await client.renote(actionPostId);
-          }
-          if (cachedPost) cachedPost.reblogged = true;
-          btnElement.classList.remove('processing');
-          btnElement.classList.add('active', 'just-activated');
-          setTimeout(() => btnElement.classList.remove('just-activated'), 600);
+          await client.renote(actionPostId);
         }
       } else if (action === 'reply') {
         btnElement.classList.remove('processing');
@@ -312,6 +264,7 @@ export const PostActionsMixin = {
       } else {
         await this.refreshSinglePost(postId, platform, accountId);
       }
+      btnElement.classList.remove('processing');
     } catch (err) {
       console.error(`Action ${action} failed:`, err);
       btnElement.classList.remove('processing');
