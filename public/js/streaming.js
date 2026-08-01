@@ -24,6 +24,11 @@
  * - bfcache (back-forward cache) restores pages with dead sockets.
  * All of these are handled below via visibility/pageshow/online listeners.
  */
+import { debugLog } from './ui/debug.js';
+
+function debugStream(...args) {
+  debugLog('stream', ...args);
+}
 
 export class StreamManager {
   // Software that doesn't implement Mastodon Streaming API
@@ -211,7 +216,7 @@ export class StreamManager {
         this._relayConnecting = false;
         this._mode = 'relay';
         this._relayReconnectDelay = 800;
-        console.log('[Stream] Relay connected');
+        debugStream('[Stream] Relay connected');
 
         // Subscribe all registered accounts (excluding those without streaming)
         const accounts = Array.from(this._accounts.values())
@@ -382,7 +387,7 @@ export class StreamManager {
   }
 
   _fallbackToDirect() {
-    console.log('[Stream] Falling back to direct connections');
+    debugStream('[Stream] Falling back to direct connections');
     this._mode = 'direct';
 
     for (const [accountId, { account, client }] of this._accounts) {
@@ -427,7 +432,7 @@ export class StreamManager {
       state.ws = ws;
 
       ws.onopen = () => {
-        console.log(`[Stream] Connected: ${account.label}`);
+        debugStream(`[Stream] Connected: ${account.label}`);
         state.reconnectDelay = 800;
         state.lastActivity = Date.now();
         state.awaitingPong = false;
@@ -566,7 +571,7 @@ export class StreamManager {
       } else if (msg.event === 'delete') {
         this._emit('postDelete', { account, postId: msg.payload });
       } else {
-        console.debug(`[Stream] ${account.label} unhandled event: ${msg.event}`);
+        debugStream(`[Stream] ${account.label} unhandled event: ${msg.event}`);
       }
     } catch (e) {
       console.error(`[Stream] Mastodon parse error (${msg.event}):`, e);
@@ -594,10 +599,10 @@ export class StreamManager {
           const post = client.normalizePost(body);
           this._emit('post', { account, post });
         } else {
-          console.debug(`[Stream] ${account.label} main:${eventType}`, body.type || body.id || '');
+          debugStream(`[Stream] ${account.label} main:${eventType}`, body.type || body.id || '');
         }
       } else {
-        console.debug(`[Stream] ${account.label} unhandled: ch=${channelId} ev=${eventType}`);
+        debugStream(`[Stream] ${account.label} unhandled: ch=${channelId} ev=${eventType}`);
       }
     } catch (e) {
       console.error(`[Stream] Misskey parse error (${eventType}):`, e);
@@ -632,7 +637,7 @@ export class StreamManager {
     if (!this._pageshowHandler) {
       this._pageshowHandler = (e) => {
         if (e.persisted) {
-          console.log('[Stream] Restored from bfcache, reconnecting all');
+          debugStream('[Stream] Restored from bfcache, reconnecting all');
           this._reconnectAll();
         }
       };
