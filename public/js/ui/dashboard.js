@@ -9,7 +9,7 @@ import {
   iconRefresh, iconClose, iconWarning, iconImage,
   iconQuote, iconSmile, iconTrash, iconEdit, iconMore,
   iconHeartSmall, iconStarSmall, iconHeartFill,
-  iconReplyNotif, iconBoostNotif, iconMegaphone,
+  iconReplyNotif, iconBoostNotif, iconMegaphone, iconBell,
   iconVisPublic, iconVisHome, iconVisFollowers, iconVisDirect,
   iconBookmark, iconBookmarkFill, iconPin,
   iconCheckCircle, iconXCircle,
@@ -29,6 +29,7 @@ const NOTIF_TYPE_LABEL = {
   quote: '인용했습니다',
   poll: '투표가 종료되었습니다',
   status: '새 글을 올렸습니다',
+  keyword: '감시 낱말이 든 글을 올렸습니다',
 };
 
 const VISIBILITY_ICONS = {
@@ -706,22 +707,27 @@ export function renderNotification(notif) {
   let html = '';
 
   // Mention / Quote / Boost notifications: render as full post-card style
-  const isMentionStyle = (notif.type === 'mention' || notif.type === 'quote' || notif.type === 'reblog') && displayPost;
+  const isMentionStyle = (notif.type === 'mention' || notif.type === 'quote' || notif.type === 'reblog' || notif.type === 'keyword') && displayPost;
   if (isMentionStyle) {
     card.classList.add('notif-mention');
 
     // Unified indicator: actor avatar with type badge + label
     const indicatorLabels = { quote: '인용', mention: '멘션', reblog: notif.platform === 'mastodon' ? '부스트' : '리노트' };
-    const indicatorIcons = { quote: iconReplyNotif, mention: iconMegaphone, reblog: iconBoostNotif };
+    const indicatorIcons = { quote: iconReplyNotif, mention: iconMegaphone, reblog: iconBoostNotif, keyword: iconBell };
     const indicatorTypeClass = `notif-type-${notif.type}`;
     const actorName = notif.actor ? (notif.actor.displayNameHtml || escapeHtml(notif.actor.displayName)) : '';
     const actorAvatar = notif.actor?.avatarUrl || '';
+    // 키워드 알림은 "누가 무엇을 했다"가 아니라 "어떤 낱말이 걸렸다"가 요점이므로
+    // 라벨 자리에 적중한 낱말을 칩으로 보여 준다.
+    const indicatorText = notif.type === 'keyword'
+      ? `${actorName} 님의 글 ${(notif.keywords || []).map(k => `<span class="notif-keyword-chip">${escapeHtml(k)}</span>`).join('')}`
+      : `${actorName} 님이 ${indicatorLabels[notif.type] || notif.type}`;
     html += `<div class="notif-indicator">
       <div class="notif-actor-wrap notif-indicator-actor">
         <img class="notif-avatar" src="${escapeHtml(actorAvatar)}" alt="" referrerpolicy="no-referrer" data-fb="hide">
         <span class="notif-type-badge ${indicatorTypeClass}"><span class="notif-svg-icon">${indicatorIcons[notif.type] || iconReplyNotif}</span></span>
       </div>
-      <span class="notif-indicator-label">${actorName} 님이 ${indicatorLabels[notif.type] || notif.type}</span>
+      <span class="notif-indicator-label">${indicatorText}</span>
     </div>`;
 
     // Reply context

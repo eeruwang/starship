@@ -111,6 +111,7 @@ export function getNotifIcon(type, reaction) {
     case 'note': case 'status': return iconNote;
     case 'favourite': return iconHeartFill;
     case 'update': return iconPencil;
+    case 'keyword': return iconBell;
     default: return iconBell;
   }
 }

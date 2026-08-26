@@ -4,6 +4,7 @@
  */
 import { MastodonClient } from './api/mastodon.js';
 import { MisskeyClient } from './api/misskey.js';
+import { getAccountKeywords, setAccountKeywords } from './keyword-alerts.js';
 
 const STORAGE_KEY = 'starship_accounts';
 
@@ -303,6 +304,20 @@ export class AccountStore {
 
   getById(accountId) {
     return this.accounts.find(a => a.id === accountId);
+  }
+
+  /** 이 계정이 감시하는 낱말들 */
+  getNotifyKeywords(accountId) {
+    return getAccountKeywords(this.getById(accountId));
+  }
+
+  /** 감시 낱말을 통째로 갈아 끼운다. 정규화된 최종 목록을 돌려준다. */
+  setNotifyKeywords(accountId, keywords) {
+    const account = this.getById(accountId);
+    if (!account) return [];
+    const list = setAccountKeywords(account, keywords);
+    this.save();
+    return list;
   }
 
   /** Misskey-family platforms support Pages */

@@ -790,3 +790,30 @@
   color: #e74c3c;
   font-size: 0.78rem;
 }
+
+/* ===== Keyword Alerts (감시 낱말 알림) ===== */
+.notif-type-badge.notif-type-keyword .notif-svg-icon {
+  color: #f0a030;
+}
+.notif-icon.notif-type-keyword .notif-svg-icon {
+  color: #f0a030;
+}
+/* 지시줄에 적중한 낱말을 칩으로 — "누가 무엇을 했다"보다 "무엇이 걸렸다"가 요점 */
+.notif-keyword-chip {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 8px;
+  background: rgba(240, 160, 48, 0.16);
+  color: #f0a030;
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notif-card.notif-type-keyword .notif-indicator-label {
+  color: var(--text-secondary);
+}

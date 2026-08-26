@@ -19,6 +19,7 @@ import { LinkEnrichmentMixin } from './mixins/link-enrichment.js';
 import { StreamingMixin } from './mixins/streaming.js';
 import { PagesMixin } from './mixins/pages.js';
 import { EmojiInfoMixin } from './mixins/emoji-info.js';
+import { KeywordAlertsMixin } from './mixins/keyword-alerts.js';
 import { initKeyboardNav } from './ui/keyboard-nav.js';
 import { initMfmMotion } from './ui/mfm-motion.js';
 import { rememberHostPlatform } from './ui/dashboard.js';
@@ -346,6 +347,7 @@ Object.assign(StarShipApp.prototype,
   StreamingMixin,
   PagesMixin,
   EmojiInfoMixin,
+  KeywordAlertsMixin,
 );
 
 // Initialize

@@ -71,6 +71,9 @@ export const StreamingMixin = {
     // Cache
     this.cachePosts([post]);
 
+    // 감시 낱말 적중 검사 — 걸리면 알림 컬럼에 바로 꽂힌다
+    this.scanKeywordAlerts?.([post], account);
+
     // Find columns that should receive this post
     const columns = this.columnsContainer.querySelectorAll('.column');
     for (const col of columns) {

@@ -28,6 +28,7 @@
 - **Thread View** - 대화 스레드를 트리 구조로 시각화
 - **MFM Rendering** - Misskey Flavored Markdown 전체 지원 (`$[spin]`, `$[rainbow]`, `$[fg]`, `$[ruby]` 등)
 - **Reactions** - 미스키 리액션 표시 및 전송, 커스텀 이모지 지원
+- **Keyword Alerts** - 계정마다 감시할 낱말을 걸어 두면, 그 낱말이 든 글이 타임라인에 뜰 때 멘션이 아니어도 알림 컬럼에 들어옴 (계정 관리 → 🔔)
 - **Image Lightbox** - 이미지 확대 보기 (줌 애니메이션)
 - **Drag Scroll** - 컬럼 헤더 드래그로 좌우 스크롤 (모멘텀 지원)
 - **Cloud Sync** - 계정 설정 클라우드 동기화
@@ -59,6 +60,7 @@ starship/
 │       ├── main.js         # App core (init, events, routing)
 │       ├── accounts.js     # Account store
 │       ├── auth.js         # Auth client
+│       ├── keyword-alerts.js # 감시 낱말 판정·보관 (DOM 없는 순수 로직)
 │       ├── api/
 │       │   ├── misskey.js  # Misskey/Iceshrimp/CherryPick API client
 │       │   └── mastodon.js # Mastodon API client
@@ -69,6 +71,7 @@ starship/
 │       │   ├── auth-ui.js        # Auth UI (login, register, menu)
 │       │   ├── account-setup.js  # Account add/settings
 │       │   ├── thread-view.js    # Conversation thread view
+│       │   ├── keyword-alerts.js # 계정별 감시 낱말 → 알림 컬럼 주입
 │       │   └── profile-modal.js  # Profile modal & edit
 │       └── ui/
 │           ├── dashboard.js      # Post/notification/account card rendering

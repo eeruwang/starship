@@ -469,6 +469,9 @@ export const DataLoadingMixin = {
       }
       this._notifNewestIds.set(container, newestIds);
 
+      // 감시 낱말 적중을 서버 알림과 합친다 (같은 글의 멘션 알림이 있으면 적중 쪽을 버림)
+      this.mergeKeywordNotifications?.(allNotifs);
+
       // Deduplicate by platform:id first (catch API-level duplicates / re-fetched notifications)
       {
         const seenIds = new Set();
@@ -690,11 +693,16 @@ export const DataLoadingMixin = {
           merged.push(item);
         }
       }
-      return merged.map(item => this._addPostMeta(client.normalizePost(item), account));
+      const posts = merged.map(item => this._addPostMeta(client.normalizePost(item), account));
+      // 과거 스크롤(untilId)에는 걸지 않는다 — 옛 글로 알림이 쏟아지는 걸 막는다
+      if (!untilId) this.scanKeywordAlerts?.(posts, account);
+      return posts;
     }
 
     const items = await client.getHomeTimeline(this.settings.postsCount, untilId);
-    return items.map(item => this._addPostMeta(client.normalizePost(item), account));
+    const posts = items.map(item => this._addPostMeta(client.normalizePost(item), account));
+    if (!untilId) this.scanKeywordAlerts?.(posts, account);
+    return posts;
   },
 
   _normalizeAcct(acct, instanceUrl) {

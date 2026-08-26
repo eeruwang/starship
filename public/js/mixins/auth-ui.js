@@ -5,6 +5,7 @@
 import { escapeHtml } from '../ui/utils.js';
 import { usableColor } from '../ui/dashboard.js';
 import { startMastodonOAuth, startMiAuth, waitForAuthCallback, clearPendingAuth, openAuthPopup } from '../auth.js';
+import { getAccountKeywords, MAX_KEYWORDS } from '../keyword-alerts.js';
 
 const SOFTWARE_LABELS = {
   misskey: 'Misskey', sharkey: 'Sharkey', foundkey: 'FoundKey', hajkey: 'Hajkey',
@@ -115,6 +116,7 @@ export const AuthUIMixin = {
             instanceUrl: a.instanceUrl,
             accessToken: a.accessToken, themeColor: a.themeColor,
             label: a.label, profile: a.profile, hidden: a.hidden || false,
+            notifyKeywords: getAccountKeywords(a),
           })),
           settings: this.settings,
           columnState: this.columnState,
@@ -393,6 +395,7 @@ export const AuthUIMixin = {
             instanceUrl: a.instanceUrl,
             accessToken: a.accessToken, themeColor: a.themeColor,
             label: a.label, profile: a.profile, hidden: a.hidden || false,
+            notifyKeywords: getAccountKeywords(a),
           })),
           settings: this.settings,
           columnState: this.columnState,
@@ -506,7 +509,7 @@ export const AuthUIMixin = {
       <div class="reauth-picker-modal">
         <div class="reauth-picker-header">
           <h3>계정 관리</h3>
-          <p class="reauth-picker-desc">${accounts.length > 0 ? '드래그하여 순서 변경. 클릭하면 재인증. 👁 표시 토글, ✕ 삭제' : '연결된 계정이 없습니다. 아래에서 추가하세요.'}</p>
+          <p class="reauth-picker-desc">${accounts.length > 0 ? '드래그하여 순서 변경. 클릭하면 재인증. 🔔 알림 낱말, 👁 표시 토글, ✕ 삭제' : '연결된 계정이 없습니다. 아래에서 추가하세요.'}</p>
         </div>
         <div class="reauth-picker-list">
           ${accounts.map((a, i) => {
@@ -521,7 +524,9 @@ export const AuthUIMixin = {
             const wsStatus = this.streamManager?.getAccountStatus(a.id) || 'disconnected';
             const wsStatusClass = `ws-${wsStatus}`;
             const wsStatusTitle = wsStatus === 'connected' ? '스트리밍 연결됨' : wsStatus === 'connecting' ? '연결 중...' : wsStatus === 'unsupported' ? '스트리밍 미지원' : '스트리밍 끊김';
+            const keywords = getAccountKeywords(a);
             return `
+            <div class="reauth-picker-entry">
             <div class="reauth-picker-row${isHidden ? ' account-hidden' : ''}" data-account-id="${a.id}" data-index="${i}" draggable="true" style="border-left: 3px solid ${borderColor}; border-radius: var(--radius);">
               <span class="reauth-drag-handle" title="드래그하여 순서 변경">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
@@ -535,12 +540,25 @@ export const AuthUIMixin = {
                 <span class="ws-status-dot ${wsStatusClass}" data-ws-account-id="${a.id}" title="${wsStatusTitle}"></span>
                 <span class="platform-badge ${sw}" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 8px; white-space: nowrap;">${escapeHtml(swLabel)}</span>
               </button>
+              <button class="reauth-picker-bell${keywords.length ? ' has-keywords' : ''}" data-account-id="${a.id}" title="알림 낱말 설정" aria-expanded="false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                ${keywords.length ? `<span class="reauth-bell-count">${keywords.length}</span>` : ''}
+              </button>
               <button class="reauth-picker-eye" data-account-id="${a.id}" title="${isHidden ? '전체/알림에 표시' : '전체/알림에서 숨기기'}">
                 ${eyeSvg}
               </button>
               <button class="reauth-picker-delete" data-account-id="${a.id}" title="계정 삭제">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
+            </div>
+            <div class="reauth-keyword-panel" data-keyword-panel="${a.id}" hidden>
+              <p class="reauth-keyword-hint">이 낱말이 든 글이 타임라인에 뜨면 멘션이 아니어도 알림에 넣습니다. 대소문자는 가리지 않고, 낱말 일부만 겹쳐도 걸립니다. 쉼표로 여러 개를 한 번에 넣을 수 있습니다.</p>
+              <div class="reauth-keyword-chips" data-keyword-chips="${a.id}"></div>
+              <div class="reauth-keyword-add">
+                <input type="text" class="input reauth-keyword-input" data-keyword-input="${a.id}" placeholder="예: 이루왕, 루왕" maxlength="40" autocomplete="off">
+                <button class="btn btn-secondary btn-small" data-keyword-add="${a.id}">추가</button>
+              </div>
+            </div>
             </div>
           `}).join('')}
         </div>
@@ -632,6 +650,126 @@ export const AuthUIMixin = {
       });
     });
 
+    // 알림 낱말 패널 — 열고 닫기, 낱말 추가/삭제
+    // 낱말은 사용자가 직접 친 문자열이므로 HTML 문자열에 끼워 넣지 않고
+    // textContent 로만 넣는다 (escapeHtml 은 따옴표를 escape 하지 않아
+    // 속성 자리에서는 안전하지 않다). 삭제는 값 대신 자리 번호로 가리킨다.
+    const renderKeywordChips = (accountId) => {
+      const box = picker.querySelector(`[data-keyword-chips="${CSS.escape(accountId)}"]`);
+      if (!box) return;
+      const keywords = this.store.getNotifyKeywords(accountId);
+      box.textContent = '';
+      if (keywords.length === 0) {
+        const empty = document.createElement('span');
+        empty.className = 'reauth-keyword-empty';
+        empty.textContent = '걸어 둔 낱말이 없습니다.';
+        box.appendChild(empty);
+      } else {
+        keywords.forEach((k, idx) => {
+          const chip = document.createElement('span');
+          chip.className = 'reauth-keyword-chip';
+          chip.appendChild(document.createTextNode(k));
+          const rm = document.createElement('button');
+          rm.className = 'reauth-keyword-remove';
+          rm.dataset.keywordIndex = String(idx);
+          rm.dataset.accountId = accountId;
+          rm.title = '삭제';
+          rm.setAttribute('aria-label', `${k} 삭제`);
+          rm.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+          chip.appendChild(rm);
+          box.appendChild(chip);
+        });
+      }
+      // 종 아이콘의 개수 배지도 함께 맞춘다
+      const bell = picker.querySelector(`.reauth-picker-bell[data-account-id="${CSS.escape(accountId)}"]`);
+      if (bell) {
+        bell.classList.toggle('has-keywords', keywords.length > 0);
+        const badge = bell.querySelector('.reauth-bell-count');
+        if (keywords.length > 0) {
+          if (badge) badge.textContent = String(keywords.length);
+          else bell.insertAdjacentHTML('beforeend', `<span class="reauth-bell-count">${keywords.length}</span>`);
+        } else if (badge) {
+          badge.remove();
+        }
+      }
+    };
+
+    const commitKeywords = (accountId, keywords) => {
+      const saved = this.store.setNotifyKeywords(accountId, keywords);
+      renderKeywordChips(accountId);
+      this.debouncedSaveToCloud();
+      if (saved.length === 0) {
+        this.clearKeywordHits?.(accountId);
+      } else {
+        // 이미 받아 둔 글에도 소급 적용 — 설정 직후 바로 반응이 보이게
+        this.rescanKeywordAlerts?.(accountId);
+      }
+      return saved;
+    };
+
+    picker.querySelectorAll('.reauth-picker-bell').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const accountId = btn.dataset.accountId;
+        const panel = picker.querySelector(`[data-keyword-panel="${CSS.escape(accountId)}"]`);
+        if (!panel) return;
+        const willOpen = panel.hidden;
+        // 한 번에 하나만 연다
+        picker.querySelectorAll('.reauth-keyword-panel').forEach(p => { p.hidden = true; });
+        picker.querySelectorAll('.reauth-picker-bell').forEach(b => b.setAttribute('aria-expanded', 'false'));
+        panel.hidden = !willOpen;
+        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        if (willOpen) {
+          renderKeywordChips(accountId);
+          panel.querySelector('.reauth-keyword-input')?.focus();
+        }
+      });
+    });
+
+    const addKeywordsFrom = (accountId) => {
+      const input = picker.querySelector(`[data-keyword-input="${CSS.escape(accountId)}"]`);
+      if (!input) return;
+      const raw = input.value.trim();
+      if (!raw) return;
+      const current = this.store.getNotifyKeywords(accountId);
+      if (current.length >= MAX_KEYWORDS) {
+        alert(`낱말은 계정당 최대 ${MAX_KEYWORDS}개까지 걸 수 있습니다.`);
+        return;
+      }
+      commitKeywords(accountId, [...current, raw]);
+      input.value = '';
+      input.focus();
+    };
+
+    picker.querySelectorAll('[data-keyword-add]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        addKeywordsFrom(btn.dataset.keywordAdd);
+      });
+    });
+
+    picker.querySelectorAll('.reauth-keyword-input').forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.stopPropagation();
+        addKeywordsFrom(input.dataset.keywordInput);
+      });
+    });
+
+    // 칩 삭제는 위임으로 — 칩은 다시 그려지므로 개별 바인딩이 살아남지 못한다
+    picker.querySelectorAll('.reauth-keyword-chips').forEach(box => {
+      box.addEventListener('click', (e) => {
+        const rm = e.target.closest('[data-keyword-index]');
+        if (!rm) return;
+        e.stopPropagation();
+        const accountId = rm.dataset.accountId;
+        const idx = parseInt(rm.dataset.keywordIndex, 10);
+        const next = this.store.getNotifyKeywords(accountId).filter((_, i) => i !== idx);
+        commitKeywords(accountId, next);
+      });
+    });
+
     // Delete click → remove account
     picker.querySelectorAll('.reauth-picker-delete').forEach(btn => {
       btn.addEventListener('click', async (e) => {
@@ -642,6 +780,7 @@ export const AuthUIMixin = {
         const name = account.profile?.displayName || account.label || accountId;
         if (!confirm(`"${name}" 계정을 삭제하시겠습니까?\n이 계정의 연결이 해제됩니다.`)) return;
         this.store.removeAccount(accountId);
+        this.clearKeywordHits?.(accountId);
         this.streamManager?.disconnect(accountId);
         this.debouncedSaveToCloud();
         // Remove the row from the picker
