@@ -4,6 +4,7 @@
  */
 import { escapeHtml, cachedImageUrl } from './utils.js';
 import { familyOf } from './platform-families.js';
+import { postSupportsReactions as supportsReactions } from '../reaction-support.js';
 import {
   iconReply, iconBoost, iconStar, iconHeart, iconLink,
   iconRefresh, iconClose, iconWarning, iconImage,
@@ -121,21 +122,6 @@ function platformBadgeHtml(post) {
   if (!sw) return '';
   const label = PLATFORM_LABELS[sw] || sw;
   return `<span class="platform-badge ${escapeHtml(sw)} badge-xs">${escapeHtml(label)}</span>`;
-}
-
-// Mastodon-fork software that supports emoji reactions
-const REACTION_SOFTWARE = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
-
-function supportsReactions(post) {
-  // Non-mastodon platforms (Misskey forks) always support reactions
-  if (post.platform !== 'mastodon') return true;
-  // Mastodon forks with known reaction support
-  if (post.accountSoftware && REACTION_SOFTWARE.has(post.accountSoftware)) return true;
-  // Merged post from multiple accounts including a non-mastodon one
-  if (post.mergedAccounts && post.mergedAccounts.some(a => a.platform !== 'mastodon')) return true;
-  // Post already has reactions (server clearly supports them)
-  if (post.reactions && Object.keys(post.reactions).length > 0) return true;
-  return false;
 }
 
 // Mastodon의 theme-color 메타태그는 배경색(#181820/#ffffff)을 반환하므로

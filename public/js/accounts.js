@@ -5,6 +5,7 @@
 import { MastodonClient } from './api/mastodon.js';
 import { MisskeyClient } from './api/misskey.js';
 import { getAccountKeywords, setAccountKeywords } from './keyword-alerts.js';
+import { setAccountReactionDialect, forgetAccountReactionDialect } from './reaction-support.js';
 
 const STORAGE_KEY = 'starship_accounts';
 
@@ -54,9 +55,34 @@ export class AccountStore {
 
   createClient(account) {
     if (account.platform === 'mastodon') {
-      return new MastodonClient(account.instanceUrl, account.accessToken, account.software || 'mastodon');
+      const client = new MastodonClient(
+        account.instanceUrl, account.accessToken,
+        account.software || 'mastodon', account.reactionDialect || null,
+      );
+      // 카드를 그리는 쪽은 클라이언트를 못 보므로 계정 단위로 따로 등록해 둔다.
+      // accountId 를 들려 주면 글을 읽다 뒤늦게 알아낸 것도 클라이언트가 직접 등록한다.
+      client.accountId = account.id;
+      setAccountReactionDialect(account.id, client.reactionDialect);
+      return client;
     }
     return new MisskeyClient(account.instanceUrl, account.accessToken, account.platform);
+  }
+
+  /**
+   * 마스토돈 계열 서버가 이모지 리액션을 받는지 알아내 계정에 적어 둔다.
+   * 이름표로는 Fedibird 를 가려낼 수 없어서 서버의 능력 신고를 읽는다.
+   */
+  async detectReactionSupport(account) {
+    if (!account || account.platform !== 'mastodon') return null;
+    const client = this.clients.get(account.id);
+    if (!client?.detectReactionSupport) return null;
+    const dialect = await client.detectReactionSupport().catch(() => null);
+    setAccountReactionDialect(account.id, dialect);
+    if (dialect && dialect !== account.reactionDialect) {
+      account.reactionDialect = dialect;
+      this.save();
+    }
+    return dialect;
   }
 
   normalizeUrl(url) {
@@ -164,8 +190,14 @@ export class AccountStore {
     }
 
     this.accounts.push(account);
+    if (platform === 'mastodon') {
+      client.accountId = account.id;
+      setAccountReactionDialect(account.id, client.reactionDialect);
+    }
     this.clients.set(account.id, client);
     this.save();
+    // 붙이자마자 리액션 단추가 나오도록 여기서 한 번 확인한다 (실패해도 그냥 넘어간다)
+    if (platform === 'mastodon') await this.detectReactionSupport(account).catch(() => {});
     return account;
   }
 
@@ -205,6 +237,11 @@ export class AccountStore {
             if (v) account.serverVersion = v;
           }).catch(() => {})
         );
+      }
+      // 이모지 리액션을 받는 서버인지 확인. 같은 /api/v2/instance 응답을
+      // getServerVersion 과 나눠 쓰므로 왕복이 늘지 않는다.
+      if (account.platform === 'mastodon') {
+        updates.push(this.detectReactionSupport(account).catch(() => {}));
       }
       updates.push(
         client.verifyCredentials().then(profile => {
@@ -273,6 +310,7 @@ export class AccountStore {
   removeAccount(accountId) {
     this.accounts = this.accounts.filter(a => a.id !== accountId);
     this.clients.delete(accountId);
+    forgetAccountReactionDialect(accountId);
     this.save();
   }
 

@@ -5,21 +5,34 @@
  */
 import { debugLog } from '../ui/debug.js';
 import { escapeHtml, cachedImageUrl, sanitizeHtml } from '../ui/utils.js';
-
-// Mastodon-compatible software that supports emoji reactions
-const REACTION_SOFTWARE = new Set(['hollo', 'fedibird', 'glitchcafe', 'akkoma', 'pleroma']);
+import {
+  DIALECT_PLEROMA, DIALECT_FEDIBIRD, dialectForSoftware, dialectFromNodeInfo,
+  dialectFromInstance, dialectFromStatus, setAccountReactionDialect,
+} from '../reaction-support.js';
 
 export class MastodonClient {
-  constructor(instanceUrl, accessToken, software = 'mastodon') {
+  constructor(instanceUrl, accessToken, software = 'mastodon', reactionDialect = null) {
     this.instanceUrl = instanceUrl.replace(/\/+$/, '');
     this.accessToken = accessToken;
     this.software = software;
+    // 이름으로 알 수 있으면 그것으로 시작하고, 저장된 값이 있으면 그것을 쓴다.
+    // 서버 신고를 읽어 오면 detectReactionSupport 가 덮어쓴다.
+    this.reactionDialect = reactionDialect || dialectForSoftware(software);
     // localhost가 아니면 Worker 프록시 사용 (Cloudflare 배포 환경)
     this.useProxy = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
   }
 
   get supportsReactions() {
-    return REACTION_SOFTWARE.has(this.software);
+    return !!this.reactionDialect;
+  }
+
+  /** 서버 응답 하나에서 방언을 알아냈을 때 (이미 알고 있으면 그대로 둔다) */
+  learnReactionDialect(dialect) {
+    if (dialect && !this.reactionDialect) {
+      this.reactionDialect = dialect;
+      if (this.accountId) setAccountReactionDialect(this.accountId, dialect);
+    }
+    return this.reactionDialect;
   }
 
   async request(method, path, body = null) {
@@ -157,13 +170,15 @@ export class MastodonClient {
 
   /**
    * Emoji reaction support for Mastodon-compatible forks.
-   * - Fedibird/glitch-soc/Hollo:  PUT  /api/v1/statuses/:id/emoji_reactions/:emoji
+   * - Fedibird/Hollo:             PUT  /api/v1/statuses/:id/emoji_reactions/:emoji
    * - Hollo(native)  fallback:    POST /api/v1/statuses/:id/react/:emoji
    * - Pleroma/Akkoma:             PUT  /api/v1/pleroma/statuses/:id/reactions/:emoji
+   * 어느 쪽인지는 reactionDialect 가 들고 있다. 소프트웨어 이름으로 가르지 않는
+   * 까닭은 Fedibird 가 자기를 mastodon 으로 신고하기 때문이다.
    */
   async createReaction(id, reaction = '❤') {
     const emoji = encodeURIComponent(reaction.replace(/^:|:$/g, ''));
-    if (this.software === 'akkoma' || this.software === 'pleroma') {
+    if (this.reactionDialect === DIALECT_PLEROMA) {
       return this.request('PUT', `/api/v1/pleroma/statuses/${encodeURIComponent(id)}/reactions/${emoji}`);
     }
     try {
@@ -180,7 +195,7 @@ export class MastodonClient {
   async deleteReaction(id, reaction) {
     if (!reaction) return this.unfavourite(id);
     const emoji = encodeURIComponent(reaction.replace(/^:|:$/g, ''));
-    if (this.software === 'akkoma' || this.software === 'pleroma') {
+    if (this.reactionDialect === DIALECT_PLEROMA) {
       return this.request('DELETE', `/api/v1/pleroma/statuses/${encodeURIComponent(id)}/reactions/${emoji}`);
     }
     try {
@@ -197,12 +212,14 @@ export class MastodonClient {
   async getReactions(id, type = null) {
     try {
       let reactions;
-      if (this.software === 'akkoma' || this.software === 'pleroma') {
+      if (this.reactionDialect === DIALECT_PLEROMA) {
         reactions = await this.request('GET', `/api/v1/pleroma/statuses/${encodeURIComponent(id)}/reactions`);
       } else {
         reactions = await this.request('GET', `/api/v1/statuses/${encodeURIComponent(id)}/emoji_reactions`);
       }
       if (!Array.isArray(reactions)) return [];
+      // 신고 없이도 이 경로가 열려 있으면 그 서버는 Fedibird 계열 엔드포인트를 받는다
+      if (reactions.length > 0) this.learnReactionDialect(DIALECT_FEDIBIRD);
       // Normalize to flat user list like Misskey: [{ type, user }]
       const result = [];
       for (const r of reactions) {
@@ -335,16 +352,69 @@ export class MastodonClient {
 
   // 서버 버전 문자열 조회 (예: "4.4.0"). 실패 시 null.
   // Mastodon 4.4+ 네이티브 quote 지원 판별용.
-  async getServerVersion() {
-    try {
-      const inst = await this.request('GET', '/api/v2/instance');
-      if (inst?.version) return String(inst.version);
-    } catch (_) {}
-    try {
-      const inst = await this.request('GET', '/api/v1/instance');
-      if (inst?.version) return String(inst.version);
-    } catch (_) {}
+  /**
+   * /api/v2/instance 를 한 번만 받아 두고 돌려준다. 없으면 v1 로 내려간다.
+   * 서버 버전과 리액션 능력 신고가 같은 응답에 들어 있어서 왕복을 한 번으로 줄인다.
+   */
+  async getInstanceInfo() {
+    if (this._instanceInfo !== undefined) return this._instanceInfo;
+    for (const path of ['/api/v2/instance', '/api/v1/instance']) {
+      try {
+        const inst = await this.request('GET', path);
+        if (inst && typeof inst === 'object') {
+          this._instanceInfo = inst;
+          return inst;
+        }
+      } catch (_) { /* 다음 경로로 */ }
+    }
+    this._instanceInfo = null;
     return null;
+  }
+
+  async getServerVersion() {
+    const inst = await this.getInstanceInfo();
+    return inst?.version ? String(inst.version) : null;
+  }
+
+  /**
+   * 이 서버가 이모지 리액션을 받는지, 받는다면 어느 엔드포인트 계열인지 알아낸다.
+   * NodeInfo 의 metadata.features 와 instance 응답의 능력 신고를 차례로 읽는다.
+   * 둘 다 조용하면 null 이고, 그때는 글에 리액션이 실려 오는 것을 보고 뒤늦게 배운다.
+   */
+  async detectReactionSupport() {
+    const fromInstance = dialectFromInstance(await this.getInstanceInfo());
+    if (fromInstance) {
+      this.reactionDialect = fromInstance;
+      return fromInstance;
+    }
+    const fromNodeInfo = dialectFromNodeInfo(await this.getNodeInfo());
+    if (fromNodeInfo) {
+      this.reactionDialect = fromNodeInfo;
+      return fromNodeInfo;
+    }
+    return this.reactionDialect;
+  }
+
+  /** NodeInfo 문서. 프록시를 거쳐 받고 한 번만 받는다. */
+  async getNodeInfo() {
+    if (this._nodeInfo !== undefined) return this._nodeInfo;
+    this._nodeInfo = null;
+    const url = (target) => this.useProxy ? `/proxy?url=${encodeURIComponent(target)}` : target;
+    try {
+      const discRes = await fetch(url(`${this.instanceUrl}/.well-known/nodeinfo`), {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!discRes.ok) return null;
+      const disc = await discRes.json();
+      const link = (disc.links || []).find(l => (l.rel || '').includes('nodeinfo'));
+      if (!link?.href) return null;
+      // 남의 호스트로 끌려가지 않게 막는다
+      if (new URL(link.href).host !== new URL(this.instanceUrl).host) return null;
+      const niRes = await fetch(url(link.href), { headers: { 'Accept': 'application/json' } });
+      if (!niRes.ok) return null;
+      this._nodeInfo = await niRes.json();
+    } catch (_) { /* 신고가 없으면 없는 대로 */ }
+    return this._nodeInfo;
   }
 
   async fetchThemeColor() {
@@ -805,6 +875,8 @@ export class MastodonClient {
     let myReaction = null;
     const emojiReactions = status.emoji_reactions || status.reactions || status.pleroma?.emoji_reactions;
     if (Array.isArray(emojiReactions) && emojiReactions.length > 0) {
+      // 신고를 못 찾았어도 글에 리액션이 실려 왔으면 그 서버는 리액션을 받는다
+      this.learnReactionDialect(dialectFromStatus(status));
       reactions = {};
       reactionEmojis = {};
       for (const er of emojiReactions) {

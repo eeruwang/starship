@@ -54,6 +54,8 @@ export const KeywordAlertsMixin = {
       if (matched.length === 0) continue;
 
       const dp = displayPostOf(post);
+      const notif = this._buildKeywordNotification({ post: dp, accountId: account.id, keywords: matched });
+      if (!notif) continue;
       hits.push({
         key,
         at: Date.now(),
@@ -63,7 +65,7 @@ export const KeywordAlertsMixin = {
         post: dp,
       });
       this._kwHitKeys.add(key);
-      fresh.push(this._buildKeywordNotification({ post: dp, accountId: account.id, keywords: matched }));
+      fresh.push(notif);
     }
 
     if (fresh.length === 0) return [];

@@ -221,10 +221,13 @@ export const PostActionsMixin = {
           } else {
             await client.unfavourite(actionPostId);
           }
-        } else if (useReactionForFav) {
-          await client.createReaction(actionPostId, '❤');
         } else {
-          await client.favourite(actionPostId);
+          if (useReactionForFav) {
+            await client.createReaction(actionPostId, '❤');
+          } else {
+            await client.favourite(actionPostId);
+          }
+          this._pulseAction(btnElement);
         }
       } else if (action === 'boost') {
         const alreadyBoosted = cachedPost?.reblogged;
@@ -234,10 +237,15 @@ export const PostActionsMixin = {
           } else {
             await client.unrenote(actionPostId);
           }
-        } else if (accountPlatform === 'mastodon') {
-          await client.reblog(actionPostId);
+          this._setLocalBoostState(cachedPost, accountPlatform, false);
         } else {
-          await client.renote(actionPostId);
+          if (accountPlatform === 'mastodon') {
+            await client.reblog(actionPostId);
+          } else {
+            await client.renote(actionPostId);
+          }
+          this._setLocalBoostState(cachedPost, accountPlatform, true);
+          this._pulseAction(btnElement);
         }
       } else if (action === 'reply') {
         btnElement.classList.remove('processing');
@@ -269,6 +277,24 @@ export const PostActionsMixin = {
       console.error(`Action ${action} failed:`, err);
       btnElement.classList.remove('processing');
     }
+  },
+
+  /**
+   * 마스토돈은 status.reblogged 로 "내가 부스트했는가" 를 돌려주지만,
+   * 미스키 계열 API 는 그 값을 내주지 않아 normalizePost 가 항상 false 로 채운다.
+   * refreshSinglePost 가 비마스토돈 계정에서는 캐시 값을 그대로 믿고 넣으므로,
+   * 리노트/취소가 성공한 직후에 여기서 적어 둔다.
+   */
+  _setLocalBoostState(cachedPost, accountPlatform, boosted) {
+    if (!cachedPost || accountPlatform === 'mastodon') return;
+    cachedPost.reblogged = boosted;
+  },
+
+  /** 누른 직후의 퍼지는 모션. 색과 숫자는 서버 응답을 받아 refreshSinglePost 가 넣는다. */
+  _pulseAction(btnElement) {
+    if (!btnElement) return;
+    btnElement.classList.add('just-activated');
+    setTimeout(() => btnElement.classList.remove('just-activated'), 600);
   },
 
   async refreshSinglePost(postId, platform, accountId, { fullRerender = false } = {}) {

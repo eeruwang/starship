@@ -27,7 +27,7 @@
 - **Compose** - 다중 계정 동시 게시, 답글, 인용, 미디어 첨부
 - **Thread View** - 대화 스레드를 트리 구조로 시각화
 - **MFM Rendering** - Misskey Flavored Markdown 전체 지원 (`$[spin]`, `$[rainbow]`, `$[fg]`, `$[ruby]` 등)
-- **Reactions** - 미스키 리액션 표시 및 전송, 커스텀 이모지 지원
+- **Reactions** - 미스키 리액션 표시 및 전송, 커스텀 이모지 지원. 마스토돈 API 를 쓰는 서버는 이름표 대신 서버가 내놓는 능력 신고를 읽어 리액션을 받는 곳을 가려냄 (Fedibird, Pleroma, Akkoma, Hollo 및 같은 신고를 하는 포크)
 - **Keyword Alerts** - 계정마다 감시할 낱말을 걸어 두면, 그 낱말이 든 글이 타임라인에 뜰 때 멘션이 아니어도 알림 컬럼에 들어옴 (계정 관리 → 🔔)
 - **Image Lightbox** - 이미지 확대 보기 (줌 애니메이션)
 - **Drag Scroll** - 컬럼 헤더 드래그로 좌우 스크롤 (모멘텀 지원)
@@ -61,6 +61,7 @@ starship/
 │       ├── accounts.js     # Account store
 │       ├── auth.js         # Auth client
 │       ├── keyword-alerts.js # 감시 낱말 판정·보관 (DOM 없는 순수 로직)
+│       ├── reaction-support.js # 마스토돈 계열의 리액션 지원 판정 (DOM 없는 순수 로직)
 │       ├── api/
 │       │   ├── misskey.js  # Misskey/Iceshrimp/CherryPick API client
 │       │   └── mastodon.js # Mastodon API client
