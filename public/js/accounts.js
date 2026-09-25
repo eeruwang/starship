@@ -4,6 +4,7 @@
  */
 import { MastodonClient } from './api/mastodon.js';
 import { MisskeyClient } from './api/misskey.js';
+import { broadcastChange } from './sync-channel.js';
 
 const STORAGE_KEY = 'starship_accounts';
 
@@ -42,6 +43,10 @@ export class AccountStore {
 
   save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.accounts)); } catch {}
+    // Tell other tabs to reload their in-memory accounts snapshot. Skipping
+    // this lets tab B's debounced saveToCloud overwrite the cloud with a
+    // stale account list after tab A removes/adds one.
+    try { broadcastChange('accounts'); } catch {}
   }
 
   initClients() {

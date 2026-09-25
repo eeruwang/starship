@@ -4,6 +4,7 @@
  */
 import { AccountStore } from './accounts.js';
 import { StreamManager } from './streaming.js';
+import { broadcastChange, onChange } from './sync-channel.js';
 
 // Mixins
 import { PostActionsMixin } from './mixins/post-actions.js';
@@ -103,6 +104,10 @@ class StarShipApp {
     initMfmMotion();
     // 알려진 계정의 host → software 매핑을 캐시에 시드 (작성자 배지 정확도)
     this._seedHostPlatformCache();
+    // 다른 탭에서 계정/컬럼/설정 바뀌면 이 탭도 반영. debouncedSaveToCloud를
+    // 취소하지 않으면 이 탭의 스테일 스냅샷이 방금 저장된 클라우드 데이터를
+    // 덮어쓴다.
+    this._unbindSyncChannel = onChange((msg) => this._onCrossTabChange(msg));
     // iOS 키보드 높이를 CSS 변수(--keyboard-h)로 노출 → 컴포즈 모달이 본문을 키보드
     // 위로 띄울 수 있게 한다.
     this._initVisualViewportShim();
@@ -144,6 +149,7 @@ class StarShipApp {
 
   saveSettings() {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch {}
+    try { broadcastChange('settings'); } catch {}
     this.debouncedSaveToCloud();
   }
 
@@ -252,7 +258,33 @@ class StarShipApp {
 
   saveColumnState() {
     try { localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(this.columnState)); } catch {}
+    try { broadcastChange('columnState'); } catch {}
     this.debouncedSaveToCloud();
+  }
+
+  _onCrossTabChange(msg) {
+    if (!msg || typeof msg.type !== 'string') return;
+    // Cancel any pending cloud save so this tab doesn't upload a stale
+    // snapshot on top of the fresh one the other tab just saved.
+    clearTimeout(this._syncDebounce);
+    this._syncDebounce = null;
+    switch (msg.type) {
+      case 'accounts':
+        this.store.accounts = this.store.load();
+        this.store.initClients();
+        this.render();
+        break;
+      case 'columnState':
+        this.columnState = this.loadColumnState();
+        this.render();
+        break;
+      case 'settings':
+        this.settings = this.loadSettings();
+        this.AUTO_REFRESH_INTERVAL = this.settings.refreshInterval;
+        this.applySettings();
+        this.startAutoRefresh();
+        break;
+    }
   }
 
   initElements() {

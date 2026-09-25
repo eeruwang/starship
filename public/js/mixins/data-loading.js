@@ -1509,9 +1509,14 @@ export const DataLoadingMixin = {
               }
               // Persist on the post for subsequent refreshes — survives via postCache
               this._persistReactionByUser(groupNotifs[0].post, reactionByUser);
-              const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, acct.instanceUrl, 'authoritative', { ground: true });
+              // Not ground-truth: getReactions() here is a single unpaginated
+              // page from the receiving Mastodon-compat server, which for a
+              // remote post may not carry every reactor yet. Pass ground=false
+              // so we don't negative-lock a notif Phase 3 could still promote.
+              // Also don't delete from favByUri — let Phase 3's authoritative
+              // Misskey walk overwrite via _assignReaction confidence gating.
+              const changed = applyReactions(groupNotifs, reactionByUser, reactionEmojis, acct.instanceUrl, 'authoritative', { ground: false });
               if (changed) rerenderGroup(groupNotifs);
-              favByUri.delete(uri);
             } catch (e) {
               this._debugWarn('[StarShip] mastodon-self fav→reaction error:', e?.message || e);
             }

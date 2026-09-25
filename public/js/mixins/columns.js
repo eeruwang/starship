@@ -451,59 +451,140 @@ export const ColumnsMixin = {
     return null; // append to end
   },
 
-  renderColumns() {
-    this.columnsContainer.innerHTML = '';
-    const allAccounts = this.store.getAll();
-    if (allAccounts.length === 0) return;
+  // Canonical key for a column DOM element. Matches the keys stored in
+  // columnState.order so diff-based renderColumns() can pair them up.
+  _columnKey(col) {
+    if (!col) return null;
+    const t = col.dataset.columnType;
+    if (t === 'account') return `account:${col.dataset.accountId}`;
+    if (t === 'thread') return col.dataset.threadKey;
+    return t;
+  },
 
+  // Fingerprint the visible-accounts set so aggregate columns can detect a
+  // membership change (add/remove/hide/unhide) and rebuild instead of showing
+  // stale content.
+  _visibleAccountsFingerprint() {
+    return this.store.getVisible().map(a => a.id).join(',');
+  },
+
+  // Build one column (DOM + first data load) for a given order key.
+  // Returns the section element, or null when the key can't be materialized.
+  _buildColumnForKey(key) {
     const visibleAccounts = this.store.getVisible();
-    const order = this.columnState.order || [];
+    const stampFp = (col) => { col.dataset.visibleFp = this._visibleAccountsFingerprint(); };
+    if (key === 'all') {
+      const col = this.createColumn('전체', 'all', null);
+      stampFp(col);
+      this.loadTimelineForColumn(col.querySelector('.column-content'), visibleAccounts);
+      return col;
+    }
+    if (key === 'notifications') {
+      const col = this.createColumn('알림', 'notifications', null);
+      stampFp(col);
+      this.loadNotificationsForColumn(col.querySelector('.column-content'), visibleAccounts);
+      return col;
+    }
+    if (key === 'bookmarks') {
+      const col = this.createColumn('북마크', 'bookmarks', null);
+      stampFp(col);
+      this.loadBookmarksForColumn(col.querySelector('.column-content'), visibleAccounts);
+      return col;
+    }
+    if (key === 'dm') {
+      const col = this.createColumn('DM', 'dm', null);
+      stampFp(col);
+      this.loadConversationsForColumn(col.querySelector('.column-content'), visibleAccounts);
+      return col;
+    }
+    if (key === 'pages') {
+      const col = this.createColumn('페이지', 'pages', null);
+      stampFp(col);
+      this.loadPagesFeedForColumn(col.querySelector('.column-content'), visibleAccounts);
+      return col;
+    }
+    if (key.startsWith('account:')) {
+      const accountId = key.slice('account:'.length);
+      const account = this.store.getById(accountId);
+      if (!account) return null;
+      const name = escapeHtml(account.label || account.profile.displayName);
+      const col = this.createColumn(name, 'account', account.id);
+      this.loadTimelineForColumn(col.querySelector('.column-content'), [account]);
+      return col;
+    }
+    if (key.startsWith('thread:')) {
+      const info = this.columnState.threads?.[key];
+      if (!info) return null;
+      const col = this.buildSingleColumn('thread', null, key);
+      if (col) this.loadThreadForColumn(col);
+      return col;
+    }
+    return null;
+  },
 
-    // Render columns in saved toggle order
+  // Diff-based column render. Preserves existing column DOM (scroll position,
+  // in-flight fetches, IntersectionObservers) whenever the same key survives
+  // the state change. Only removes columns that dropped out and adds ones
+  // that appeared; reorders in place without a full teardown.
+  renderColumns() {
+    const container = this.columnsContainer;
+    const allAccounts = this.store.getAll();
+    if (allAccounts.length === 0) {
+      container.innerHTML = '';
+      this._renderPagerDots();
+      return;
+    }
+
+    // Desired keys, in order.
+    const order = this.columnState.order || [];
+    const desiredKeys = [];
     for (const key of order) {
-      if (key === 'all' && this.columnState.all) {
-        const col = this.createColumn('전체', 'all', null);
-        this.columnsContainer.appendChild(col);
-        this.loadTimelineForColumn(col.querySelector('.column-content'), visibleAccounts);
-      } else if (key === 'notifications' && this.columnState.notifications) {
-        const col = this.createColumn('알림', 'notifications', null);
-        this.columnsContainer.appendChild(col);
-        this.loadNotificationsForColumn(col.querySelector('.column-content'), visibleAccounts);
-      } else if (key === 'bookmarks' && this.columnState.bookmarks) {
-        const col = this.createColumn('북마크', 'bookmarks', null);
-        this.columnsContainer.appendChild(col);
-        this.loadBookmarksForColumn(col.querySelector('.column-content'), visibleAccounts);
-      } else if (key === 'dm' && this.columnState.dm) {
-        const col = this.createColumn('DM', 'dm', null);
-        this.columnsContainer.appendChild(col);
-        this.loadConversationsForColumn(col.querySelector('.column-content'), visibleAccounts);
-      } else if (key === 'pages' && this.columnState.pages) {
-        const col = this.createColumn('페이지', 'pages', null);
-        this.columnsContainer.appendChild(col);
-        this.loadPagesFeedForColumn(col.querySelector('.column-content'), visibleAccounts);
-      } else if (key.startsWith('account:')) {
+      if (key === 'all' && this.columnState.all) desiredKeys.push(key);
+      else if (key === 'notifications' && this.columnState.notifications) desiredKeys.push(key);
+      else if (key === 'bookmarks' && this.columnState.bookmarks) desiredKeys.push(key);
+      else if (key === 'dm' && this.columnState.dm) desiredKeys.push(key);
+      else if (key === 'pages' && this.columnState.pages) desiredKeys.push(key);
+      else if (key.startsWith('account:')) {
         const accountId = key.slice('account:'.length);
-        if (this.columnState.accounts[accountId]) {
-          const account = this.store.getById(accountId);
-          if (account) {
-            const name = escapeHtml(account.label || account.profile.displayName);
-            const col = this.createColumn(name, 'account', account.id);
-            this.columnsContainer.appendChild(col);
-            this.loadTimelineForColumn(col.querySelector('.column-content'), [account]);
-          }
+        if (this.columnState.accounts[accountId] && this.store.getById(accountId)) {
+          desiredKeys.push(key);
         }
       } else if (key.startsWith('thread:')) {
-        const threadKey = key;
-        const info = this.columnState.threads?.[threadKey];
-        if (info) {
-          const col = this.buildSingleColumn('thread', null, threadKey);
-          if (col) {
-            this.columnsContainer.appendChild(col);
-            this.loadThreadForColumn(col);
-          }
-        }
+        if (this.columnState.threads?.[key]) desiredKeys.push(key);
       }
     }
+    const desiredSet = new Set(desiredKeys);
+
+    // Aggregate columns (all/notifications/bookmarks/dm/pages) depend on the
+    // visible-accounts set; drop them when membership changes so the diff
+    // rebuilds them below.
+    const currentFp = this._visibleAccountsFingerprint();
+    const AGGREGATE = new Set(['all', 'notifications', 'bookmarks', 'dm', 'pages']);
+
+    // Index existing DOM columns by key, drop any no longer wanted.
+    const existingByKey = new Map();
+    for (const col of Array.from(container.querySelectorAll('.column'))) {
+      const key = this._columnKey(col);
+      const staleAggregate = key && AGGREGATE.has(key) && col.dataset.visibleFp !== currentFp;
+      if (!key || !desiredSet.has(key) || existingByKey.has(key) || staleAggregate) {
+        col.remove();
+      } else {
+        existingByKey.set(key, col);
+      }
+    }
+
+    // Walk desired order, reordering surviving columns in place and inserting
+    // freshly-built ones for keys not yet in the DOM.
+    let cursor = null;
+    for (const key of desiredKeys) {
+      let col = existingByKey.get(key);
+      if (!col) col = this._buildColumnForKey(key);
+      if (!col) continue;
+      const nextAnchor = cursor ? cursor.nextSibling : container.firstChild;
+      if (col !== nextAnchor) container.insertBefore(col, nextAnchor);
+      cursor = col;
+    }
+
     this._renderPagerDots();
   },
 
