@@ -86,6 +86,12 @@ export const StreamingMixin = {
         // Duplicate check by platform:id
         if (content.querySelector(`.post-card[data-platform="${CSS.escape(post.platform)}"][data-post-id="${CSS.escape(post.id)}"]`)) continue;
 
+        // Duplicate check by dedup key (부스트: reblog:acct:URI, 원본: URI).
+        // _dedupKey 는 _onStreamPost 진입부에서 이미 부여됨.
+        if (post._dedupKey) {
+          if (content.querySelector(`.post-card[data-dedup-key="${CSS.escape(post._dedupKey)}"]`)) continue;
+        }
+
         // Duplicate check by canonicalUri (same post from another account)
         const displayPost = post.reblog || post;
         if (displayPost.canonicalUri) {

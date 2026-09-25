@@ -665,6 +665,12 @@ export const DataLoadingMixin = {
     post.themeColor = this._accountColor(account);
     const ownerId = post.rebloggedBy ? post.rebloggedBy.id : post.author.id;
     post.isOwn = String(ownerId) === String(account.profile?.id);
+    // dedup 키를 여기서 부여 — 단일 계정 타임라인은 _deduplicatePosts 를 안 거치므로
+    // Phase 2 의 dedup 인덱스 매칭이 실패하고 부스트/자기 글이 다시 위로 올라오는
+    // 원인이 됐음. _computeDedupKey 는 boost 여부까지 반영해 정확한 키를 만든다.
+    if (typeof this._computeDedupKey === 'function' && !post._dedupKey) {
+      post._dedupKey = this._computeDedupKey(post);
+    }
     return post;
   },
 
