@@ -77,11 +77,16 @@ export const ComposeMixin = {
     this._composeEmojiMap = {};
     this._composeEmojiMapAccountIds = new Set();
 
-    // Restore saved draft for new posts (not reply/edit/quote)
-    if (!replyToId && this._composeDraft) {
-      this.composeText.value = this._composeDraft.text || '';
-      this.composeCw.value = this._composeDraft.cw || '';
+    // Restore saved draft for new posts (not reply/edit/quote).
+    // Prefer persisted draft (sessionStorage) so a page reload keeps it too.
+    if (!replyToId) {
+      const draft = this._readComposeDraftStorage() || this._composeDraft;
+      if (draft) {
+        this.composeText.value = draft.text || '';
+        this.composeCw.value = draft.cw || '';
+      }
       this._composeDraft = null;
+      this._writeComposeDraftStorage(null);
     }
 
     const replyCtx = document.getElementById('compose-reply-context');
@@ -158,8 +163,16 @@ export const ComposeMixin = {
     // Emoji 오버레이는 입력 중엔 캐럿 위치가 어긋나 보이므로 focus 상태에서
     // 자동 숨김. blur 시 다시 표시.
     if (!this._composeEmojiInputHandler) {
-      this._composeEmojiInputHandler = () => this._updateComposeEmojiPreview();
+      this._composeEmojiInputHandler = () => {
+        this._updateComposeEmojiPreview();
+        if (this._composeDraftSaveTimer) clearTimeout(this._composeDraftSaveTimer);
+        this._composeDraftSaveTimer = setTimeout(() => this._saveComposeDraft(), 400);
+      };
       this.composeText.addEventListener('input', this._composeEmojiInputHandler);
+      this.composeCw.addEventListener('input', () => {
+        if (this._composeDraftSaveTimer) clearTimeout(this._composeDraftSaveTimer);
+        this._composeDraftSaveTimer = setTimeout(() => this._saveComposeDraft(), 400);
+      });
       this._composeScrollSyncHandler = () => {
         const ov = document.getElementById('compose-text-overlay');
         if (ov) ov.scrollTop = this.composeText.scrollTop;
@@ -187,13 +200,34 @@ export const ComposeMixin = {
     const cw = this.composeCw.value;
     if (!text.trim() && !cw.trim()) {
       this._composeDraft = null;
+      this._writeComposeDraftStorage(null);
       return;
     }
     this._composeDraft = { text, cw };
+    this._writeComposeDraftStorage(this._composeDraft);
   },
 
   _clearComposeDraft() {
     this._composeDraft = null;
+    this._writeComposeDraftStorage(null);
+  },
+
+  _readComposeDraftStorage() {
+    try {
+      const raw = sessionStorage.getItem('starship_compose_draft');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (typeof parsed.text !== 'string' || typeof parsed.cw !== 'string') return null;
+      return parsed;
+    } catch (_) { return null; }
+  },
+
+  _writeComposeDraftStorage(draft) {
+    try {
+      if (!draft) sessionStorage.removeItem('starship_compose_draft');
+      else sessionStorage.setItem('starship_compose_draft', JSON.stringify({ text: draft.text || '', cw: draft.cw || '' }));
+    } catch (_) { /* quota / private mode → in-memory fallback still works */ }
   },
 
   _getAccountVisibility(accountId) {

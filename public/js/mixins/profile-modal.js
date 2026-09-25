@@ -2,7 +2,7 @@
  * Profile Modal Mixin
  * Handles the profile modal: opening, profile editing, notes tabs, follow relations
  */
-import { escapeHtml, compressImage, sanitizeHtml } from '../ui/utils.js';
+import { escapeHtml, cachedImageUrl, compressImage, sanitizeHtml } from '../ui/utils.js';
 import { renderPost } from '../ui/dashboard.js';
 
 export const ProfileModalMixin = {
@@ -245,7 +245,7 @@ export const ProfileModalMixin = {
       if (user.emojis && user.emojis.length > 0) {
         for (const emoji of user.emojis) {
           nameHtml = nameHtml.replaceAll(`:${emoji.shortcode}:`,
-            `<img class="inline-emoji" src="${emoji.url}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
+            `<img class="inline-emoji" src="${escapeHtml(emoji.url)}" alt=":${emoji.shortcode}:" title=":${emoji.shortcode}:" referrerpolicy="no-referrer">`);
         }
       }
       nameEl.innerHTML = nameHtml;
@@ -893,7 +893,7 @@ export const ProfileModalMixin = {
           await this._loadProfilePages(postsEl, client, account, userId);
         }
       } catch (err) {
-        postsEl.innerHTML = `<div class="profile-posts-empty">로딩 오류: ${err.message}</div>`;
+        postsEl.innerHTML = `<div class="profile-posts-empty">로딩 오류: ${escapeHtml(err.message)}</div>`;
       }
     };
     tabsEl.addEventListener('click', tabClickHandler);
@@ -936,12 +936,12 @@ export const ProfileModalMixin = {
         return;
       }
       for (const post of posts) {
-        if (this.postCache) this.postCache.set(`${post.platform}:${post.id}`, post);
+        if (this._setCachedPost) this._setCachedPost(`${post.platform}:${post.id}`, post);
         container.appendChild(renderPost(post));
       }
       this.enrichLinkCards(container);
     } catch (err) {
-      container.innerHTML = `<div class="profile-posts-empty">게시물 로딩 오류: ${err.message}</div>`;
+      container.innerHTML = `<div class="profile-posts-empty">게시물 로딩 오류: ${escapeHtml(err.message)}</div>`;
     }
   },
 
@@ -978,12 +978,12 @@ export const ProfileModalMixin = {
         return;
       }
       for (const post of posts) {
-        if (this.postCache) this.postCache.set(`${post.platform}:${post.id}`, post);
+        if (this._setCachedPost) this._setCachedPost(`${post.platform}:${post.id}`, post);
         container.appendChild(renderPost(post));
       }
       this.enrichLinkCards(container);
     } catch (err) {
-      container.innerHTML = `<div class="profile-posts-empty">고정 게시물 로딩 오류: ${err.message}</div>`;
+      container.innerHTML = `<div class="profile-posts-empty">고정 게시물 로딩 오류: ${escapeHtml(err.message)}</div>`;
     }
   },
 
@@ -1007,10 +1007,10 @@ export const ProfileModalMixin = {
         const card = document.createElement('div');
         card.className = 'user-list-item';
         card.innerHTML = `
-          <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" data-fb="hide">
+          <img class="user-list-avatar" src="${escapeHtml(cachedImageUrl(user.avatarUrl || ''))}" alt="" referrerpolicy="no-referrer" data-fb="hide">
           <div class="user-list-info">
-            <div class="user-list-name">${user.displayNameHtml || ''}</div>
-            <div class="user-list-acct">@${user.acct || user.username || ''}</div>
+            <div class="user-list-name">${user.displayNameHtml || escapeHtml(user.displayName || '')}</div>
+            <div class="user-list-acct">@${escapeHtml(user.acct || user.username || '')}</div>
           </div>
         `;
         card.addEventListener('click', () => {
@@ -1019,7 +1019,7 @@ export const ProfileModalMixin = {
         container.appendChild(card);
       }
     } catch (err) {
-      container.innerHTML = `<div class="profile-posts-empty">팔로워 로딩 오류: ${err.message}</div>`;
+      container.innerHTML = `<div class="profile-posts-empty">팔로워 로딩 오류: ${escapeHtml(err.message)}</div>`;
     }
   },
 
@@ -1043,10 +1043,10 @@ export const ProfileModalMixin = {
         const card = document.createElement('div');
         card.className = 'user-list-item';
         card.innerHTML = `
-          <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" data-fb="hide">
+          <img class="user-list-avatar" src="${escapeHtml(cachedImageUrl(user.avatarUrl || ''))}" alt="" referrerpolicy="no-referrer" data-fb="hide">
           <div class="user-list-info">
-            <div class="user-list-name">${user.displayNameHtml || ''}</div>
-            <div class="user-list-acct">@${user.acct || user.username || ''}</div>
+            <div class="user-list-name">${user.displayNameHtml || escapeHtml(user.displayName || '')}</div>
+            <div class="user-list-acct">@${escapeHtml(user.acct || user.username || '')}</div>
           </div>
         `;
         card.addEventListener('click', () => {
@@ -1055,7 +1055,7 @@ export const ProfileModalMixin = {
         container.appendChild(card);
       }
     } catch (err) {
-      container.innerHTML = `<div class="profile-posts-empty">팔로잉 로딩 오류: ${err.message}</div>`;
+      container.innerHTML = `<div class="profile-posts-empty">팔로잉 로딩 오류: ${escapeHtml(err.message)}</div>`;
     }
   },
 
@@ -1066,10 +1066,10 @@ export const ProfileModalMixin = {
     const infoArea = document.createElement('div');
     infoArea.className = 'user-list-item-left';
     infoArea.innerHTML = `
-      <img class="user-list-avatar" src="${user.avatarUrl || ''}" alt="" referrerpolicy="no-referrer" data-fb="hide">
+      <img class="user-list-avatar" src="${escapeHtml(cachedImageUrl(user.avatarUrl || ''))}" alt="" referrerpolicy="no-referrer" data-fb="hide">
       <div class="user-list-info">
-        <div class="user-list-name">${user.displayNameHtml || ''}</div>
-        <div class="user-list-acct">@${user.acct || user.username || ''}</div>
+        <div class="user-list-name">${user.displayNameHtml || escapeHtml(user.displayName || '')}</div>
+        <div class="user-list-acct">@${escapeHtml(user.acct || user.username || '')}</div>
       </div>
     `;
     infoArea.addEventListener('click', () => {
@@ -1159,7 +1159,7 @@ export const ProfileModalMixin = {
         }
       } catch (_) { /* proceed without relation info */ }
     } catch (err) {
-      container.innerHTML = `<div class="profile-posts-empty">팔로워 로딩 오류: ${err.message}</div>`;
+      container.innerHTML = `<div class="profile-posts-empty">팔로워 로딩 오류: ${escapeHtml(err.message)}</div>`;
     }
   },
 
@@ -1187,7 +1187,7 @@ export const ProfileModalMixin = {
         container.appendChild(card);
       }
     } catch (err) {
-      container.innerHTML = `<div class="profile-posts-empty">팔로잉 로딩 오류: ${err.message}</div>`;
+      container.innerHTML = `<div class="profile-posts-empty">팔로잉 로딩 오류: ${escapeHtml(err.message)}</div>`;
     }
   },
 };

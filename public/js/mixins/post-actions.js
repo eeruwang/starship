@@ -2,7 +2,7 @@
  * Post Actions Mixin
  * Handles post interactions: fav, boost, reply, quote, reaction, edit, delete
  */
-import { escapeHtml } from '../ui/utils.js';
+import { escapeHtml, cachedImageUrl } from '../ui/utils.js';
 import { COMMON_EMOJIS, loadInstanceEmojis, setupPickerSearch } from '../ui/emoji-picker.js';
 import { buildReactionsHtml, renderPost } from '../ui/dashboard.js';
 
@@ -409,7 +409,7 @@ export const PostActionsMixin = {
         updatedPost.accountId = accountId;
         updatedPost.accountPlatform = account.platform;
         updatedPost.themeColor = this._accountColor(account);
-        this.postCache.set(cacheKey, updatedPost);
+        this._setCachedPost(cacheKey, updatedPost);
       }
 
       if (fullRerender) {
@@ -607,7 +607,7 @@ export const PostActionsMixin = {
       cachedPost.favourited = basePost.favourited;
       cachedPost.reblogged = basePost.reblogged;
     } else {
-      this.postCache.set(`${platform}:${postId}`, basePost);
+      this._setCachedPost(`${platform}:${postId}`, basePost);
     }
 
     // In-place DOM update: only refresh action buttons and counts
@@ -1230,7 +1230,7 @@ export const PostActionsMixin = {
       const dotStyle = dotColor ? `style="background:${dotColor}"` : '';
       html += `
         <button class="account-picker-item${isPreferred ? ' preferred' : ''}" data-account-id="${account.id}"${isPreferred && dotColor ? ` style="border-left-color:${dotColor}"` : ''}>
-          <img src="${p.avatarUrl || ''}" alt="" data-fb="hide">
+          <img src="${escapeHtml(cachedImageUrl(p.avatarUrl || ''))}" alt="" data-fb="hide">
           <span class="picker-name">${escapeHtml(p.displayName)}</span>
           <span class="platform-dot ${account.software || account.platform}" ${dotStyle}></span>
         </button>

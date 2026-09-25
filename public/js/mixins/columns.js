@@ -860,5 +860,14 @@ export const ColumnsMixin = {
       // Fallback: remove after 1s even if transitionend doesn't fire
       setTimeout(() => { if (toast.parentNode) toast.remove(); }, 1000);
     }, 3500);
+    // Mirror to a11y live region so screen readers announce the toast.
+    // 'error' → assertive (interrupts), others → polite (queues).
+    const liveId = type === 'error' ? 'a11y-live-assertive' : 'a11y-live-polite';
+    const live = document.getElementById(liveId);
+    if (live) {
+      // Force re-announce by clearing first when the same text arrives.
+      live.textContent = '';
+      requestAnimationFrame(() => { live.textContent = String(message); });
+    }
   },
 };

@@ -274,7 +274,7 @@ function renderQuotePost(qp, depth = 0) {
   html += `<div class="quote-post-body">`;
   html += `<div class="quote-post-text-area">`;
   html += `<div class="quote-post-header">`;
-  html += `<img class="quote-post-avatar" src="${cachedImageUrl(qp.author?.avatarUrl || '')}" alt="" width="18" height="18" referrerpolicy="no-referrer" data-fb="hide">`;
+  html += `<img class="quote-post-avatar" src="${escapeHtml(cachedImageUrl(qp.author?.avatarUrl || ''))}" alt="" width="18" height="18" referrerpolicy="no-referrer" data-fb="hide">`;
   html += `<span class="quote-post-author">${qp.author?.displayNameHtml || escapeHtml(qp.author?.displayName || '')}</span>`;
   html += `<span class="quote-post-handle">@${escapeHtml(qp.author?.acct || '')}</span>`;
   html += `</div>`;
@@ -290,7 +290,7 @@ function renderQuotePost(qp, depth = 0) {
   html += `</div>`; // quote-post-text-area
   html += `</div>`; // quote-post-body
   if (qpImages.length > 0) {
-    html += `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb="hide">`).join('')}</div>`;
+    html += `<div class="quote-post-media media-${qpImages.length}">${qpImages.map(m => `<img src="${escapeHtml(m.previewUrl || m.url || '')}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb="hide">`).join('')}</div>`;
   }
   html += `</div>`; // quote-post
   return html;
@@ -304,9 +304,9 @@ function renderReplyMedia(media) {
   let html = `<div class="reply-context-media post-media media-${items.length}${layoutClass}">`;
   for (const m of items) {
     if (m.type === 'video') {
-      html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
+      html += `<video controls preload="none" poster="${escapeHtml(m.previewUrl || '')}"><source src="${escapeHtml(m.url || '')}"></video>`;
     } else {
-      html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" data-fb="dim">`;
+      html += `<img src="${escapeHtml(m.previewUrl || m.url || '')}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${escapeHtml(m.url || '')}" data-lightbox="true" data-fb="dim">`;
     }
   }
   html += '</div>';
@@ -388,9 +388,9 @@ function renderMediaGridHtml(mediaItems, isSensitive, extraClass = '') {
   }
   for (const m of mediaItems.slice(0, count)) {
     if (m.type === 'video') {
-      html += `<video controls preload="none" poster="${m.previewUrl || ''}"><source src="${m.url}"></video>`;
+      html += `<video controls preload="none" poster="${escapeHtml(m.previewUrl || '')}"><source src="${escapeHtml(m.url || '')}"></video>`;
     } else {
-      html += `<img src="${m.previewUrl || m.url}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${m.url}" data-lightbox="true" data-fb="dim">`;
+      html += `<img src="${escapeHtml(m.previewUrl || m.url || '')}" alt="${escapeHtml(m.description || '')}" loading="lazy" referrerpolicy="no-referrer" data-full-url="${escapeHtml(m.url || '')}" data-lightbox="true" data-fb="dim">`;
     }
   }
   html += '</div>';
@@ -455,7 +455,7 @@ function renderReplyContextHtml(displayPost, ctxId) {
     return `
       <div class="reply-context">
         <div class="reply-context-header">
-          <img class="reply-context-avatar" src="${cachedImageUrl(replyAuthor?.avatarUrl || '')}" alt="" width="16" height="16" referrerpolicy="no-referrer" data-fb="hide">
+          <img class="reply-context-avatar" src="${escapeHtml(cachedImageUrl(replyAuthor?.avatarUrl || ''))}" alt="" width="16" height="16" referrerpolicy="no-referrer" data-fb="hide">
           <span class="reply-context-author">${replyAuthor?.displayNameHtml || escapeHtml(replyAuthor?.displayName || '')}</span>
         </div>
         ${parentCw ? `<div class="reply-context-cw"><span class="icon-inline cw-icon">${iconWarning}</span> ${escapeHtml(parentCw)} <button class="cw-toggle" data-cw-target="${ctxId}">내용 보기</button></div>` : ''}
@@ -538,7 +538,7 @@ export function renderPost(post) {
   // Header (always visible, even under CW)
   html += `
     <div class="post-header">
-      <img class="post-avatar" src="${displayPost.author.avatarUrl ? cachedImageUrl(displayPost.author.avatarUrl) : 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'}"
+      <img class="post-avatar" src="${displayPost.author.avatarUrl ? escapeHtml(cachedImageUrl(displayPost.author.avatarUrl)) : 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23555%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>?</text></svg>'}"
            alt="${escapeHtml(displayPost.author.displayName)}"
            width="40" height="40"
            loading="lazy"
@@ -718,7 +718,7 @@ export function renderNotification(notif) {
     const actorAvatar = notif.actor?.avatarUrl || '';
     html += `<div class="notif-indicator">
       <div class="notif-actor-wrap notif-indicator-actor">
-        <img class="notif-avatar" src="${escapeHtml(actorAvatar)}" alt="" referrerpolicy="no-referrer" data-fb="hide">
+        <img class="notif-avatar" src="${escapeHtml(cachedImageUrl(actorAvatar))}" alt="" referrerpolicy="no-referrer" data-fb="hide">
         <span class="notif-type-badge ${indicatorTypeClass}"><span class="notif-svg-icon">${indicatorIcons[notif.type] || iconReplyNotif}</span></span>
       </div>
       <span class="notif-indicator-label">${actorName} 님이 ${indicatorLabels[notif.type] || notif.type}</span>
@@ -730,7 +730,7 @@ export function renderNotification(notif) {
     // Post header (full avatar + name + handle + time)
     html += `
       <div class="post-header">
-        <img class="post-avatar" src="${cachedImageUrl(displayPost.author.avatarUrl || '')}"
+        <img class="post-avatar" src="${escapeHtml(cachedImageUrl(displayPost.author.avatarUrl || ''))}"
              alt="${escapeHtml(displayPost.author.displayName)}"
              width="40" height="40"
              loading="lazy" referrerpolicy="no-referrer"
@@ -870,7 +870,7 @@ export function renderNotification(notif) {
       const replyCtxId = `notif-reply-ctx-${notif.id}`;
       html += `<div class="notif-parent-context notif-parent-context-full">
         <div class="notif-parent-header">
-          <img class="notif-parent-avatar" src="${cachedImageUrl(notifReplyAuthor?.avatarUrl || '')}" alt="" width="16" height="16" referrerpolicy="no-referrer" data-fb="hide">
+          <img class="notif-parent-avatar" src="${escapeHtml(cachedImageUrl(notifReplyAuthor?.avatarUrl || ''))}" alt="" width="16" height="16" referrerpolicy="no-referrer" data-fb="hide">
           <span class="notif-parent-author">${notifReplyAuthor?.displayNameHtml || escapeHtml(notifReplyAuthor?.displayName || '')}</span>
           <span class="notif-parent-label-tag">원본</span>
         </div>
@@ -1002,7 +1002,7 @@ export function renderAccountCard(account, onRemove) {
 
   card.innerHTML = `
     <div class="account-card-header">
-      <img class="account-card-avatar" src="${p.avatarUrl || ''}" alt="${escapeHtml(p.displayName)}" width="40" height="40" loading="lazy"
+      <img class="account-card-avatar" src="${escapeHtml(cachedImageUrl(p.avatarUrl || ''))}" alt="${escapeHtml(p.displayName)}" width="40" height="40" loading="lazy"
            data-fb="svg-placeholder">
       <div class="account-card-info">
         <div class="account-card-name">${escapeHtml(p.displayName)}</div>

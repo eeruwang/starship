@@ -1012,7 +1012,7 @@ export const DataLoadingMixin = {
     for (const [acct, emoji] of reactionByUser) {
       dp._reactionByUser[acct] = emoji;
     }
-    if (this.postCache) this.postCache.set(`${post.platform}:${post.id}`, post);
+    this._setCachedPost(`${post.platform}:${post.id}`, post);
   },
 
   // Resolve a custom emoji shortcode to a URL using post emoji maps, actor's
@@ -1160,7 +1160,7 @@ export const DataLoadingMixin = {
               dp._noteIdsByInstance[usedAccount.instanceUrl] = rdp.id;
             }
             this._adjustFavouritesForReactions(dp);
-            this.postCache.set(`${post.platform}:${post.id}`, post);
+            this._setCachedPost(`${post.platform}:${post.id}`, post);
 
             if (isNotification) {
               for (const notif of items) {
@@ -1230,7 +1230,7 @@ export const DataLoadingMixin = {
             dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...reactionEmojis };
             dp._reactionInstanceUrl = dp._reactionInstanceUrl || originUrl;
             this._adjustFavouritesForReactions(dp);
-            this.postCache.set(`${post.platform}:${post.id}`, post);
+            this._setCachedPost(`${post.platform}:${post.id}`, post);
             if (isNotification) {
               const cards = container.querySelectorAll(`.notif-card[data-notif-id="${item.id}"]`);
               for (const card of cards) {
@@ -1653,7 +1653,7 @@ export const DataLoadingMixin = {
                   dp._noteIdsByInstance[mskAccount.instanceUrl] = rdp.id;
                 }
                 if (rdp.reactionEmojis) dp.reactionEmojis = { ...(dp.reactionEmojis || {}), ...rdp.reactionEmojis };
-                if (this.postCache) this.postCache.set(`${groupNotifs[0].post.platform}:${groupNotifs[0].post.id}`, groupNotifs[0].post);
+                this._setCachedPost(`${groupNotifs[0].post.platform}:${groupNotifs[0].post.id}`, groupNotifs[0].post);
               }
             }
             this._persistReactionByUser(groupNotifs[0].post, reactionByUser);
@@ -2320,6 +2320,21 @@ export const DataLoadingMixin = {
       this.enrichLinkCards(container);
     } catch (err) {
       container.innerHTML = `<div class="loading-text">DM 로딩 오류: ${escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  // Single-post cache set with LRU-style eviction. Every code path that adds
+  // one post to postCache should go through here instead of calling .set()
+  // directly, otherwise POST_CACHE_MAX is silently bypassed.
+  _setCachedPost(key, post) {
+    if (!this.postCache) return;
+    this.postCache.set(key, post);
+    if (this.postCache.size > this.POST_CACHE_MAX) {
+      const toDelete = this.postCache.size - this.POST_CACHE_MAX;
+      const keys = this.postCache.keys();
+      for (let i = 0; i < toDelete; i++) {
+        this.postCache.delete(keys.next().value);
+      }
     }
   },
 

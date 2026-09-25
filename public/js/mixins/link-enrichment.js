@@ -2,7 +2,7 @@
  * Link Enrichment Mixin
  * Fetches OG metadata and resolves fediverse post links in link cards.
  */
-import { escapeHtml } from '../ui/utils.js';
+import { escapeHtml, cachedImageUrl } from '../ui/utils.js';
 
 export const LinkEnrichmentMixin = {
 
@@ -59,7 +59,7 @@ export const LinkEnrichmentMixin = {
   _buildFediEmbedHtml(post) {
     const dp = post.reblog || post;
     const author = dp.author || {};
-    const avatarUrl = escapeHtml(author.avatarUrl || '');
+    const avatarUrl = escapeHtml(cachedImageUrl(author.avatarUrl || ''));
     const displayName = author.displayNameHtml || escapeHtml(author.displayName || '');
     const acct = escapeHtml(author.acct || '');
     const content = dp.content || '';
@@ -86,12 +86,12 @@ export const LinkEnrichmentMixin = {
     html += `</div>`;
 
     if (images.length === 1) {
-      html += `<div class="quote-post-thumb"><img src="${images[0].previewUrl || images[0].url}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb="hide-parent"></div>`;
+      html += `<div class="quote-post-thumb"><img src="${escapeHtml(images[0].previewUrl || images[0].url || '')}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb="hide-parent"></div>`;
     }
     html += `</div>`;
 
     if (images.length > 1) {
-      html += `<div class="quote-post-media media-${images.length}">${images.map(m => `<img src="${m.previewUrl || m.url}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb="hide">`).join('')}</div>`;
+      html += `<div class="quote-post-media media-${images.length}">${images.map(m => `<img src="${escapeHtml(m.previewUrl || m.url || '')}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb="hide">`).join('')}</div>`;
     }
 
     html += `</div>`;
