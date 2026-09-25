@@ -349,7 +349,18 @@ export const EventsMixin = {
       const overflowBtn = e.target.closest('.post-action-overflow > button');
       const btn = overflowBtn || e.target.closest('.post-action');
       if (!btn) return;
-      const card = btn.closest('.post-card') || btn.closest('.notif-card');
+      let card = btn.closest('.post-card') || btn.closest('.notif-card');
+      // ⋯ 오버플로 메뉴는 카드 클리핑 회피 위해 body 로 이동 → menu 안 버튼은
+      // .post-card 조상이 없음. menu.dataset.owner (postId) 로 원본 카드 찾기.
+      if (!card && overflowBtn) {
+        const menu = overflowBtn.closest('.post-action-overflow');
+        const ownerPostId = menu?.dataset?.owner;
+        if (ownerPostId) {
+          card = document.querySelector(
+            `.post-card[data-post-id="${CSS.escape(ownerPostId)}"], .notif-card[data-post-id="${CSS.escape(ownerPostId)}"]`
+          );
+        }
+      }
       if (!card) return;
 
       const action = btn.dataset.action;
