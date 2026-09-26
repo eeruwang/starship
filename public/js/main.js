@@ -263,6 +263,27 @@ class StarShipApp {
     this.debouncedSaveToCloud();
   }
 
+  // Drop columnState entries owned by a removed account so the persisted state
+  // doesn't accumulate orphaned toggles + order slots forever. Safe to call
+  // even when the account never had a column open.
+  _cleanupAccountColumnState(accountId) {
+    if (!accountId || !this.columnState) return;
+    let dirty = false;
+    if (this.columnState.accounts && accountId in this.columnState.accounts) {
+      delete this.columnState.accounts[accountId];
+      dirty = true;
+    }
+    if (Array.isArray(this.columnState.order)) {
+      const key = `account:${accountId}`;
+      const filtered = this.columnState.order.filter(k => k !== key);
+      if (filtered.length !== this.columnState.order.length) {
+        this.columnState.order = filtered;
+        dirty = true;
+      }
+    }
+    if (dirty) this.saveColumnState();
+  }
+
   _onCrossTabChange(msg) {
     if (!msg || typeof msg.type !== 'string') return;
     // Cancel any pending cloud save so this tab doesn't upload a stale

@@ -643,6 +643,11 @@ export const AuthUIMixin = {
         if (!confirm(`"${name}" 계정을 삭제하시겠습니까?\n이 계정의 연결이 해제됩니다.`)) return;
         this.store.removeAccount(accountId);
         this.streamManager?.disconnect(accountId);
+        // Clean up the columnState entries this account owned. Without this,
+        // toggle state (accounts[id]) and column order (account:id) accumulate
+        // dead entries forever, bloating the persisted JSON and the cloud
+        // sync payload for every account ever removed.
+        this._cleanupAccountColumnState(accountId);
         this.debouncedSaveToCloud();
         // Remove the row from the picker
         const row = btn.closest('.reauth-picker-row');
