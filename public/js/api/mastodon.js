@@ -3,6 +3,7 @@
  * Handles communication with Mastodon instances.
  * Worker 배포 시 /proxy 를 통해 CORS를 우회합니다.
  */
+import { debugLog } from '../ui/debug.js';
 import { escapeHtml, cachedImageUrl, sanitizeHtml } from '../ui/utils.js';
 
 // Mastodon-compatible software that supports emoji reactions
@@ -212,7 +213,7 @@ export class MastodonClient {
       }
       return result;
     } catch (err) {
-      console.debug('[StarShip] getReactions failed:', err.message || err);
+      debugLog('api', '[StarShip] getReactions failed:', err.message || err);
       return [];
     }
   }
