@@ -6,7 +6,8 @@
     "dev": "npx wrangler dev",
     "deploy": "npx wrangler deploy",
     "deploy:staging": "npx wrangler deploy --env staging",
-    "tail": "npx wrangler tail"
+    "tail": "npx wrangler tail",
+    "test": "node --test 'tests/*.test.js'"
   },
   "devDependencies": {
     "wrangler": "^3.0.0"
