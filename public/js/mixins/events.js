@@ -308,38 +308,15 @@ export const EventsMixin = {
   },
 
   _bindDelegatedEvents() {
-    // CW 토글 — 배너 알약 버튼. .cw-content 의 .visible + 부모 .post-card 의 .cw-open 동기화
-    document.addEventListener('click', (e) => {
-      if (!e.target.matches('.cw-toggle')) return;
-      const targetId = e.target.dataset.cwTarget;
-      let target;
-      if (targetId) {
-        const container = e.target.closest('.thread-content, .column-content, .notif-card, .post-card');
-        target = container ? container.querySelector(`#${CSS.escape(targetId)}`) : document.getElementById(targetId);
-      } else {
-        const cwWarning = e.target.closest('.cw-warning, .reply-context-cw, .notif-cw-warning');
-        target = cwWarning?.nextElementSibling;
-      }
-      if (target && (target.classList.contains('cw-content') || target.id?.startsWith('reply-ctx-') || target.id?.startsWith('notif-reply-ctx-'))) {
-        target.classList.toggle('visible');
-        const opened = target.classList.contains('visible');
-        e.target.textContent = opened ? '숨기기' : '내용 보기';
-        // v3 redesign-03 §6 의 .cw-open .cw-content { display: block } 매칭
-        const card = e.target.closest('.post-card');
-        if (card) card.classList.toggle('cw-open', opened);
-      }
-    });
-
-    // Expand toggle for long content
-    document.addEventListener('click', (e) => {
-      if (e.target.matches('.expand-toggle')) {
-        const target = e.target.previousElementSibling;
-        if (target) {
-          target.classList.toggle('collapsed');
-          e.target.textContent = target.classList.contains('collapsed') ? '더보기' : '접기';
-        }
-      }
-    });
+    // === 1차 통합 라우터 ===
+    // 예전엔 아래 8개(cw-toggle, expand-toggle, poll vote, follow-req, notif-action,
+    // reaction-badge, sensitive reveal/hide, 이미지 lightbox)가 각각 document
+    // click 리스너를 등록해 브라우저가 매 클릭마다 8번 순회했고 순서도 취약했음.
+    // 하나의 dispatch로 묶어 명시적 순서 + early-return을 명확히 함.
+    // order-sensitive한 것들(post-action, boost-menu, 프로필/스레드 open, 멘션
+    // 링크)은 이 라우터 뒤에 각자 유지 — 서로의 stopPropagation과 capture-phase
+    // 의존이 있어 이번 라운드에선 건드리지 않음.
+    document.addEventListener('click', (e) => this._routeSimpleClick(e));
 
     // Post actions (works for post-card and mention-style notif-card)
     document.addEventListener('click', (e) => {
@@ -550,47 +527,7 @@ export const EventsMixin = {
       document.querySelectorAll('.boost-menu:not([hidden])').forEach(m => m._closeCleanup?.());
     });
 
-    // Poll vote button
-    document.addEventListener('click', (e) => {
-      const voteBtn = e.target.closest('.poll-vote-btn');
-      if (!voteBtn) return;
-      e.stopPropagation();
-      const pollEl = voteBtn.closest('.post-poll');
-      if (pollEl) this.handleVotePoll(pollEl);
-    });
-
-    // Follow request accept/reject buttons
-    document.addEventListener('click', (e) => {
-      const reqBtn = e.target.closest('.follow-req-btn');
-      if (!reqBtn) return;
-      e.stopPropagation();
-      e.preventDefault();
-      const action = reqBtn.dataset.action;
-      const actorId = reqBtn.dataset.actorId;
-      const accountId = reqBtn.dataset.accountId;
-      const platform = reqBtn.dataset.platform;
-      if (action && actorId && accountId) {
-        this.handleFollowRequest(action, actorId, accountId, platform, reqBtn);
-      }
-    });
-
-    // Notification action buttons
-    document.addEventListener('click', (e) => {
-      const actionBtn = e.target.closest('.notif-action-btn');
-      if (actionBtn) {
-        e.stopPropagation();
-        e.preventDefault();
-        const card = actionBtn.closest('.notif-card');
-        if (!card) return;
-        const postId = card.dataset.postId;
-        const accountId = card.dataset.accountId;
-        const platform = card.dataset.platform;
-        const action = actionBtn.dataset.action;
-        if (!postId || !accountId || !action) return;
-        this.handlePostAction(action, postId, platform, accountId, actionBtn);
-        return;
-      }
-    });
+    // (Poll vote / Follow-req / Notif-action 은 _routeSimpleClick 안으로 이관됨)
 
     // Notification card click: open thread view
     document.addEventListener('click', (e) => {
@@ -651,21 +588,7 @@ export const EventsMixin = {
       }
     });
 
-    // Reaction badge click: show who reacted
-    document.addEventListener('click', (e) => {
-      const badge = e.target.closest('.reaction-badge');
-      if (!badge) return;
-      e.stopPropagation();
-      const card = badge.closest('.post-card') || badge.closest('.notif-card');
-      if (!card) return;
-      const postId = card.dataset.postId;
-      const platform = card.dataset.platform;
-      const accountId = card.dataset.accountId;
-      const reaction = badge.dataset.reaction;
-      const cached = this.postCache.get(`${platform}:${postId}`);
-      const reactionPostId = cached?.reblog?.id || postId;
-      this.showReactionUsers(badge, reactionPostId, platform, accountId, reaction);
-    });
+    // (Reaction badge 클릭은 _routeSimpleClick 안으로 이관됨)
 
     // Post card click: open thread view
     document.addEventListener('click', (e) => {
@@ -694,44 +617,7 @@ export const EventsMixin = {
       }
     });
 
-    // Sensitive media reveal/hide
-    document.addEventListener('click', (e) => {
-      const revealBtn = e.target.closest('.sensitive-reveal');
-      if (revealBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const media = revealBtn.closest('.post-media');
-        if (media) media.classList.add('media-revealed');
-        return;
-      }
-      const hideBtn = e.target.closest('.sensitive-hide');
-      if (hideBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const media = hideBtn.closest('.post-media');
-        if (media) media.classList.remove('media-revealed');
-      }
-    });
-
-    // Image lightbox
-    document.addEventListener('click', (e) => {
-      const img = e.target.closest('img[data-lightbox="true"]');
-      if (!img) return;
-      e.preventDefault();
-      e.stopPropagation();
-      // Collect all lightbox images in the same media container
-      const mediaContainer = img.closest('.post-media, .reply-context-media');
-      const allImages = mediaContainer
-        ? [...mediaContainer.querySelectorAll('img[data-lightbox="true"]')]
-        : [img];
-      const mediaList = allImages.map(i => ({
-        url: i.dataset.fullUrl || i.src,
-        previewUrl: i.src,
-        thumb: i,
-      }));
-      const index = allImages.indexOf(img);
-      this.openLightbox(mediaList, Math.max(index, 0));
-    });
+    // (Sensitive reveal/hide 및 이미지 lightbox 는 _routeSimpleClick 안으로 이관됨)
 
     // Lightbox close
     this.lightboxClose.addEventListener('click', () => this.closeLightbox());
@@ -747,6 +633,143 @@ export const EventsMixin = {
 
     // Lightbox swipe
     this._bindLightboxSwipe();
+  },
+
+  // Single dispatch for the 8 "trivial" delegated handlers that used to each
+  // register their own document click listener. Each branch mirrors what its
+  // former standalone listener did — first match wins, and we early-return so
+  // subsequent branches don't run for the same click. Order matters only for
+  // targets that could match more than one branch (e.g. a .sensitive-reveal
+  // inside a .post-media that also holds a data-lightbox img); the current
+  // order matches the previous listener registration order, keeping behavior
+  // byte-identical.
+  _routeSimpleClick(e) {
+    const t = e.target;
+
+    // 1. CW toggle — banner pill button. Sync .cw-content .visible with the
+    //    parent .post-card .cw-open (redesign-03 §6).
+    if (t.matches?.('.cw-toggle')) {
+      const targetId = t.dataset.cwTarget;
+      let target;
+      if (targetId) {
+        const container = t.closest('.thread-content, .column-content, .notif-card, .post-card');
+        target = container ? container.querySelector(`#${CSS.escape(targetId)}`) : document.getElementById(targetId);
+      } else {
+        const cwWarning = t.closest('.cw-warning, .reply-context-cw, .notif-cw-warning');
+        target = cwWarning?.nextElementSibling;
+      }
+      if (target && (target.classList.contains('cw-content') || target.id?.startsWith('reply-ctx-') || target.id?.startsWith('notif-reply-ctx-'))) {
+        target.classList.toggle('visible');
+        const opened = target.classList.contains('visible');
+        t.textContent = opened ? '숨기기' : '내용 보기';
+        const card = t.closest('.post-card');
+        if (card) card.classList.toggle('cw-open', opened);
+      }
+      return;
+    }
+
+    // 2. Expand toggle (long content 더보기/접기)
+    if (t.matches?.('.expand-toggle')) {
+      const target = t.previousElementSibling;
+      if (target) {
+        target.classList.toggle('collapsed');
+        t.textContent = target.classList.contains('collapsed') ? '더보기' : '접기';
+      }
+      return;
+    }
+
+    // 3. Poll vote button
+    const voteBtn = t.closest?.('.poll-vote-btn');
+    if (voteBtn) {
+      e.stopPropagation();
+      const pollEl = voteBtn.closest('.post-poll');
+      if (pollEl) this.handleVotePoll(pollEl);
+      return;
+    }
+
+    // 4. Follow request accept/reject
+    const reqBtn = t.closest?.('.follow-req-btn');
+    if (reqBtn) {
+      e.stopPropagation();
+      e.preventDefault();
+      const action = reqBtn.dataset.action;
+      const actorId = reqBtn.dataset.actorId;
+      const accountId = reqBtn.dataset.accountId;
+      const platform = reqBtn.dataset.platform;
+      if (action && actorId && accountId) {
+        this.handleFollowRequest(action, actorId, accountId, platform, reqBtn);
+      }
+      return;
+    }
+
+    // 5. Notification action buttons (inline reply/boost/fav in notif card)
+    const notifActionBtn = t.closest?.('.notif-action-btn');
+    if (notifActionBtn) {
+      e.stopPropagation();
+      e.preventDefault();
+      const card = notifActionBtn.closest('.notif-card');
+      if (!card) return;
+      const postId = card.dataset.postId;
+      const accountId = card.dataset.accountId;
+      const platform = card.dataset.platform;
+      const action = notifActionBtn.dataset.action;
+      if (!postId || !accountId || !action) return;
+      this.handlePostAction(action, postId, platform, accountId, notifActionBtn);
+      return;
+    }
+
+    // 6. Reaction badge — show who reacted
+    const badge = t.closest?.('.reaction-badge');
+    if (badge) {
+      e.stopPropagation();
+      const card = badge.closest('.post-card') || badge.closest('.notif-card');
+      if (!card) return;
+      const postId = card.dataset.postId;
+      const platform = card.dataset.platform;
+      const accountId = card.dataset.accountId;
+      const reaction = badge.dataset.reaction;
+      const cached = this.postCache.get(`${platform}:${postId}`);
+      const reactionPostId = cached?.reblog?.id || postId;
+      this.showReactionUsers(badge, reactionPostId, platform, accountId, reaction);
+      return;
+    }
+
+    // 7. Sensitive media reveal / hide
+    const revealBtn = t.closest?.('.sensitive-reveal');
+    if (revealBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const media = revealBtn.closest('.post-media');
+      if (media) media.classList.add('media-revealed');
+      return;
+    }
+    const hideBtn = t.closest?.('.sensitive-hide');
+    if (hideBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const media = hideBtn.closest('.post-media');
+      if (media) media.classList.remove('media-revealed');
+      return;
+    }
+
+    // 8. Image lightbox (bubbles across the whole media grid)
+    const img = t.closest?.('img[data-lightbox="true"]');
+    if (img) {
+      e.preventDefault();
+      e.stopPropagation();
+      const mediaContainer = img.closest('.post-media, .reply-context-media');
+      const allImages = mediaContainer
+        ? [...mediaContainer.querySelectorAll('img[data-lightbox="true"]')]
+        : [img];
+      const mediaList = allImages.map(i => ({
+        url: i.dataset.fullUrl || i.src,
+        previewUrl: i.src,
+        thumb: i,
+      }));
+      const index = allImages.indexOf(img);
+      this.openLightbox(mediaList, Math.max(index, 0));
+      return;
+    }
   },
 
   _bindComposeEvents() {
