@@ -10,6 +10,7 @@ import { broadcastChange, onChange } from './sync-channel.js';
 import { PostActionsMixin } from './mixins/post-actions.js';
 import { ComposeMixin } from './mixins/compose.js';
 import { DataLoadingMixin } from './mixins/data-loading.js';
+import { ReactionsMixin } from './mixins/reactions.js';
 import { AuthUIMixin } from './mixins/auth-ui.js';
 import { AccountSetupMixin } from './mixins/account-setup.js';
 import { ThreadViewMixin } from './mixins/thread-view.js';
@@ -368,6 +369,7 @@ Object.assign(StarShipApp.prototype,
   PostActionsMixin,
   ComposeMixin,
   DataLoadingMixin,
+  ReactionsMixin,
   AuthUIMixin,
   AccountSetupMixin,
   ThreadViewMixin,
