@@ -115,6 +115,8 @@ class StarShipApp {
     initKeyboardNav({
       onCompose: () => this.openComposeModal(),
       onHelp: () => document.getElementById('shortcut-overlay')?.classList.add('open'),
+      onColumnLeft: () => this.navigateColumn(-1),
+      onColumnRight: () => this.navigateColumn(1),
     });
     // ? 도움말 닫기 (Esc / 바깥 클릭)
     const overlay = document.getElementById('shortcut-overlay');
